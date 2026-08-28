@@ -1,28 +1,30 @@
-// 페이션트 커넥트 서비스워커 — 정적 자원 캐시
-const CACHE = 'pc-v1'
-const STATIC = ['/static/styles.css', '/static/common.js', '/static/icon.svg']
+// 페이션트 커넥트 서비스워커 — v4 (네트워크 우선, 구캐시 전부 삭제)
+const CACHE = 'pc-v4'
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)))
   self.skipWaiting()
 })
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))))
-  self.clients.claim()
+  e.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  )
 })
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)
   if (e.request.method !== 'GET') return
-  // 정적 자원·플레이스홀더는 캐시 우선
+  // 정적 자원: 네트워크 우선, 실패 시에만 캐시 (오프라인 대비)
   if (url.pathname.startsWith('/static/') || url.pathname.startsWith('/ph')) {
     e.respondWith(
-      caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
-        const copy = res.clone()
-        caches.open(CACHE).then((c) => c.put(e.request, copy))
-        return res
-      }))
+      fetch(e.request)
+        .then((res) => {
+          const copy = res.clone()
+          caches.open(CACHE).then((c) => c.put(e.request, copy))
+          return res
+        })
+        .catch(() => caches.match(e.request))
     )
   }
 })

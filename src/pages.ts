@@ -1,4 +1,5 @@
 // HTML 페이지 셸 — 실제 UI는 /static/*.js 가 렌더링
+const V = 'v4' // 정적 자산 버전 (구 SW 캐시 무력화)
 const head = (title: string, extra = '') => `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -20,7 +21,7 @@ tailwind.config = {
 </script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-<link href="/static/styles.css" rel="stylesheet">
+<link href="/static/styles.css?${V}" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
 ${extra}
 </head>`
@@ -28,51 +29,51 @@ ${extra}
 export const pageHome = () => `${head('페이션트 커넥트 — 진료 상담 설명자료 라이브러리')}
 <body class="font-sans antialiased">
 <div id="app"></div>
-<script src="/static/common.js"></script>
-<script src="/static/home.js"></script>
+<script src="/static/common.js?${V}"></script>
+<script src="/static/home.js?${V}"></script>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}</script>
 </body></html>`
 
 export const pageConsult = () => `${head('상담 화면 — 페이션트 커넥트')}
 <body class="font-sans antialiased overflow-hidden cinema">
 <div id="app"></div>
-<script src="/static/common.js"></script>
-<script src="/static/consult.js"></script>
+<script src="/static/common.js?${V}"></script>
+<script src="/static/consult.js?${V}"></script>
 </body></html>`
 
 export const pageCases = () => `${head('비포·애프터 갤러리 — 페이션트 커넥트')}
 <body class="font-sans antialiased">
 <div id="app"></div>
-<script src="/static/common.js"></script>
-<script src="/static/cases.js"></script>
+<script src="/static/common.js?${V}"></script>
+<script src="/static/cases.js?${V}"></script>
 </body></html>`
 
 export const pageManage = () => `${head('우리 병원 자료 관리 — 페이션트 커넥트')}
 <body class="font-sans antialiased">
 <div id="app"></div>
-<script src="/static/common.js"></script>
-<script src="/static/manage.js"></script>
+<script src="/static/common.js?${V}"></script>
+<script src="/static/manage.js?${V}"></script>
 </body></html>`
 
 export const pageAdmin = () => `${head('운영자 콘솔 — 페이션트 커넥트')}
 <body class="font-sans antialiased">
 <div id="app"></div>
-<script src="/static/common.js"></script>
-<script src="/static/admin.js"></script>
+<script src="/static/common.js?${V}"></script>
+<script src="/static/admin.js?${V}"></script>
 </body></html>`
 
 export const pageLogin = () => `${head('로그인 — 페이션트 커넥트')}
 <body class="font-sans antialiased">
 <div id="app"></div>
-<script src="/static/common.js"></script>
-<script src="/static/login.js"></script>
+<script src="/static/common.js?${V}"></script>
+<script src="/static/login.js?${V}"></script>
 </body></html>`
 
 export const pageShare = () => `${head('오늘 설명드린 자료')}
 <body class="font-sans antialiased">
 <div id="app"></div>
-<script src="/static/common.js"></script>
-<script src="/static/share.js"></script>
+<script src="/static/common.js?${V}"></script>
+<script src="/static/share.js?${V}"></script>
 </body></html>`
 
 export const pageNotFound = (msg: string) => `${head('준비 중 — 페이션트 커넥트')}
@@ -82,5 +83,5 @@ export const pageNotFound = (msg: string) => `${head('준비 중 — 페이션�
   <h1 class="text-[20px] font-bold text-[#18181b]">${msg}</h1>
   <a href="/" class="btn-primary mt-1 px-6 py-2.5">라이브러리로 돌아가기</a>
 </div>
-<script src="/static/common.js"></script>
+<script src="/static/common.js?${V}"></script>
 </body></html>`
