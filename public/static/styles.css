@@ -1,74 +1,105 @@
 /* ============================================================
-   페이션트 커넥트 — Design System v2 "AURORA DARK"
-   다크 프리미엄 · 글래스 · 글로우 · 큰 타이포
+   페이션트 커넥트 — Design System v3 "APPLE LIGHT"
+   apple.com 감성: 밝은 배경 · 큰 타이포 · 프로스티드 글래스 ·
+   컬러 그라데이션 헤드라인 · 스크롤 리빌 모션
+   상담 화면(/consult)만 .cinema 다크 모드
    ============================================================ */
 * { -webkit-tap-highlight-color: transparent; }
 html { font-size: 16px; scroll-behavior: smooth; }
 body {
-  letter-spacing: -0.02em;
-  background: #070b14;
-  color: #e6edf7;
+  letter-spacing: -0.022em;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ---------- 배경 오로라 ---------- */
-.aurora-bg { position: relative; isolation: isolate; }
-.aurora-bg::before {
-  content: ''; position: fixed; inset: 0; z-index: -2;
-  background:
-    radial-gradient(ellipse 55% 42% at 78% -8%, rgba(45,212,191,0.16), transparent 60%),
-    radial-gradient(ellipse 48% 38% at 12% 8%, rgba(99,102,241,0.14), transparent 58%),
-    radial-gradient(ellipse 60% 50% at 50% 115%, rgba(14,116,144,0.12), transparent 55%),
-    #070b14;
-}
-.aurora-bg::after {
+/* ---------- 배경 (라이트: 은은한 컬러 블롭) ---------- */
+.apple-bg { position: relative; isolation: isolate; }
+.apple-bg::before {
   content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background-image: radial-gradient(rgba(255,255,255,0.028) 1px, transparent 1px);
-  background-size: 26px 26px;
-  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 30%, transparent 100%);
+  background:
+    radial-gradient(ellipse 50% 36% at 85% -6%, rgba(94,92,230,0.08), transparent 60%),
+    radial-gradient(ellipse 44% 32% at 8% 4%, rgba(0,113,227,0.07), transparent 58%),
+    radial-gradient(ellipse 56% 42% at 50% 112%, rgba(255,55,95,0.05), transparent 55%),
+    #f5f5f7;
 }
+
+/* ---------- 시네마(상담 화면) 다크 ---------- */
+.cinema { background: #0a0a0c; color: #f5f5f7; }
+.cinema::before { display: none; }
 
 /* ---------- 스크롤바 ---------- */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.4); }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 8px; }
+.cinema ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
 
-/* ---------- 글래스 ---------- */
+/* ---------- 프로스티드 글래스 ---------- */
 .glass {
-  background: rgba(13,20,33,0.66);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.66);
+  backdrop-filter: blur(22px) saturate(1.8);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  border: 1px solid rgba(0,0,0,0.06);
 }
-.glass-strong, .glass-dark {
-  background: rgba(10,16,28,0.85);
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  border: 1px solid rgba(255,255,255,0.08);
+.glass-strong {
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(26px) saturate(1.9);
+  -webkit-backdrop-filter: blur(26px) saturate(1.9);
+  border: 1px solid rgba(0,0,0,0.07);
+}
+/* 시네마 컨텍스트에선 다크 글래스 */
+.cinema .glass, .glass-dark {
+  background: rgba(22,22,26,0.72);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid rgba(255,255,255,0.09);
+}
+.cinema .glass-strong {
+  background: rgba(16,16,20,0.88);
+  backdrop-filter: blur(26px) saturate(1.6);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 /* ---------- 카드 ---------- */
 .card {
-  background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255,255,255,0.075);
-  border-radius: 24px;
-  transition: transform .3s cubic-bezier(.22,1,.36,1), border-color .3s, box-shadow .3s;
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.045);
+  border-radius: 28px;
+  box-shadow: 0 2px 14px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03);
+  transition: transform .45s cubic-bezier(.22,1,.36,1), box-shadow .45s cubic-bezier(.22,1,.36,1);
 }
 .card-hover:hover {
-  transform: translateY(-5px);
-  border-color: rgba(45,212,191,0.35);
-  box-shadow: 0 24px 60px -18px rgba(45,212,191,0.22), 0 0 0 1px rgba(45,212,191,0.12);
+  transform: translateY(-6px) scale(1.008);
+  box-shadow: 0 28px 60px -16px rgba(0,0,0,0.14), 0 4px 16px rgba(0,0,0,0.05);
+}
+.cinema .card {
+  background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: none;
 }
 
-/* ---------- 그라데이션 텍스트/보더 ---------- */
+/* ---------- 그라데이션 텍스트 (애플 스타일 컬러풀) ---------- */
 .grad-text {
-  background: linear-gradient(100deg, #5eead4 0%, #7dd3fc 45%, #a5b4fc 100%);
+  background: linear-gradient(92deg, #0071e3 0%, #5e5ce6 38%, #bf5af2 68%, #ff375f 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
+.grad-text-blue {
+  background: linear-gradient(94deg, #0090f7, #5e5ce6);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+@keyframes gradShift { 0%,100% { background-position: 0% 50% } 50% { background-position: 100% 50% } }
+.grad-animate { background-size: 220% 220%; animation: gradShift 7s ease-in-out infinite; }
+.cinema .grad-text {
+  background: linear-gradient(92deg, #64d2ff, #5e5ce6 50%, #bf5af2);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* ---------- 그라데이션 보더 ---------- */
 .grad-border { position: relative; }
 .grad-border::before {
   content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px;
-  background: linear-gradient(135deg, rgba(94,234,212,0.7), rgba(125,211,252,0.3) 40%, rgba(165,180,252,0.6));
+  background: linear-gradient(135deg, rgba(0,113,227,0.55), rgba(94,92,230,0.35) 45%, rgba(191,90,242,0.5));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude;
   pointer-events: none;
@@ -77,78 +108,111 @@ body {
 /* ---------- 버튼 ---------- */
 .btn-touch { min-height: 48px; min-width: 48px; }
 .btn-primary {
-  background: linear-gradient(135deg, #14b8a6, #0ea5e9);
-  color: #fff; font-weight: 800;
-  box-shadow: 0 8px 28px -6px rgba(20,184,166,0.5), inset 0 1px 0 rgba(255,255,255,0.25);
-  transition: all .25s cubic-bezier(.22,1,.36,1);
+  background: #0071e3;
+  color: #fff; font-weight: 700;
+  border-radius: 980px;
+  transition: all .3s cubic-bezier(.22,1,.36,1);
+  box-shadow: 0 4px 18px -4px rgba(0,113,227,0.45);
 }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 36px -6px rgba(20,184,166,0.6), inset 0 1px 0 rgba(255,255,255,0.25); filter: brightness(1.08); }
-.btn-primary:active { transform: translateY(0); }
+.btn-primary:hover { background: #0077ed; transform: translateY(-1px) scale(1.015); box-shadow: 0 10px 28px -6px rgba(0,113,227,0.5); }
+.btn-primary:active { transform: scale(.985); }
+.btn-grad {
+  background: linear-gradient(120deg, #0071e3, #5e5ce6 55%, #bf5af2);
+  background-size: 180% 180%;
+  color: #fff; font-weight: 700; border-radius: 980px;
+  transition: all .3s cubic-bezier(.22,1,.36,1);
+  box-shadow: 0 6px 24px -6px rgba(94,92,230,0.55);
+  animation: gradShift 6s ease-in-out infinite;
+}
+.btn-grad:hover { transform: translateY(-1px) scale(1.015); box-shadow: 0 12px 34px -8px rgba(94,92,230,0.65); }
 .btn-ghost {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: #cbd5e1; font-weight: 700;
-  transition: all .2s;
+  background: rgba(0,0,0,0.045);
+  color: #1d1d1f; font-weight: 600; border-radius: 980px;
+  transition: all .25s;
 }
-.btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.18); color: #fff; }
-.btn-kakao { background: #FEE500; color: #191919; font-weight: 800; }
+.btn-ghost:hover { background: rgba(0,0,0,0.08); }
+.cinema .btn-ghost { background: rgba(255,255,255,0.08); color: #f5f5f7; }
+.cinema .btn-ghost:hover { background: rgba(255,255,255,0.14); }
+.btn-kakao { background: #FEE500; color: #191919; font-weight: 800; border-radius: 980px; }
 
 /* ---------- 인풋 ---------- */
-.input-dark {
-  background: rgba(255,255,255,0.055);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: #e6edf7;
+.input-light {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.1);
+  color: #1d1d1f;
   border-radius: 16px;
-  transition: border-color .2s, box-shadow .2s, background .2s;
+  transition: border-color .2s, box-shadow .2s;
 }
-.input-dark::placeholder { color: #64748b; }
-.input-dark:focus { outline: none; border-color: rgba(45,212,191,0.6); box-shadow: 0 0 0 4px rgba(45,212,191,0.14); background: rgba(255,255,255,0.08); }
-select.input-dark option { background: #0d1421; color: #e6edf7; }
+.input-light::placeholder { color: #a1a1a6; }
+.input-light:focus { outline: none; border-color: #0071e3; box-shadow: 0 0 0 4px rgba(0,113,227,0.14); }
+/* 상담 화면용 다크 인풋(기존 클래스 유지) */
+.input-dark {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #f5f5f7; border-radius: 16px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.input-dark::placeholder { color: #86868b; }
+.input-dark:focus { outline: none; border-color: rgba(100,210,255,0.6); box-shadow: 0 0 0 4px rgba(100,210,255,0.15); }
+select.input-dark option { background: #1c1c1e; color: #f5f5f7; }
 
 /* ---------- 칩/탭 ---------- */
 .chip {
-  border: 1px solid rgba(255,255,255,0.09);
-  background: rgba(255,255,255,0.04);
-  color: #94a3b8; font-weight: 700;
-  transition: all .2s;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(255,255,255,0.7);
+  color: #6e6e73; font-weight: 600;
+  border-radius: 980px;
+  transition: all .25s cubic-bezier(.22,1,.36,1);
 }
-.chip:hover { color: #e6edf7; background: rgba(255,255,255,0.08); }
+.chip:hover { color: #1d1d1f; background: #fff; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.07); }
 .chip.on {
-  background: linear-gradient(135deg, rgba(20,184,166,0.22), rgba(14,165,233,0.18));
-  border-color: rgba(45,212,191,0.5);
-  color: #5eead4;
-  box-shadow: 0 4px 20px -4px rgba(20,184,166,0.35);
+  background: #1d1d1f; border-color: #1d1d1f; color: #fff;
+  box-shadow: 0 6px 20px -4px rgba(0,0,0,0.3);
 }
+.cinema .chip { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #a1a1a6; }
+.cinema .chip.on { background: #f5f5f7; border-color: #f5f5f7; color: #1d1d1f; }
+
+/* ---------- 스크롤 리빌 모션 ---------- */
+.reveal { opacity: 0; transform: translateY(28px) scale(.985); transition: opacity .8s cubic-bezier(.22,1,.36,1), transform .8s cubic-bezier(.22,1,.36,1); }
+.reveal.in { opacity: 1; transform: none; }
+.reveal-d1 { transition-delay: .08s } .reveal-d2 { transition-delay: .16s } .reveal-d3 { transition-delay: .24s }
 
 /* ---------- 애니메이션 ---------- */
-@keyframes cardIn { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
-.card-in { animation: cardIn .5s cubic-bezier(.22,1,.36,1) both; }
+@keyframes cardIn { from { opacity: 0; transform: translateY(20px) scale(.98); } to { opacity: 1; transform: none; } }
+.card-in { animation: cardIn .6s cubic-bezier(.22,1,.36,1) both; }
 @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
-.fade-in { animation: fadeIn .4s ease both; }
-@keyframes floatY { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
-.float-y { animation: floatY 5s ease-in-out infinite; }
-@keyframes pulseGlow { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
-.pulse-glow { animation: pulseGlow 3s ease-in-out infinite; }
+.fade-in { animation: fadeIn .5s ease both; }
+@keyframes floatY { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-12px) } }
+.float-y { animation: floatY 5.5s ease-in-out infinite; }
+@keyframes pulseGlow { 0%,100% { opacity: .5 } 50% { opacity: 1 } }
+.pulse-glow { animation: pulseGlow 2.6s ease-in-out infinite; }
+@keyframes blobDrift {
+  0%,100% { transform: translate(0,0) scale(1) }
+  33% { transform: translate(40px,-30px) scale(1.08) }
+  66% { transform: translate(-30px,24px) scale(.95) }
+}
+.blob { position: absolute; border-radius: 50%; filter: blur(70px); pointer-events: none; animation: blobDrift 16s ease-in-out infinite; }
 
 /* ---------- 스켈레톤 ---------- */
 @keyframes shimmer { 0% { background-position: -400px 0 } 100% { background-position: 400px 0 } }
 .skeleton {
-  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+  background: linear-gradient(90deg, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.09) 50%, rgba(0,0,0,0.05) 75%);
   background-size: 800px 100%; animation: shimmer 1.4s infinite;
 }
+.cinema .skeleton { background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%); background-size: 800px 100%; }
 
 /* ---------- 드로잉 ---------- */
 #draw-canvas { touch-action: none; cursor: crosshair; }
 
-/* ---------- 필름스트립 ---------- */
-.film-thumb { transition: all .22s cubic-bezier(.22,1,.36,1); opacity: .55; }
-.film-thumb:hover { opacity: .9; }
-.film-thumb.active { opacity: 1; outline: 2.5px solid #2dd4bf; outline-offset: 2px; transform: scale(1.06); box-shadow: 0 8px 24px -6px rgba(45,212,191,.5); }
+/* ---------- 필름스트립 (상담·다크) ---------- */
+.film-thumb { transition: all .25s cubic-bezier(.22,1,.36,1); opacity: .5; border-radius: 12px; }
+.film-thumb:hover { opacity: .85; }
+.film-thumb.active { opacity: 1; outline: 2.5px solid #64d2ff; outline-offset: 2px; transform: scale(1.06); box-shadow: 0 8px 24px -6px rgba(100,210,255,.5); }
 
 /* ---------- 비교 슬라이더 ---------- */
 .compare-wrap { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; }
 .compare-after { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--split, 50%)); }
-.compare-handle { position: absolute; top: 0; bottom: 0; width: 3px; background: linear-gradient(#5eead4, #38bdf8); box-shadow: 0 0 16px rgba(94,234,212,.7); left: var(--split, 50%); transform: translateX(-50%); }
+.compare-handle { position: absolute; top: 0; bottom: 0; width: 3px; background: linear-gradient(#64d2ff, #5e5ce6); box-shadow: 0 0 16px rgba(100,210,255,.7); left: var(--split, 50%); transform: translateX(-50%); }
 
 /* ---------- 마소너리 ---------- */
 .masonry { columns: 2 280px; column-gap: 1.25rem; }
@@ -166,17 +230,24 @@ select.input-dark option { background: #0d1421; color: #e6edf7; }
 
 /* ---------- 토스트 ---------- */
 @keyframes toastIn { from { opacity: 0; transform: translateY(16px) scale(.96) } to { opacity: 1; transform: none } }
-.toast { animation: toastIn .3s cubic-bezier(.22,1,.36,1) both; }
+.toast { animation: toastIn .35s cubic-bezier(.22,1,.36,1) both; }
 
 /* ---------- 병원명 타이포 ---------- */
 .clinic-title {
-  background: linear-gradient(100deg, #f0fdfa 10%, #5eead4 55%, #7dd3fc 100%);
+  background: linear-gradient(94deg, #1d1d1f 20%, #0071e3 70%, #5e5ce6 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 2px 14px rgba(94,234,212,0.25));
+}
+.cinema .clinic-title {
+  background: linear-gradient(94deg, #f5f5f7 20%, #64d2ff 70%, #5e5ce6 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 
-/* ---------- 히어로 대형 타이틀 ---------- */
-.hero-title { font-size: clamp(2.2rem, 5.5vw, 4.2rem); line-height: 1.08; font-weight: 900; letter-spacing: -0.04em; }
+/* ---------- 히어로 대형 타이틀 (애플 스케일) ---------- */
+.hero-title { font-size: clamp(2.6rem, 6.5vw, 5rem); line-height: 1.05; font-weight: 800; letter-spacing: -0.045em; }
+.hero-sub { font-size: clamp(1.1rem, 2vw, 1.45rem); line-height: 1.5; font-weight: 500; color: #6e6e73; }
 
-/* ---------- 라이트 표면(수가표·환자 페이지 카드 등) ---------- */
-.surface-light { background: #ffffff; color: #0f172a; }
+/* ---------- 섹션 타이틀 ---------- */
+.section-title { font-size: clamp(1.6rem, 3.4vw, 2.6rem); font-weight: 800; letter-spacing: -0.04em; line-height: 1.12; }
+
+/* ---------- 라이트 표면 ---------- */
+.surface-light { background: #ffffff; color: #1d1d1f; }

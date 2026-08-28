@@ -61,7 +61,7 @@ function render() {
     <div class="flex-1 flex min-h-0">
       <!-- 스테이지 영역 -->
       <main class="flex-1 flex flex-col min-w-0">
-        <div id="stage-wrap" class="relative flex-1 min-h-0" style="background:radial-gradient(ellipse 70% 55% at 50% 40%, #0c1524 0%, #060a12 100%)">
+        <div id="stage-wrap" class="relative flex-1 min-h-0" style="background:radial-gradient(ellipse 70% 55% at 50% 40%, #16161c 0%, #060608 100%)">
           <div id="stage" class="absolute inset-0 flex items-center justify-center overflow-hidden"></div>
           <canvas id="draw-canvas" class="absolute inset-0 w-full h-full z-10"></canvas>
           <!-- 드로잉 툴바 -->
@@ -114,7 +114,7 @@ function renderStage() {
       <div class="compare-after"><img src="${after}" class="absolute inset-0 w-full h-full object-contain" draggable="false"></div>
       <div class="compare-handle"><div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-1/2 w-12 h-12 rounded-full bg-white shadow-xl flex items-center justify-center"><i class="fas fa-arrows-left-right text-slate-700"></i></div></div>
       <span class="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-black/60 text-white font-bold">Before</span>
-      <span class="absolute top-4 right-4 px-3 py-1.5 rounded-lg font-bold text-white" style="background:linear-gradient(135deg,rgba(20,184,166,.9),rgba(14,165,233,.9))">After</span>
+      <span class="absolute top-4 right-4 px-3 py-1.5 rounded-lg font-bold text-white" style="background:linear-gradient(120deg,rgba(0,113,227,.92),rgba(94,92,230,.92))">After</span>
     </div>`
     initCompare()
     renderSubnav('')
@@ -123,8 +123,8 @@ function renderStage() {
     stage.innerHTML = `
     <div class="w-full h-full overflow-auto dark-scroll flex items-start justify-center p-4 sm:p-8">
       <div class="print-area w-full max-w-[900px] bg-white rounded-3xl shadow-2xl overflow-hidden">
-        <div class="px-8 py-6" style="background:linear-gradient(120deg,#0f766e,#0284c7)">
-          <p class="text-teal-100 font-bold text-sm">${PC.esc(PC.user?.clinic_name || '페이션트 커넥트')}</p>
+        <div class="px-8 py-6" style="background:linear-gradient(120deg,#0071e3,#5e5ce6)">
+          <p class="text-sky-100 font-bold text-sm">${PC.esc(PC.user?.clinic_name || '페이션트 커넥트')}</p>
           <h2 class="text-white text-2xl font-extrabold mt-0.5">${PC.esc(a.title)}</h2>
         </div>
         <table class="w-full consult-text">
@@ -134,7 +134,7 @@ function renderStage() {
           <tbody>${rows.map((r, i) => `
             <tr class="${i % 2 ? 'bg-slate-50/60' : ''} border-t border-slate-100">
               <td class="px-8 py-4 font-bold text-slate-800">${PC.esc(r.item)}</td>
-              <td class="px-4 py-4 text-right font-extrabold text-teal-700 whitespace-nowrap">${PC.esc(r.price)}</td>
+              <td class="px-4 py-4 text-right font-extrabold text-[#0071e3] whitespace-nowrap">${PC.esc(r.price)}</td>
               <td class="px-4 py-4 text-center"><span class="px-2.5 py-1 rounded-full text-sm font-bold ${r.insurance === '급여' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${PC.esc(r.insurance)}</span></td>
               <td class="px-6 py-4 text-slate-500 text-base hidden sm:table-cell">${PC.esc(r.note || '')}</td>
             </tr>`).join('')}
@@ -149,10 +149,10 @@ function renderStage() {
     <div class="w-full h-full flex items-center justify-center p-6">
       <div class="max-w-[800px] w-full">
         <div class="grad-border rounded-3xl"><div class="glass-strong rounded-3xl p-8 sm:p-12">
-          <p class="grad-text font-extrabold text-lg"><i class="fas fa-circle-question mr-2 text-teal-300"></i>자주 묻는 질문</p>
+          <p class="grad-text font-extrabold text-lg"><i class="fas fa-circle-question mr-2 text-sky-300"></i>자주 묻는 질문</p>
           <h2 class="mt-3 text-2xl sm:text-4xl font-extrabold text-white leading-snug">${PC.esc(p.question || a.title)}</h2>
           <p class="mt-6 consult-text text-slate-300 sm:text-2xl sm:leading-relaxed">${PC.esc(p.answer || a.description || '')}</p>
-          ${a.reviewer_name ? `<p class="mt-8 text-teal-300 font-bold"><i class="fas fa-user-doctor mr-1.5"></i>감수 · ${PC.esc(a.reviewer_name)}</p>` : ''}
+          ${a.reviewer_name ? `<p class="mt-8 text-sky-300 font-bold"><i class="fas fa-user-doctor mr-1.5"></i>감수 · ${PC.esc(a.reviewer_name)}</p>` : ''}
         </div></div>
       </div>
     </div>`
@@ -482,7 +482,7 @@ function renderPanel() {
   <div class="p-5 space-y-5">
     <div>
       <div class="flex items-center gap-2 flex-wrap">${PC.typeBadge(a.type)}
-        ${a.reviewer_name ? `<span class="text-teal-300 text-sm font-bold"><i class="fas fa-user-doctor mr-1"></i>감수 ${PC.esc(a.reviewer_name)}</span>` : ''}
+        ${a.reviewer_name ? `<span class="text-sky-300 text-sm font-bold"><i class="fas fa-user-doctor mr-1"></i>감수 ${PC.esc(a.reviewer_name)}</span>` : ''}
       </div>
       <h2 class="mt-2 text-white text-xl font-extrabold leading-snug">${PC.esc(a.title)}</h2>
       ${a.description ? `<p class="mt-2 text-slate-300 text-[15px] leading-relaxed">${PC.esc(a.description)}</p>` : ''}
@@ -492,8 +492,8 @@ function renderPanel() {
       <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">단계 목록</p>
       <div class="space-y-1.5">
         ${items.map((it, i) => `
-        <button onclick="subGo(${i})" class="w-full text-left p-3 rounded-xl transition ${i === S.subIndex ? 'bg-teal-500/20 border border-teal-400/40' : 'bg-white/5 hover:bg-white/10 border border-transparent'}">
-          <p class="font-bold text-[15px] ${i === S.subIndex ? 'text-teal-300' : 'text-slate-200'}">${PC.esc(it.label ? it.label + ' · ' + it.title : it.title)}</p>
+        <button onclick="subGo(${i})" class="w-full text-left p-3 rounded-xl transition ${i === S.subIndex ? 'bg-sky-500/20 border border-sky-400/40' : 'bg-white/5 hover:bg-white/10 border border-transparent'}">
+          <p class="font-bold text-[15px] ${i === S.subIndex ? 'text-sky-300' : 'text-slate-200'}">${PC.esc(it.label ? it.label + ' · ' + it.title : it.title)}</p>
           <p class="text-slate-400 text-[13px] mt-0.5 line-clamp-2">${PC.esc(it.desc || '')}</p>
         </button>`).join('')}
       </div>
@@ -502,7 +502,7 @@ function renderPanel() {
     <div>
       <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">수가표</p>
       <div class="space-y-1">${p.rows.map((r) => `
-        <div class="flex justify-between gap-2 p-2.5 rounded-lg bg-white/5 text-sm"><span class="text-slate-300">${PC.esc(r.item)}</span><span class="text-teal-300 font-bold whitespace-nowrap">${PC.esc(r.price)}</span></div>`).join('')}
+        <div class="flex justify-between gap-2 p-2.5 rounded-lg bg-white/5 text-sm"><span class="text-slate-300">${PC.esc(r.item)}</span><span class="text-sky-300 font-bold whitespace-nowrap">${PC.esc(r.price)}</span></div>`).join('')}
       </div>
     </div>` : ''}
     <div id="caution-box"></div>
@@ -511,10 +511,10 @@ function renderPanel() {
       <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">상담 메모</p>
       <input id="patient-label" placeholder="환자 표시명 (예: 김○○님)" value="${PC.esc(S.session.patient_label)}"
         onchange="S.session.patient_label=this.value"
-        class="w-full h-12 px-4 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400 mb-2">
+        class="w-full h-12 px-4 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400 mb-2">
       <textarea id="slide-note" placeholder="이 자료에 대한 메모" rows="3"
         onchange="setNote(this.value)"
-        class="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400 text-[15px]">${PC.esc(S.session.slides[S.assetId]?.note || '')}</textarea>
+        class="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-[15px]">${PC.esc(S.session.slides[S.assetId]?.note || '')}</textarea>
     </div>` : ''}
   </div>`
   loadCautions()
@@ -579,8 +579,8 @@ window.sendToPatient = async () => {
   modal.innerHTML = `
   <div class="card-in grad-border w-full max-w-md glass-strong rounded-3xl p-7">
     <div class="relative w-16 h-16 mx-auto">
-      <div class="absolute inset-0 rounded-2xl bg-teal-400/40 blur-xl"></div>
-      <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-400 to-sky-500 flex items-center justify-center"><i class="fas fa-paper-plane text-2xl text-white"></i></div>
+      <div class="absolute inset-0 rounded-2xl bg-sky-400/40 blur-xl"></div>
+      <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0071e3] to-[#5e5ce6] flex items-center justify-center"><i class="fas fa-paper-plane text-2xl text-white"></i></div>
     </div>
     <h3 class="mt-5 text-center text-2xl font-black text-white">환자 전송 링크 생성 완료</h3>
     <p class="mt-1.5 text-center text-slate-400">오늘 설명드린 자료와 그림, 주의사항이 담겨 있습니다</p>

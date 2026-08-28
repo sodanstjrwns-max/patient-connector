@@ -1,4 +1,4 @@
-// 라이브러리 홈 — v2 AURORA DARK, 전 진료과
+// 라이브러리 홈 — v3 APPLE LIGHT, 전 진료과
 const SPECIALTY_ICONS = {
   '치과': 'fa-tooth', '피부·미용': 'fa-spa', '성형외과': 'fa-wand-magic-sparkles',
   '정형·재활': 'fa-bone', '안과': 'fa-eye', '한방': 'fa-leaf',
@@ -37,7 +37,6 @@ async function loadTreatments() {
 async function loadAssets() {
   const grid = document.getElementById('grid')
   if (grid) grid.innerHTML = skeletons()
-  // 진료과의 진료 id들로 필터 (treatment=all이면 specialty의 전체)
   const params = { category: state.category, q: state.q }
   if (state.treatment !== 'all') params.treatment = state.treatment
   const { data } = await axios.get('/api/assets', { params })
@@ -59,64 +58,62 @@ function render() {
   document.getElementById('app').innerHTML = `
   ${PC.headerHTML('home')}
 
-  <!-- 히어로 -->
+  <!-- 히어로: 애플 스타일 센터 정렬 대형 타이포 -->
   <section id="hero-section" class="relative overflow-hidden">
-    <div class="max-w-[1700px] mx-auto px-4 sm:px-7 pt-12 sm:pt-16 pb-8">
-      <div class="flex flex-wrap items-end justify-between gap-8">
-        <div class="max-w-3xl">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-teal-300 text-sm font-bold mb-5">
-            <span class="w-2 h-2 rounded-full bg-teal-400 pulse-glow"></span>
-            ${u?.clinic_name ? PC.esc(u.clinic_name) + ' 전용 상담 시스템' : '모든 병원이 영원히 무료 · 회원 병원 상담 도구'}
-          </div>
-          <h1 class="hero-title text-white">
-            환자의 눈높이에서,<br><span class="grad-text">그리며 설명하는</span> 상담
-          </h1>
-          <p class="mt-5 text-slate-400 text-lg sm:text-xl font-medium">자료를 고르고 → 화면에 띄우고 → 그리며 설명하고 → 환자에게 보내세요</p>
-        </div>
-        <div class="relative w-full lg:w-[440px]">
-          <div class="absolute -inset-1 rounded-3xl bg-gradient-to-r from-teal-500/30 to-sky-500/30 blur-xl"></div>
-          <div class="relative">
-            <i class="fas fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-slate-500"></i>
-            <input id="search-input" type="search" placeholder="제목·태그 검색 (예: 임플란트, 보톡스)"
-              class="input-dark w-full h-[60px] pl-13 pr-5 text-lg font-medium" style="padding-left:3.2rem"
-              oninput="onSearch(this.value)">
-          </div>
-        </div>
+    <div class="blob w-[420px] h-[420px] bg-[#5e5ce6]/12 -top-32 -right-24"></div>
+    <div class="blob w-[360px] h-[360px] bg-[#0071e3]/10 top-20 -left-28" style="animation-delay:-6s"></div>
+    <div class="relative max-w-[1100px] mx-auto px-5 pt-16 sm:pt-24 pb-10 text-center">
+      ${u?.clinic_name ? `
+      <div class="reveal inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-[#0071e3] text-sm font-bold mb-6">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 pulse-glow"></span>${PC.esc(u.clinic_name)} 전용 상담 시스템
+      </div>` : `
+      <div class="reveal inline-flex items-center gap-2 px-4 py-2 rounded-full glass text-[#6e6e73] text-sm font-bold mb-6">
+        모든 병원이 <span class="grad-text-blue font-extrabold">영원히 무료</span>로 쓰는 설명자료 라이브러리
+      </div>`}
+      <h1 class="hero-title reveal reveal-d1 text-[#1d1d1f]">
+        설명이 달라지면,<br><span class="grad-text grad-animate">환자의 마음</span>이 움직입니다.
+      </h1>
+      <p class="hero-sub reveal reveal-d2 mt-6 max-w-xl mx-auto">자료를 고르고, 화면에 띄우고, 그리며 설명하고,<br class="hidden sm:block">상담이 끝나면 환자 폰으로 보내세요.</p>
+      <div class="reveal reveal-d3 mt-9 max-w-xl mx-auto relative">
+        <i class="fas fa-magnifying-glass absolute left-6 top-1/2 -translate-y-1/2 text-[#a1a1a6]"></i>
+        <input id="search-input" type="search" placeholder="제목·태그 검색 (예: 임플란트, 보톡스)"
+          class="input-light w-full h-[62px] pr-6 text-lg font-medium shadow-lg shadow-black/5" style="padding-left:3.5rem;border-radius:980px"
+          oninput="onSearch(this.value)">
       </div>
 
       <!-- 진료과 선택 -->
-      <div class="mt-9 flex gap-2.5 overflow-x-auto pb-1" id="specialty-tabs">
+      <div class="reveal reveal-d3 mt-9 flex flex-wrap justify-center gap-2.5" id="specialty-tabs">
         ${state.specialties.map((sp) => `
-        <button onclick="setSpecialty('${sp}')" class="chip ${state.specialty === sp ? 'on' : ''} btn-touch shrink-0 inline-flex items-center gap-2.5 px-5 rounded-2xl text-[15px]">
+        <button onclick="setSpecialty('${sp}')" class="chip ${state.specialty === sp ? 'on' : ''} btn-touch shrink-0 inline-flex items-center gap-2.5 px-5 text-[15px]">
           <i class="fas ${SPECIALTY_ICONS[sp] || 'fa-stethoscope'}"></i>${sp}
         </button>`).join('')}
       </div>
     </div>
   </section>
 
-  <!-- 진료 탭 -->
-  <div class="glass sticky top-[76px] z-30 border-x-0 border-t-0">
-    <div class="max-w-[1700px] mx-auto px-4 sm:px-7 py-3 flex gap-2 overflow-x-auto" id="treatment-tabs">
+  <!-- 진료 탭: 프로스티드 스티키 바 -->
+  <div class="glass sticky top-[72px] z-30 border-x-0">
+    <div class="max-w-[1700px] mx-auto px-4 sm:px-7 py-3 flex gap-2 overflow-x-auto justify-start lg:justify-center" id="treatment-tabs">
       ${tabBtn('all', '전체')}
       ${state.treatments.map((t) => tabBtn(t.id, t.name)).join('')}
     </div>
   </div>
 
-  <div class="max-w-[1700px] mx-auto px-4 sm:px-7 py-8 flex gap-8">
+  <div class="max-w-[1700px] mx-auto px-4 sm:px-7 py-10 flex gap-10">
     <!-- 좌측 카테고리 -->
     <aside id="category-sidebar" class="hidden lg:block w-60 shrink-0">
-      <div class="sticky top-[156px] space-y-1.5">
-        <p class="px-3 pb-2.5 text-[11px] font-black tracking-[0.25em] text-slate-600 uppercase">카테고리</p>
+      <div class="sticky top-[150px] space-y-1">
+        <p class="px-4 pb-2.5 text-[11px] font-extrabold tracking-[0.25em] text-[#a1a1a6] uppercase">카테고리</p>
         ${CATEGORIES.map(([key, label, icon]) => `
-          <button onclick="setCategory('${key}')" class="btn-touch w-full flex items-center gap-3.5 px-4 rounded-2xl text-left font-bold text-[15px] transition ${state.category === key ? 'bg-white/10 text-teal-300 grad-border' : 'text-slate-400 hover:text-white hover:bg-white/5'}">
-            <i class="fas ${icon} w-5 text-center ${state.category === key ? 'text-teal-400' : 'text-slate-600'}"></i>${label}
+          <button onclick="setCategory('${key}')" class="btn-touch w-full flex items-center gap-3.5 px-4 rounded-2xl text-left font-semibold text-[15px] transition ${state.category === key ? 'bg-white shadow-md shadow-black/5 text-[#0071e3]' : 'text-[#6e6e73] hover:bg-white/70'}">
+            <i class="fas ${icon} w-5 text-center ${state.category === key ? 'text-[#0071e3]' : 'text-[#c7c7cc]'}"></i>${label}
           </button>`).join('')}
         ${u && u.clinic_id ? `
-        <div class="pt-5">
-          <a href="/manage" class="grad-border block p-5 rounded-3xl bg-gradient-to-br from-teal-500/15 to-sky-500/10 hover:from-teal-500/25 hover:to-sky-500/15 transition group">
-            <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-400 to-sky-500 flex items-center justify-center shadow-lg shadow-teal-500/30 group-hover:scale-105 transition"><i class="fas fa-cloud-arrow-up text-white"></i></div>
-            <p class="font-extrabold text-white mt-3">병원 자료 올리기</p>
-            <p class="text-[13px] text-slate-400 mt-1 leading-snug">이미지·영상 업로드,<br>자료 커스터마이즈</p>
+        <div class="pt-6">
+          <a href="/manage" class="block p-5 rounded-3xl bg-gradient-to-br from-[#0071e3] to-[#5e5ce6] text-white shadow-xl shadow-[#5e5ce6]/30 hover:scale-[1.02] transition duration-300 group">
+            <div class="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center group-hover:scale-105 transition"><i class="fas fa-cloud-arrow-up"></i></div>
+            <p class="font-extrabold mt-3.5">병원 자료 올리기</p>
+            <p class="text-[13px] text-white/70 mt-1 leading-snug">이미지·영상 업로드,<br>자료 커스터마이즈</p>
           </a>
         </div>` : ''}
       </div>
@@ -125,28 +122,29 @@ function render() {
     <!-- 본문 -->
     <main class="flex-1 min-w-0">
       <div class="lg:hidden flex gap-2 overflow-x-auto pb-5" id="category-chips">
-        ${CATEGORIES.map(([key, label]) => `<button onclick="setCategory('${key}')" class="chip ${state.category === key ? 'on' : ''} btn-touch shrink-0 px-4 rounded-xl text-sm">${label}</button>`).join('')}
+        ${CATEGORIES.map(([key, label]) => `<button onclick="setCategory('${key}')" class="chip ${state.category === key ? 'on' : ''} btn-touch shrink-0 px-4 text-sm">${label}</button>`).join('')}
       </div>
       <div id="grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">${skeletons()}</div>
     </main>
   </div>
-  <footer class="py-12 text-center text-sm text-slate-600">
+  <footer class="py-14 text-center text-sm text-[#a1a1a6]">
     페이션트 커넥트 · 모든 병원이 영원히 무료로 사용하는 공개 설명자료 라이브러리
   </footer>`
+  PC.observeReveals()
 }
 
 function tabBtn(id, name) {
   const active = String(state.treatment) === String(id)
-  return `<button onclick="setTreatment('${id}')" class="btn-touch shrink-0 px-5 rounded-xl font-bold text-[15px] transition ${active ? 'bg-white text-slate-900 shadow-xl shadow-white/10' : 'text-slate-400 hover:text-white hover:bg-white/6'}">${PC.esc(name)}</button>`
+  return `<button onclick="setTreatment('${id}')" class="btn-touch shrink-0 px-5 rounded-full font-semibold text-[15px] transition ${active ? 'bg-[#1d1d1f] text-white shadow-lg shadow-black/15' : 'text-[#6e6e73] hover:text-[#1d1d1f] hover:bg-black/5'}">${PC.esc(name)}</button>`
 }
 
 function renderGrid() {
   const grid = document.getElementById('grid')
   if (!state.assets.length) {
     grid.innerHTML = `<div class="col-span-full py-24 text-center fade-in">
-      <div class="w-24 h-24 mx-auto rounded-[2rem] card flex items-center justify-center mb-5 float-y"><i class="fas fa-folder-open text-4xl text-slate-600"></i></div>
-      <p class="text-xl font-extrabold text-slate-400">자료가 없습니다</p>
-      <p class="text-slate-600 mt-1.5">다른 진료나 카테고리를 선택해 보세요</p>
+      <div class="w-24 h-24 mx-auto rounded-[2rem] card flex items-center justify-center mb-5 float-y"><i class="fas fa-folder-open text-4xl text-[#c7c7cc]"></i></div>
+      <p class="text-xl font-extrabold text-[#6e6e73]">자료가 없습니다</p>
+      <p class="text-[#a1a1a6] mt-1.5">다른 진료나 카테고리를 선택해 보세요</p>
     </div>`
     return
   }
@@ -154,20 +152,19 @@ function renderGrid() {
     const mine = a.clinic_id != null
     return `
     <a href="/consult/${a.id}" class="card card-hover card-in group block overflow-hidden" style="animation-delay:${Math.min(i * 45, 450)}ms">
-      <div class="relative aspect-[4/3] overflow-hidden">
-        <img src="${PC.thumbOf(a)}" alt="${PC.esc(a.title)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-[1.05] transition duration-700">
-        <div class="absolute inset-0 bg-gradient-to-t from-[#070b14]/80 via-transparent to-[#070b14]/20"></div>
+      <div class="relative aspect-[4/3] overflow-hidden bg-[#f5f5f7]">
+        <img src="${PC.thumbOf(a)}" alt="${PC.esc(a.title)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-[1.06] transition duration-[900ms] ease-[cubic-bezier(.22,1,.36,1)]">
         <div class="absolute top-3.5 left-3.5 flex gap-1.5">${PC.typeBadge(a.type)}</div>
-        <span class="absolute top-3.5 right-3.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold backdrop-blur border ${mine ? 'bg-teal-400/20 text-teal-300 border-teal-400/40' : 'bg-white/10 text-slate-300 border-white/15'}">${mine ? '우리 병원' : '공개'}</span>
-        <div class="absolute inset-x-0 bottom-0 p-4 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition duration-300">
-          <span class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl btn-primary text-sm"><i class="fas fa-display"></i>상담 화면으로</span>
+        <span class="absolute top-3.5 right-3.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold backdrop-blur-md ${mine ? 'bg-[#0071e3] text-white' : 'bg-white/85 text-[#6e6e73]'}">${mine ? '우리 병원' : '공개'}</span>
+        <div class="absolute inset-x-0 bottom-0 p-4 translate-y-3 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition duration-300">
+          <span class="inline-flex items-center gap-2 px-5 py-2.5 btn-primary text-sm"><i class="fas fa-display"></i>상담 화면으로</span>
         </div>
       </div>
       <div class="p-5">
-        <h3 class="font-extrabold text-white text-[17px] leading-snug line-clamp-2">${PC.esc(a.title)}</h3>
+        <h3 class="font-bold text-[#1d1d1f] text-[17px] leading-snug line-clamp-2">${PC.esc(a.title)}</h3>
         <div class="mt-2.5 flex items-center justify-between text-[13px]">
-          <span class="text-slate-500 font-semibold">${PC.esc(a.treatment_name || '')}</span>
-          ${a.reviewer_name ? `<span class="inline-flex items-center gap-1.5 text-teal-400/90 font-bold"><i class="fas fa-user-doctor text-[11px]"></i>${PC.esc(a.reviewer_name)}</span>` : ''}
+          <span class="text-[#a1a1a6] font-semibold">${PC.esc(a.treatment_name || '')}</span>
+          ${a.reviewer_name ? `<span class="inline-flex items-center gap-1.5 text-[#0071e3] font-bold"><i class="fas fa-user-doctor text-[11px]"></i>${PC.esc(a.reviewer_name)}</span>` : ''}
         </div>
       </div>
     </a>`
