@@ -1,0 +1,61 @@
+/* 페이션트 커넥트 공통 스타일 */
+* { -webkit-tap-highlight-color: transparent; }
+html { font-size: 16px; }
+body { letter-spacing: -0.01em; }
+
+/* 스크롤바 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+.dark-scroll::-webkit-scrollbar-thumb { background: #334155; }
+
+/* 글래스 */
+.glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.glass-dark { background: rgba(10,15,25,0.72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+
+/* 카드 등장 애니메이션 */
+@keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.card-in { animation: cardIn .45s cubic-bezier(.22,1,.36,1) both; }
+
+/* 카드 호버 */
+.asset-card { transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s; }
+.asset-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -12px rgba(13,148,136,.25); }
+
+/* 큰 터치 타깃 */
+.btn-touch { min-height: 48px; min-width: 48px; }
+
+/* 드로잉 캔버스 */
+#draw-canvas { touch-action: none; cursor: crosshair; }
+
+/* 필름스트립 */
+.filmstrip { scrollbar-width: thin; }
+.film-thumb { transition: all .2s; }
+.film-thumb.active { outline: 3px solid #2dd4bf; outline-offset: 2px; transform: scale(1.05); }
+
+/* 비교 슬라이더 */
+.compare-wrap { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; }
+.compare-after { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--split, 50%)); }
+.compare-handle { position: absolute; top: 0; bottom: 0; width: 4px; background: #fff; box-shadow: 0 0 12px rgba(0,0,0,.5); left: var(--split, 50%); transform: translateX(-50%); }
+
+/* 마소너리 */
+.masonry { columns: 2 260px; column-gap: 1rem; }
+.masonry > * { break-inside: avoid; margin-bottom: 1rem; }
+
+/* 로딩 스켈레톤 */
+@keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.skeleton { background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 800px 100%; animation: shimmer 1.4s infinite; }
+
+/* 인쇄 (수가표 A4) */
+@media print {
+  .no-print { display: none !important; }
+  .print-area { box-shadow: none !important; border: none !important; }
+}
+
+/* 상담 화면 큰 글자 */
+.consult-text { font-size: 20px; line-height: 1.7; }
+
+/* 토스트 */
+@keyframes toastIn { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
+.toast { animation: toastIn .3s cubic-bezier(.22,1,.36,1) both; }
+
+/* 헤더 병원명 그라데이션 */
+.clinic-title { background: linear-gradient(135deg, #0f766e, #0d9488 55%, #2dd4bf); -webkit-background-clip: text; background-clip: text; color: transparent; }

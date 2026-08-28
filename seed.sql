@@ -4,8 +4,8 @@ INSERT OR IGNORE INTO clinics (id, name, phone, address, emergency_info) VALUES
 
 -- 비밀번호: demo1234 (SHA-256 hex of 'demo1234' + salt 'pc_salt')
 INSERT OR IGNORE INTO users (id, clinic_id, email, password_hash, name, role) VALUES
-  (1, 1, 'demo@clinic.com', 'PLACEHOLDER_HASH_OWNER', '문석준', 'owner'),
-  (2, NULL, 'admin@patientconnect.kr', 'PLACEHOLDER_HASH_ADMIN', '운영자', 'admin');
+  (1, 1, 'demo@clinic.com', 'd8a4e8923c509a0dfc245a2bad42ae1a54641097eed83fc1491bd5be8c02bebd', '문석준', 'owner'),
+  (2, NULL, 'admin@patientconnect.kr', '2a06bddddd0838ff9b99cd564c783f697e7fcc8292467900b4250a72fac27123', '운영자', 'admin');
 
 -- 진료 과목
 INSERT OR IGNORE INTO treatments (id, name, slug, sort_order) VALUES
