@@ -5,7 +5,7 @@ const head = (title: string, extra = '') => `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>${title}</title>
-<meta name="theme-color" content="#f5f5f7">
+<meta name="theme-color" content="#f7f7f8">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
@@ -13,7 +13,7 @@ const head = (title: string, extra = '') => `<!DOCTYPE html>
 <script>
 tailwind.config = {
   theme: { extend: {
-    colors: { brand: { 50:'#f0fdfa',100:'#ccfbf1',200:'#99f6e4',300:'#5eead4',400:'#2dd4bf',500:'#14b8a6',600:'#0d9488',700:'#0f766e',800:'#115e59',900:'#134e4a' } },
+    colors: { brand: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81' } },
     fontFamily: { sans: ['Pretendard','Apple SD Gothic Neo','Noto Sans KR','sans-serif'] }
   } }
 }
@@ -77,10 +77,10 @@ export const pageShare = () => `${head('오늘 설명드린 자료')}
 
 export const pageNotFound = (msg: string) => `${head('준비 중 — 페이션트 커넥트')}
 <body class="font-sans antialiased">
-<div class="min-h-screen flex flex-col items-center justify-center gap-5 p-8">
-  <div class="w-24 h-24 rounded-[2rem] card flex items-center justify-center float-y"><i class="fas fa-hammer text-4xl text-[#0071e3]"></i></div>
-  <h1 class="text-2xl font-extrabold text-[#1d1d1f]">${msg}</h1>
-  <a href="/" class="mt-2 px-7 py-3.5 btn-primary">라이브러리로 돌아가기</a>
+<div class="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
+  <div class="w-14 h-14 rounded-[12px] bg-white border border-[#e4e4e7] flex items-center justify-center"><i class="fas fa-hammer text-[20px] text-[#4f46e5]"></i></div>
+  <h1 class="text-[20px] font-bold text-[#18181b]">${msg}</h1>
+  <a href="/" class="btn-primary mt-1 px-6 py-2.5">라이브러리로 돌아가기</a>
 </div>
 <script src="/static/common.js"></script>
 </body></html>`

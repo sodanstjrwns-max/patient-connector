@@ -16,6 +16,7 @@ export type AuthUser = {
   clinic_name?: string
   clinic_phone?: string
   clinic_logo?: string
+  clinic_specialty?: string
 }
 
 const SALT = 'pc_salt'
@@ -35,7 +36,7 @@ export async function getUser(c: Context<{ Bindings: Bindings }>): Promise<AuthU
   const token = getCookie(c, 'pc_session') || c.req.header('Authorization')?.replace('Bearer ', '')
   if (!token) return null
   const row = await c.env.DB.prepare(
-    `SELECT u.id, u.clinic_id, u.email, u.name, u.role, cl.name as clinic_name, cl.phone as clinic_phone, cl.logo_url as clinic_logo
+    `SELECT u.id, u.clinic_id, u.email, u.name, u.role, cl.name as clinic_name, cl.phone as clinic_phone, cl.logo_url as clinic_logo, cl.specialty as clinic_specialty
      FROM auth_sessions s JOIN users u ON u.id = s.user_id
      LEFT JOIN clinics cl ON cl.id = u.clinic_id
      WHERE s.token = ? AND (s.expires_at IS NULL OR s.expires_at > datetime('now'))`

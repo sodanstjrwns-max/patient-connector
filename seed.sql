@@ -16,3 +16,4 @@ INSERT OR IGNORE INTO treatments (id, name, slug, sort_order) VALUES
   (5, '잇몸치료', 'perio', 5),
   (6, '소아치과', 'pedo', 6),
   (7, '검진·스케일링', 'checkup', 7);
+UPDATE clinics SET specialty='치과' WHERE id=1;
