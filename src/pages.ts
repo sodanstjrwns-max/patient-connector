@@ -1,5 +1,5 @@
 // HTML 페이지 셸 — 실제 UI는 /static/*.js 가 렌더링
-const V = 'v4' // 정적 자산 버전 (구 SW 캐시 무력화)
+const V = 'v5' // 정적 자산 버전 (구 SW·HTTP 캐시 무력화)
 const head = (title: string, extra = '') => `<!DOCTYPE html>
 <html lang="ko">
 <head>

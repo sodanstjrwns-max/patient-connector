@@ -15,39 +15,35 @@ app.use('/sw.js', serveStatic({ root: './public' }))
 // ============================================================
 // 플레이스홀더 SVG 생성기  /ph?t=제목&s=부제&v=변형&dark=1
 // ============================================================
+// v4 플랫 플레이스홀더: [배경 틴트, 악센트] — 채도 낮은 중립 팜레트
 const PALETTES = [
-  ['#0d9488', '#14b8a6'], ['#0891b2', '#22d3ee'], ['#0369a1', '#38bdf8'],
-  ['#4f46e5', '#818cf8'], ['#7c3aed', '#a78bfa'], ['#0f766e', '#5eead4'],
-  ['#1e40af', '#60a5fa'], ['#155e75', '#67e8f9'],
+  ['#eef2ff', '#4f46e5'], ['#f0f9ff', '#0284c7'], ['#f0fdfa', '#0d9488'],
+  ['#fdf4ff', '#a21caf'], ['#fff7ed', '#ea580c'], ['#f0fdf4', '#16a34a'],
+  ['#fefce8', '#a16207'], ['#fdf2f8', '#db2777'],
 ]
 app.get('/ph', (c) => {
   const t = c.req.query('t') || '자료'
   const s = c.req.query('s') || ''
   const v = parseInt(c.req.query('v') || '0')
   const dark = c.req.query('dark') === '1'
-  const [c1, c2] = dark ? ['#334155', '#475569'] : PALETTES[v % PALETTES.length]
+  const [tint, accent] = dark ? ['#1e1e23', '#818cf8'] : PALETTES[v % PALETTES.length]
+  const ink = dark ? '#f4f4f5' : '#18181b'
+  const ink2 = dark ? '#a1a1aa' : '#71717a'
+  const ink3 = dark ? '#52525b' : '#a1a1aa'
+  const line = dark ? '#2e2e36' : '#e4e4e7'
+  const surface = dark ? '#26262c' : '#ffffff'
   const esc = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0.75" cy="0.2" r="0.9">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.25"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <rect width="1200" height="800" fill="url(#g)"/>
-  <rect width="1200" height="800" fill="url(#glow)"/>
-  <circle cx="${100 + (v * 137) % 900}" cy="${600 + (v * 53) % 150}" r="220" fill="#ffffff" opacity="0.06"/>
-  <circle cx="${900 - (v * 91) % 700}" cy="${100 + (v * 71) % 200}" r="160" fill="#ffffff" opacity="0.08"/>
-  <g transform="translate(600,330)">
-    <path d="M -55 -45 C -55 -85 -20 -95 0 -80 C 20 -95 55 -85 55 -45 C 55 0 35 20 28 70 C 25 90 12 90 10 70 C 8 45 5 30 0 30 C -5 30 -8 45 -10 70 C -12 90 -25 90 -28 70 C -35 20 -55 0 -55 -45 Z" fill="#ffffff" opacity="0.9"/>
+  <rect width="1200" height="800" fill="${dark ? '#1a1a1e' : tint}"/>
+  <g transform="translate(600,300) scale(1.35)">
+    <circle r="105" fill="${surface}" ${dark ? '' : `stroke="${line}" stroke-width="2"`}/>
+    <path d="M -55 -45 C -55 -85 -20 -95 0 -80 C 20 -95 55 -85 55 -45 C 55 0 35 20 28 70 C 25 90 12 90 10 70 C 8 45 5 30 0 30 C -5 30 -8 45 -10 70 C -12 90 -25 90 -28 70 C -35 20 -55 0 -55 -45 Z" transform="scale(0.82) translate(0,-8)" fill="none" stroke="${accent}" stroke-width="10" stroke-linejoin="round"/>
   </g>
-  <text x="600" y="520" font-family="'Pretendard','Apple SD Gothic Neo',sans-serif" font-size="64" font-weight="800" fill="#ffffff" text-anchor="middle">${esc(t)}</text>
-  ${s ? `<text x="600" y="580" font-family="'Pretendard','Apple SD Gothic Neo',sans-serif" font-size="30" font-weight="500" fill="#ffffff" opacity="0.85" text-anchor="middle">${esc(s)}</text>` : ''}
-  <text x="600" y="760" font-family="sans-serif" font-size="20" fill="#ffffff" opacity="0.5" text-anchor="middle">설명용 예시 이미지</text>
+  <text x="600" y="545" font-family="'Pretendard','Apple SD Gothic Neo',sans-serif" font-size="58" font-weight="700" fill="${ink}" text-anchor="middle" letter-spacing="-1">${esc(t)}</text>
+  ${s ? `<text x="600" y="605" font-family="'Pretendard','Apple SD Gothic Neo',sans-serif" font-size="30" font-weight="500" fill="${ink2}" text-anchor="middle">${esc(s)}</text>` : ''}
+  <text x="600" y="740" font-family="'Pretendard','Apple SD Gothic Neo',sans-serif" font-size="20" font-weight="500" fill="${ink3}" text-anchor="middle">설명용 예시 이미지</text>
 </svg>`
-  return new Response(svg, { headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' } })
+  return new Response(svg, { headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=300' } })
 })
 
 // ============================================================
