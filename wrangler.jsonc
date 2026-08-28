@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "webapp",
+  "name": "patient-connect",
   "compatibility_date": "2026-08-25",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": ["nodejs_compat"],
@@ -8,7 +8,7 @@
     {
       "binding": "DB",
       "database_name": "webapp-production",
-      "database_id": "local-placeholder"
+      "database_id": "355f055a-f92b-4435-8643-a321d3e1d753"
     }
   ],
   "r2_buckets": [

@@ -7,6 +7,7 @@
 - **디자인 컨셉 (v3 APPLE LIGHT)**: 애플 최신 페이지 스타일 — 밝은 배경(#f5f5f7) + 프로스티드 글래스 네비 + 글래스모피즘 카드 + 스크롤 리빌/블롭/그라데이션 모션 그래픽 + 애플 필(pill) 버튼(#0071e3). 상담 화면(`/consult/:id`)만 발표용 시네마 다크(`.cinema` 바디 클래스) 유지. 화이트라벨: 로그인하면 병원 이름이 헤더에 그라데이션으로 크게 표시되어 "그 병원 전용 프로그램"처럼 보임.
 
 ## URL
+- **프로덕션**: https://patient-connect.pages.dev
 - **개발 미리보기**: https://3000-inm1c6uo4zqtact2e0j9v-8f57ffe2.sandbox.novita.ai
 - **데모 계정**: 병원 `demo@clinic.com` / `demo1234` · 운영자 `admin@patientconnect.kr` / `admin1234`
 
@@ -66,7 +67,7 @@
 - 카카오톡 공유는 시스템 공유 API 사용 중 → 카카오 SDK 키 연동 시 카톡 직접 공유 가능
 - 수가표·steps 편집 UI 고도화(현재 prompt 기반 간이 편집)
 - 관리자 공개 자료 등록 전용 폼(현재 API로 가능)
-- 프로덕션 배포(Cloudflare Pages)
+- 커스텀 도메인 연결(선택)
 
 ## 개발/실행
 ```bash
@@ -79,6 +80,11 @@ pm2 start ecosystem.config.cjs   # wrangler pages dev dist --d1 --r2 --local :30
 ```
 
 ## 배포
-- **플랫폼**: Cloudflare Pages (미배포, 샌드박스 개발 서버 운영 중)
+- **플랫폼**: Cloudflare Pages — ✅ 프로덕션 배포 완료 (사용자 본인 Cloudflare 계정)
+- **프로젝트명**: `patient-connect` · **프로덕션 URL**: https://patient-connect.pages.dev
+- **프로덕션 D1**: `webapp-production` (id `355f055a-f92b-4435-8643-a321d3e1d753`) — 마이그레이션 0001·0002 + 시드 3종 적용 완료(자료 40, 진료 21, 케이스 7)
+- **프로덕션 R2**: `webapp-bucket`
+- **재배포**: `npm run build && npx wrangler pages deploy dist --project-name patient-connect`
+- **프로덕션 DB 콘솔**: `npx wrangler d1 execute webapp-production --remote --command="..."`
 - **기술 스택**: Hono + TypeScript + TailwindCSS(CDN) + D1 + R2 + PWA
 - **최종 업데이트**: 2026-08-28
