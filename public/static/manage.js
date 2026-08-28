@@ -1,4 +1,4 @@
-// 우리 병원 자료 관리 — 업로드 / 복제 편집 / 숨기기 / 삭제 + 상담 이력
+// 우리 병원 자료 관리 — 업로드 / 복제 편집 / 숨기기 / 삭제 + 상담 이력 (v2 AURORA DARK)
 const state = { treatments: [], myAssets: [], publicAssets: [], sessions: [], tab: 'mine', showUpload: false }
 
 async function init() {
@@ -19,16 +19,16 @@ async function reload() {
 
 function render() {
   const tabBtn = (key, label, icon) => `
-    <button onclick="setTab('${key}')" class="btn-touch px-5 rounded-xl font-bold transition ${state.tab === key ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-600 shadow-sm hover:bg-slate-100'}"><i class="fas ${icon} mr-2"></i>${label}</button>`
+    <button onclick="setTab('${key}')" class="btn-touch px-5 rounded-xl font-bold transition ${state.tab === key ? 'bg-white text-slate-900 shadow-lg shadow-white/10' : 'glass text-slate-300 hover:text-white'}"><i class="fas ${icon} mr-2"></i>${label}</button>`
   document.getElementById('app').innerHTML = `
   ${PC.headerHTML('manage')}
   <main class="max-w-[1600px] mx-auto px-4 sm:px-6 py-8">
     <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
       <div>
-        <h1 class="text-3xl font-extrabold text-slate-900">우리 병원 자료 관리</h1>
-        <p class="mt-1 text-slate-500">업로드한 자료는 '우리 병원' 라벨과 함께 라이브러리에 표시됩니다</p>
+        <h1 class="text-3xl font-extrabold text-white">우리 병원 자료 관리</h1>
+        <p class="mt-1 text-slate-400">업로드한 자료는 '우리 병원' 라벨과 함께 라이브러리에 표시됩니다</p>
       </div>
-      <button onclick="toggleUpload()" class="btn-touch px-5 rounded-xl bg-brand-600 text-white font-bold shadow-lg shadow-brand-600/25"><i class="fas fa-cloud-arrow-up mr-2"></i>자료 업로드</button>
+      <button onclick="toggleUpload()" class="btn-touch btn-primary px-6 rounded-xl font-bold"><i class="fas fa-cloud-arrow-up mr-2"></i>자료 업로드</button>
     </div>
     <div class="flex gap-2 mb-6 overflow-x-auto pb-1">
       ${tabBtn('mine', '우리 병원 자료', 'fa-hospital')}
@@ -51,59 +51,61 @@ function renderTab() {
     body.innerHTML = state.myAssets.length ? `
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
       ${state.myAssets.map((a) => `
-      <div class="card-in rounded-3xl overflow-hidden bg-white shadow-sm ${a.is_hidden ? 'opacity-50' : ''}">
-        <a href="/consult/${a.id}" class="block relative aspect-[4/3] bg-slate-100">
+      <div class="card-in card rounded-3xl overflow-hidden ${a.is_hidden ? 'opacity-40' : ''}">
+        <a href="/consult/${a.id}" class="block relative aspect-[4/3] bg-slate-800/60">
           <img src="${PC.thumbOf(a)}" class="w-full h-full object-cover" loading="lazy">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
           <div class="absolute top-3 left-3">${PC.typeBadge(a.type)}</div>
-          ${a.source_asset_id ? '<span class="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/90 text-xs font-bold text-slate-500"><i class="fas fa-clone mr-1"></i>복제본</span>' : ''}
+          ${a.source_asset_id ? '<span class="absolute top-3 right-3 px-2.5 py-1 rounded-full glass text-xs font-bold text-slate-300"><i class="fas fa-clone mr-1"></i>복제본</span>' : ''}
         </a>
         <div class="p-4">
-          <h3 class="font-bold text-slate-800 leading-snug line-clamp-1">${PC.esc(a.title)}</h3>
+          <h3 class="font-bold text-white leading-snug line-clamp-1">${PC.esc(a.title)}</h3>
           <p class="text-sm text-slate-400 mt-0.5">${PC.esc(a.treatment_name || '')} ${a.reviewer_name ? '· 감수 ' + PC.esc(a.reviewer_name) : ''}</p>
           <div class="mt-3 flex gap-1.5">
-            <button onclick="editAsset(${a.id})" class="btn-touch flex-1 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200">편집</button>
-            <button onclick="toggleHide(${a.id}, ${a.is_hidden ? 0 : 1})" class="btn-touch flex-1 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200">${a.is_hidden ? '표시' : '숨기기'}</button>
-            <button onclick="delAsset(${a.id})" class="btn-touch w-12 rounded-xl bg-red-50 text-red-500 hover:bg-red-100"><i class="fas fa-trash-can"></i></button>
+            <button onclick="editAsset(${a.id})" class="btn-touch flex-1 rounded-xl glass text-slate-200 text-sm font-bold hover:bg-white/10">편집</button>
+            <button onclick="toggleHide(${a.id}, ${a.is_hidden ? 0 : 1})" class="btn-touch flex-1 rounded-xl glass text-slate-200 text-sm font-bold hover:bg-white/10">${a.is_hidden ? '표시' : '숨기기'}</button>
+            <button onclick="delAsset(${a.id})" class="btn-touch w-12 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"><i class="fas fa-trash-can"></i></button>
           </div>
         </div>
       </div>`).join('')}
     </div>` : emptyBox('아직 병원 자료가 없습니다', '자료를 업로드하거나, 공개 자료를 복제해서 시작하세요')
   } else if (state.tab === 'public') {
     body.innerHTML = `
-    <p class="mb-4 text-slate-500"><i class="fas fa-wand-magic-sparkles text-brand-500 mr-1.5"></i>공개 자료를 <b>복제해서 편집</b>하면 우리 병원 버전이 생깁니다. 원본은 그대로 유지됩니다.</p>
+    <p class="mb-4 text-slate-400"><i class="fas fa-wand-magic-sparkles text-teal-300 mr-1.5"></i>공개 자료를 <b class="text-white">복제해서 편집</b>하면 우리 병원 버전이 생깁니다. 원본은 그대로 유지됩니다.</p>
     <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
       ${state.publicAssets.map((a) => `
-      <div class="card-in rounded-3xl overflow-hidden bg-white shadow-sm">
-        <div class="relative aspect-[4/3] bg-slate-100">
+      <div class="card-in card rounded-3xl overflow-hidden">
+        <div class="relative aspect-[4/3] bg-slate-800/60">
           <img src="${PC.thumbOf(a)}" class="w-full h-full object-cover" loading="lazy">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
           <div class="absolute top-3 left-3">${PC.typeBadge(a.type)}</div>
         </div>
         <div class="p-4">
-          <h3 class="font-bold text-slate-800 leading-snug line-clamp-1">${PC.esc(a.title)}</h3>
+          <h3 class="font-bold text-white leading-snug line-clamp-1">${PC.esc(a.title)}</h3>
           <p class="text-sm text-slate-400 mt-0.5">${PC.esc(a.treatment_name || '')}</p>
-          <button onclick="dupAsset(${a.id})" class="btn-touch w-full mt-3 rounded-xl bg-brand-50 text-brand-700 font-bold hover:bg-brand-100"><i class="fas fa-clone mr-2"></i>복제해서 편집</button>
+          <button onclick="dupAsset(${a.id})" class="btn-touch w-full mt-3 rounded-xl bg-teal-500/10 text-teal-300 font-bold hover:bg-teal-500/20 border border-teal-400/20"><i class="fas fa-clone mr-2"></i>복제해서 편집</button>
         </div>
       </div>`).join('')}
     </div>`
   } else {
     body.innerHTML = state.sessions.length ? `
-    <div class="bg-white rounded-3xl shadow-sm overflow-hidden">
+    <div class="glass rounded-3xl overflow-hidden">
       <table class="w-full">
-        <thead><tr class="text-left text-sm text-slate-400 border-b border-slate-100">
+        <thead><tr class="text-left text-sm text-slate-400 border-b border-white/10">
           <th class="px-6 py-4 font-bold">환자</th><th class="px-4 py-4 font-bold">상담일</th><th class="px-4 py-4 font-bold">전송 링크</th><th class="px-4 py-4 font-bold">열람</th>
         </tr></thead>
         <tbody>
         ${state.sessions.map((s) => `
-        <tr class="border-b border-slate-50 hover:bg-slate-50/60">
-          <td class="px-6 py-4 font-bold text-slate-800">${PC.esc(s.patient_label || '(이름 없음)')}</td>
-          <td class="px-4 py-4 text-slate-500 text-sm">${new Date(s.updated_at + 'Z').toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+        <tr class="border-b border-white/5 hover:bg-white/5">
+          <td class="px-6 py-4 font-bold text-white">${PC.esc(s.patient_label || '(이름 없음)')}</td>
+          <td class="px-4 py-4 text-slate-400 text-sm">${new Date(s.updated_at + 'Z').toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}</td>
           <td class="px-4 py-4">
-            ${s.share_token ? `<a href="/p/${s.share_token}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 text-sm font-bold"><i class="fas fa-link"></i>열기</a>` : '<span class="text-slate-300 text-sm">미생성</span>'}
+            ${s.share_token ? `<a href="/p/${s.share_token}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-300 text-sm font-bold border border-teal-400/20"><i class="fas fa-link"></i>열기</a>` : '<span class="text-slate-600 text-sm">미생성</span>'}
           </td>
           <td class="px-4 py-4">
             ${s.view_count > 0
-              ? `<span class="inline-flex items-center gap-1.5 text-emerald-600 font-bold text-sm"><i class="fas fa-eye"></i>${s.view_count}회 · ${new Date(s.last_viewed + 'Z').toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>`
-              : '<span class="text-slate-300 text-sm">아직 열람 전</span>'}
+              ? `<span class="inline-flex items-center gap-1.5 text-emerald-400 font-bold text-sm"><i class="fas fa-eye"></i>${s.view_count}회 · ${new Date(s.last_viewed + 'Z').toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>`
+              : '<span class="text-slate-600 text-sm">아직 열람 전</span>'}
           </td>
         </tr>`).join('')}
         </tbody>
@@ -113,33 +115,34 @@ function renderTab() {
 }
 
 function emptyBox(title, sub) {
-  return `<div class="py-20 text-center"><div class="w-20 h-20 mx-auto rounded-3xl bg-white shadow-sm flex items-center justify-center mb-4"><i class="fas fa-folder-open text-3xl text-slate-300"></i></div>
-  <p class="text-lg font-bold text-slate-500">${title}</p><p class="text-slate-400 mt-1">${sub}</p></div>`
+  return `<div class="py-20 text-center"><div class="w-20 h-20 mx-auto rounded-3xl glass flex items-center justify-center mb-4 float-y"><i class="fas fa-folder-open text-3xl text-slate-500"></i></div>
+  <p class="text-lg font-bold text-slate-300">${title}</p><p class="text-slate-500 mt-1">${sub}</p></div>`
 }
 
 // ============ 업로드 폼 (드래그&드롭, 다중) ============
 let uploadedFiles = []
 function renderUpload() {
   uploadedFiles = []
+  const inputCls = 'h-12 px-4 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:border-teal-400/50 focus:outline-none'
   document.getElementById('upload-form').innerHTML = `
-  <form onsubmit="return saveUpload(event)" class="card-in bg-white rounded-3xl shadow-sm p-6 space-y-4">
-    <div id="dropzone" class="rounded-2xl border-2 border-dashed border-slate-200 hover:border-brand-400 transition p-8 text-center cursor-pointer"
-      ondragover="event.preventDefault(); this.classList.add('border-brand-400','bg-brand-50/50')"
-      ondragleave="this.classList.remove('border-brand-400','bg-brand-50/50')"
+  <form onsubmit="return saveUpload(event)" class="card-in glass-strong rounded-3xl p-6 space-y-4">
+    <div id="dropzone" class="rounded-2xl border-2 border-dashed border-white/15 hover:border-teal-400/60 transition p-8 text-center cursor-pointer"
+      ondragover="event.preventDefault(); this.classList.add('border-teal-400/60','bg-teal-400/5')"
+      ondragleave="this.classList.remove('border-teal-400/60','bg-teal-400/5')"
       ondrop="onDrop(event)">
       <input id="file-input" type="file" accept="image/*,video/mp4,video/webm" multiple class="hidden" onchange="onFiles(this.files)">
-      <i class="fas fa-cloud-arrow-up text-3xl text-brand-500"></i>
-      <p class="mt-2 font-extrabold text-slate-700 text-lg">이미지·영상을 끌어다 놓거나 클릭해서 선택</p>
+      <i class="fas fa-cloud-arrow-up text-3xl text-teal-300"></i>
+      <p class="mt-2 font-extrabold text-white text-lg">이미지·영상을 끌어다 놓거나 클릭해서 선택</p>
       <p class="text-sm text-slate-400 mt-1">여러 파일 동시 업로드 가능 · mp4/webm 영상 지원</p>
       <div id="file-list" class="mt-4 grid grid-cols-3 sm:grid-cols-6 gap-2"></div>
     </div>
     <div class="grid sm:grid-cols-2 gap-4">
-      <input name="title" required placeholder="자료 제목" class="h-12 px-4 rounded-xl border border-slate-200">
-      <select name="treatment_id" class="h-12 px-4 rounded-xl border border-slate-200 bg-white">
+      <input name="title" required placeholder="자료 제목" class="${inputCls}">
+      <select name="treatment_id" class="${inputCls} bg-slate-900">
         <option value="">진료 선택</option>
         ${state.treatments.map((t) => `<option value="${t.id}">${PC.esc(t.name)}</option>`).join('')}
       </select>
-      <select name="category" class="h-12 px-4 rounded-xl border border-slate-200 bg-white">
+      <select name="category" class="${inputCls} bg-slate-900">
         <option value="clinic">우리 병원 자료</option>
         <option value="process">치료 과정</option>
         <option value="progression">질환 진행</option>
@@ -147,11 +150,11 @@ function renderUpload() {
         <option value="cost">비용</option>
         <option value="faq">자주 묻는 질문</option>
       </select>
-      <input name="reviewer_name" placeholder="감수 원장 (예: ${PC.esc(PC.user.name)})" value="${PC.esc(PC.user.name)}" class="h-12 px-4 rounded-xl border border-slate-200">
-      <input name="tags" placeholder="태그 (쉼표로 구분: 임플란트, 통증)" class="sm:col-span-2 h-12 px-4 rounded-xl border border-slate-200">
-      <textarea name="description" placeholder="설명 (상담 화면·환자 링크에 표시됩니다)" rows="2" class="sm:col-span-2 px-4 py-3 rounded-xl border border-slate-200"></textarea>
+      <input name="reviewer_name" placeholder="감수 원장 (예: ${PC.esc(PC.user.name)})" value="${PC.esc(PC.user.name)}" class="${inputCls}">
+      <input name="tags" placeholder="태그 (쉼표로 구분: 임플란트, 통증)" class="sm:col-span-2 ${inputCls}">
+      <textarea name="description" placeholder="설명 (상담 화면·환자 링크에 표시됩니다)" rows="2" class="sm:col-span-2 px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:border-teal-400/50 focus:outline-none"></textarea>
     </div>
-    <button class="btn-touch w-full rounded-xl bg-brand-600 text-white font-extrabold text-lg py-3.5">자료 저장</button>
+    <button class="btn-touch btn-primary w-full rounded-xl font-extrabold text-lg py-3.5">자료 저장</button>
   </form>`
   document.getElementById('dropzone').addEventListener('click', (e) => {
     if (e.target.closest('#file-list')) return
@@ -159,14 +162,13 @@ function renderUpload() {
   })
 }
 
-window.onDrop = (e) => { e.preventDefault(); e.currentTarget.classList.remove('border-brand-400', 'bg-brand-50/50'); onFiles(e.dataTransfer.files) }
+window.onDrop = (e) => { e.preventDefault(); e.currentTarget.classList.remove('border-teal-400/60', 'bg-teal-400/5'); onFiles(e.dataTransfer.files) }
 
 window.onFiles = async (files) => {
   const list = document.getElementById('file-list')
   for (const file of files) {
-    const idx = uploadedFiles.length
     const cell = document.createElement('div')
-    cell.className = 'relative aspect-square rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden'
+    cell.className = 'relative aspect-square rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden'
     cell.innerHTML = '<i class="fas fa-spinner fa-spin text-slate-400"></i>'
     list.appendChild(cell)
     const fd = new FormData(); fd.append('file', file)
@@ -177,7 +179,7 @@ window.onFiles = async (files) => {
         ? `<video src="${data.url}" class="w-full h-full object-cover" muted></video><span class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white text-xs flex items-center justify-center"><i class="fas fa-play"></i></span>`
         : `<img src="${data.url}" class="w-full h-full object-cover">`
     } catch (err) {
-      cell.innerHTML = '<i class="fas fa-xmark text-red-400"></i>'
+      cell.innerHTML = '<i class="fas fa-xmark text-rose-400"></i>'
       PC.toast(err.response?.data?.error || '업로드 실패', 'err')
     }
   }

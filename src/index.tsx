@@ -66,11 +66,11 @@ app.post('/api/auth/login', async (c) => {
 })
 
 app.post('/api/auth/signup', async (c) => {
-  const { clinic_name, email, password, name, phone } = await c.req.json()
+  const { clinic_name, email, password, name, phone, specialty } = await c.req.json()
   if (!clinic_name || !email || !password || !name) return c.json({ error: '필수 항목을 모두 입력해주세요' }, 400)
   const exists = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first()
   if (exists) return c.json({ error: '이미 가입된 이메일입니다' }, 409)
-  const clinic = await c.env.DB.prepare('INSERT INTO clinics (name, phone) VALUES (?, ?)').bind(clinic_name, phone || null).run()
+  const clinic = await c.env.DB.prepare('INSERT INTO clinics (name, phone, specialty) VALUES (?, ?, ?)').bind(clinic_name, phone || null, specialty || '').run()
   const hash = await hashPassword(password)
   const u = await c.env.DB.prepare("INSERT INTO users (clinic_id, email, password_hash, name, role) VALUES (?, ?, ?, ?, 'owner')")
     .bind(clinic.meta.last_row_id, email, hash, name).run()
@@ -94,8 +94,14 @@ app.get('/api/auth/me', async (c) => {
 // 진료 과목
 // ============================================================
 app.get('/api/treatments', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM treatments ORDER BY sort_order').all()
-  return c.json({ treatments: results })
+  const specialty = c.req.query('specialty')
+  let sql = 'SELECT * FROM treatments'
+  const binds: any[] = []
+  if (specialty && specialty !== 'all') { sql += ' WHERE specialty = ?'; binds.push(specialty) }
+  sql += ' ORDER BY sort_order'
+  const { results } = await c.env.DB.prepare(sql).bind(...binds).all()
+  const specs = await c.env.DB.prepare('SELECT DISTINCT specialty FROM treatments ORDER BY sort_order').all()
+  return c.json({ treatments: results, specialties: [...new Set(specs.results.map((r: any) => r.specialty))] })
 })
 
 // ============================================================
@@ -228,16 +234,19 @@ app.get('/files/*', async (c) => {
 })
 
 // ============================================================
-// 비포·애프터 케이스 (로그인 전용)
+// 비포·애프터 케이스 (원내 사용 전제 — 로그인 불필요.
+// 공용 데모(clinic_id NULL) + 로그인 시 자기 병원 케이스.
+// 단, 환자 전송 공개 링크에는 여전히 포함하지 않음)
 // ============================================================
 app.get('/api/cases', async (c) => {
-  const user = await requireUser(c); if (user instanceof Response) return user
-  if (!user.clinic_id) return c.json({ cases: [] })
+  const user = await getUser(c)
   const treatment = c.req.query('treatment')
-  let sql = 'SELECT cs.*, t.name as treatment_name FROM cases cs LEFT JOIN treatments t ON t.id = cs.treatment_id WHERE cs.clinic_id = ?'
-  const binds: any[] = [user.clinic_id]
+  let sql = 'SELECT cs.*, t.name as treatment_name FROM cases cs LEFT JOIN treatments t ON t.id = cs.treatment_id WHERE (cs.clinic_id IS NULL'
+  const binds: any[] = []
+  if (user?.clinic_id) { sql += ' OR cs.clinic_id = ?'; binds.push(user.clinic_id) }
+  sql += ')'
   if (treatment && treatment !== 'all') { sql += ' AND cs.treatment_id = ?'; binds.push(treatment) }
-  sql += ' ORDER BY cs.id DESC'
+  sql += ' ORDER BY cs.clinic_id IS NOT NULL DESC, cs.id DESC'
   const { results } = await c.env.DB.prepare(sql).bind(...binds).all()
   return c.json({ cases: results.map((r: any) => ({ ...r, tags: JSON.parse(r.tags || '[]') })) })
 })

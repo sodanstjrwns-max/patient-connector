@@ -19,7 +19,7 @@ async function init() {
   } catch (e) {
     document.getElementById('app').innerHTML = `<div class="min-h-screen flex flex-col items-center justify-center text-white gap-4">
       <p class="text-xl font-bold">${e.response?.data?.error || '자료를 불러올 수 없습니다'}</p>
-      <a href="/" class="px-6 py-3 bg-brand-600 rounded-xl font-bold">라이브러리로</a></div>`
+      <a href="/" class="px-6 py-3 btn-primary rounded-xl font-bold inline-flex items-center">라이브러리로</a></div>`
     return
   }
   render()
@@ -39,20 +39,20 @@ function render() {
   document.getElementById('app').innerHTML = `
   <div class="h-screen flex flex-col select-none">
     <!-- 상단 바 -->
-    <header class="glass-dark shrink-0 z-30 border-b border-white/10">
-      <div class="px-3 sm:px-5 h-16 flex items-center gap-3">
-        <a href="/" class="btn-touch flex items-center justify-center w-12 rounded-xl text-slate-300 hover:bg-white/10 transition"><i class="fas fa-arrow-left text-lg"></i></a>
+    <header class="glass-strong shrink-0 z-30">
+      <div class="px-3 sm:px-5 h-[68px] flex items-center gap-3">
+        <a href="/" class="btn-touch flex items-center justify-center w-12 rounded-xl text-slate-400 hover:text-white hover:bg-white/8 transition"><i class="fas fa-arrow-left text-lg"></i></a>
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2">
-            <span class="text-brand-300 text-lg font-extrabold truncate">${PC.esc(u?.clinic_name || '페이션트 커넥트')}</span>
-            <span class="hidden sm:inline text-slate-500 text-xs font-bold tracking-widest uppercase">Consult</span>
+          <div class="flex items-center gap-2.5">
+            <span class="clinic-title text-xl font-black truncate">${PC.esc(u?.clinic_name || '페이션트 커넥트')}</span>
+            <span class="hidden sm:inline text-slate-600 text-[10px] font-bold tracking-[0.28em] uppercase">Consult</span>
           </div>
-          <h1 class="text-white font-bold truncate text-[15px] leading-tight">${PC.esc(a.title)}</h1>
+          <h1 class="text-slate-300 font-bold truncate text-[14px] leading-tight">${PC.esc(a.title)}</h1>
         </div>
         ${u?.clinic_id ? `
-        <button onclick="saveSession(false)" class="btn-touch hidden sm:flex items-center gap-2 px-4 rounded-xl text-slate-200 font-semibold hover:bg-white/10 transition"><i class="fas fa-floppy-disk"></i>상담 저장</button>
-        <button onclick="sendToPatient()" class="btn-touch flex items-center gap-2 px-4 sm:px-5 rounded-xl bg-brand-500 text-white font-bold shadow-lg shadow-brand-500/30 hover:bg-brand-400 transition"><i class="fas fa-paper-plane"></i><span class="hidden sm:inline">환자에게 전송</span></button>
-        ` : `<a href="/login" class="btn-touch flex items-center gap-2 px-4 rounded-xl bg-brand-600 text-white font-bold"><i class="fas fa-lock"></i><span class="hidden sm:inline">로그인 후 전송</span></a>`}
+        <button onclick="saveSession(false)" class="btn-touch btn-ghost hidden sm:flex items-center gap-2 px-4 rounded-xl"><i class="fas fa-floppy-disk"></i>상담 저장</button>
+        <button onclick="sendToPatient()" class="btn-touch btn-primary flex items-center gap-2 px-4 sm:px-5 rounded-xl"><i class="fas fa-paper-plane"></i><span class="hidden sm:inline">환자에게 전송</span></button>
+        ` : `<a href="/login" class="btn-touch btn-primary flex items-center gap-2 px-4 rounded-xl"><i class="fas fa-lock"></i><span class="hidden sm:inline">로그인 후 전송</span></a>`}
         <button onclick="toggleFullscreen()" class="btn-touch hidden sm:flex items-center justify-center w-12 rounded-xl text-slate-300 hover:bg-white/10 transition"><i class="fas fa-expand text-lg"></i></button>
         <button onclick="togglePanel()" class="btn-touch flex items-center justify-center w-12 rounded-xl text-slate-300 hover:bg-white/10 transition"><i class="fas fa-sidebar fa-table-columns text-lg"></i></button>
       </div>
@@ -61,7 +61,7 @@ function render() {
     <div class="flex-1 flex min-h-0">
       <!-- 스테이지 영역 -->
       <main class="flex-1 flex flex-col min-w-0">
-        <div id="stage-wrap" class="relative flex-1 min-h-0 bg-slate-950">
+        <div id="stage-wrap" class="relative flex-1 min-h-0" style="background:radial-gradient(ellipse 70% 55% at 50% 40%, #0c1524 0%, #060a12 100%)">
           <div id="stage" class="absolute inset-0 flex items-center justify-center overflow-hidden"></div>
           <canvas id="draw-canvas" class="absolute inset-0 w-full h-full z-10"></canvas>
           <!-- 드로잉 툴바 -->
@@ -76,7 +76,7 @@ function render() {
       </main>
 
       <!-- 우측 패널 -->
-      <aside id="side-panel" class="${S.panelOpen ? '' : 'hidden'} w-[340px] shrink-0 bg-slate-900 border-l border-white/10 overflow-y-auto dark-scroll"></aside>
+      <aside id="side-panel" class="${S.panelOpen ? '' : 'hidden'} w-[340px] shrink-0 glass overflow-y-auto dark-scroll"></aside>
     </div>
   </div>
 
@@ -114,7 +114,7 @@ function renderStage() {
       <div class="compare-after"><img src="${after}" class="absolute inset-0 w-full h-full object-contain" draggable="false"></div>
       <div class="compare-handle"><div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-1/2 w-12 h-12 rounded-full bg-white shadow-xl flex items-center justify-center"><i class="fas fa-arrows-left-right text-slate-700"></i></div></div>
       <span class="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-black/60 text-white font-bold">Before</span>
-      <span class="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-brand-600/90 text-white font-bold">After</span>
+      <span class="absolute top-4 right-4 px-3 py-1.5 rounded-lg font-bold text-white" style="background:linear-gradient(135deg,rgba(20,184,166,.9),rgba(14,165,233,.9))">After</span>
     </div>`
     initCompare()
     renderSubnav('')
@@ -123,8 +123,8 @@ function renderStage() {
     stage.innerHTML = `
     <div class="w-full h-full overflow-auto dark-scroll flex items-start justify-center p-4 sm:p-8">
       <div class="print-area w-full max-w-[900px] bg-white rounded-3xl shadow-2xl overflow-hidden">
-        <div class="px-8 py-6 bg-gradient-to-r from-brand-700 to-brand-600">
-          <p class="text-brand-200 font-bold text-sm">${PC.esc(PC.user?.clinic_name || '페이션트 커넥트')}</p>
+        <div class="px-8 py-6" style="background:linear-gradient(120deg,#0f766e,#0284c7)">
+          <p class="text-teal-100 font-bold text-sm">${PC.esc(PC.user?.clinic_name || '페이션트 커넥트')}</p>
           <h2 class="text-white text-2xl font-extrabold mt-0.5">${PC.esc(a.title)}</h2>
         </div>
         <table class="w-full consult-text">
@@ -134,7 +134,7 @@ function renderStage() {
           <tbody>${rows.map((r, i) => `
             <tr class="${i % 2 ? 'bg-slate-50/60' : ''} border-t border-slate-100">
               <td class="px-8 py-4 font-bold text-slate-800">${PC.esc(r.item)}</td>
-              <td class="px-4 py-4 text-right font-extrabold text-brand-700 whitespace-nowrap">${PC.esc(r.price)}</td>
+              <td class="px-4 py-4 text-right font-extrabold text-teal-700 whitespace-nowrap">${PC.esc(r.price)}</td>
               <td class="px-4 py-4 text-center"><span class="px-2.5 py-1 rounded-full text-sm font-bold ${r.insurance === '급여' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${PC.esc(r.insurance)}</span></td>
               <td class="px-6 py-4 text-slate-500 text-base hidden sm:table-cell">${PC.esc(r.note || '')}</td>
             </tr>`).join('')}
@@ -148,12 +148,12 @@ function renderStage() {
     stage.innerHTML = `
     <div class="w-full h-full flex items-center justify-center p-6">
       <div class="max-w-[800px] w-full">
-        <div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12">
-          <p class="text-brand-600 font-extrabold text-lg"><i class="fas fa-circle-question mr-2"></i>자주 묻는 질문</p>
-          <h2 class="mt-3 text-2xl sm:text-4xl font-extrabold text-slate-900 leading-snug">${PC.esc(p.question || a.title)}</h2>
-          <p class="mt-6 consult-text text-slate-600 sm:text-2xl sm:leading-relaxed">${PC.esc(p.answer || a.description || '')}</p>
-          ${a.reviewer_name ? `<p class="mt-8 text-brand-700 font-bold"><i class="fas fa-user-doctor mr-1.5"></i>감수 · ${PC.esc(a.reviewer_name)}</p>` : ''}
-        </div>
+        <div class="grad-border rounded-3xl"><div class="glass-strong rounded-3xl p-8 sm:p-12">
+          <p class="grad-text font-extrabold text-lg"><i class="fas fa-circle-question mr-2 text-teal-300"></i>자주 묻는 질문</p>
+          <h2 class="mt-3 text-2xl sm:text-4xl font-extrabold text-white leading-snug">${PC.esc(p.question || a.title)}</h2>
+          <p class="mt-6 consult-text text-slate-300 sm:text-2xl sm:leading-relaxed">${PC.esc(p.answer || a.description || '')}</p>
+          ${a.reviewer_name ? `<p class="mt-8 text-teal-300 font-bold"><i class="fas fa-user-doctor mr-1.5"></i>감수 · ${PC.esc(a.reviewer_name)}</p>` : ''}
+        </div></div>
       </div>
     </div>`
     renderSubnav('')
@@ -166,7 +166,7 @@ function renderStage() {
     <div class="glass-dark rounded-2xl px-3 py-2 flex items-center gap-2 border border-white/10 shadow-2xl">
       <button onclick="subMove(-1)" class="btn-touch w-11 rounded-xl text-white hover:bg-white/10 flex items-center justify-center"><i class="fas fa-chevron-left"></i></button>
       <div class="flex items-center gap-1.5">
-        ${items.map((x, i) => `<button onclick="subGo(${i})" class="btn-touch min-w-[44px] px-2 rounded-xl font-extrabold text-sm transition ${i === S.subIndex ? (isProg ? 'bg-amber-500 text-white' : 'bg-brand-500 text-white') : 'text-slate-300 hover:bg-white/10'}">${isProg ? (x.label || i + 1) : (i + 1)}</button>`).join('')}
+        ${items.map((x, i) => `<button onclick="subGo(${i})" class="btn-touch min-w-[44px] px-2 rounded-xl font-extrabold text-sm transition ${i === S.subIndex ? (isProg ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/40' : 'btn-primary') : 'text-slate-400 hover:text-white hover:bg-white/10'}">${isProg ? (x.label || i + 1) : (i + 1)}</button>`).join('')}
       </div>
       <button onclick="subMove(1)" class="btn-touch w-11 rounded-xl text-white hover:bg-white/10 flex items-center justify-center"><i class="fas fa-chevron-right"></i></button>
     </div>
@@ -417,7 +417,7 @@ function renderToolbar() {
   const tb = document.getElementById('toolbar')
   tb.innerHTML = `
     ${TOOLS.map(([key, icon, label]) => `
-      <button onclick="setTool('${key}')" title="${label}" class="btn-touch w-12 rounded-xl flex items-center justify-center text-lg transition ${S.tool === key ? 'bg-brand-500 text-white shadow-lg' : 'text-slate-300 hover:bg-white/10'}"><i class="fas ${icon}"></i></button>`).join('')}
+      <button onclick="setTool('${key}')" title="${label}" class="btn-touch w-12 rounded-xl flex items-center justify-center text-lg transition ${S.tool === key ? 'btn-primary' : 'text-slate-400 hover:text-white hover:bg-white/10'}"><i class="fas ${icon}"></i></button>`).join('')}
     <div class="w-px h-8 bg-white/15 mx-1"></div>
     ${COLORS.map(([c, name]) => `
       <button onclick="setColor('${c}')" title="${name}" class="btn-touch w-11 rounded-xl flex items-center justify-center transition ${S.color === c ? 'bg-white/15' : 'hover:bg-white/10'}">
@@ -482,7 +482,7 @@ function renderPanel() {
   <div class="p-5 space-y-5">
     <div>
       <div class="flex items-center gap-2 flex-wrap">${PC.typeBadge(a.type)}
-        ${a.reviewer_name ? `<span class="text-brand-300 text-sm font-bold"><i class="fas fa-user-doctor mr-1"></i>감수 ${PC.esc(a.reviewer_name)}</span>` : ''}
+        ${a.reviewer_name ? `<span class="text-teal-300 text-sm font-bold"><i class="fas fa-user-doctor mr-1"></i>감수 ${PC.esc(a.reviewer_name)}</span>` : ''}
       </div>
       <h2 class="mt-2 text-white text-xl font-extrabold leading-snug">${PC.esc(a.title)}</h2>
       ${a.description ? `<p class="mt-2 text-slate-300 text-[15px] leading-relaxed">${PC.esc(a.description)}</p>` : ''}
@@ -492,8 +492,8 @@ function renderPanel() {
       <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">단계 목록</p>
       <div class="space-y-1.5">
         ${items.map((it, i) => `
-        <button onclick="subGo(${i})" class="w-full text-left p-3 rounded-xl transition ${i === S.subIndex ? 'bg-brand-600/25 border border-brand-500/40' : 'bg-white/5 hover:bg-white/10 border border-transparent'}">
-          <p class="font-bold text-[15px] ${i === S.subIndex ? 'text-brand-300' : 'text-slate-200'}">${PC.esc(it.label ? it.label + ' · ' + it.title : it.title)}</p>
+        <button onclick="subGo(${i})" class="w-full text-left p-3 rounded-xl transition ${i === S.subIndex ? 'bg-teal-500/20 border border-teal-400/40' : 'bg-white/5 hover:bg-white/10 border border-transparent'}">
+          <p class="font-bold text-[15px] ${i === S.subIndex ? 'text-teal-300' : 'text-slate-200'}">${PC.esc(it.label ? it.label + ' · ' + it.title : it.title)}</p>
           <p class="text-slate-400 text-[13px] mt-0.5 line-clamp-2">${PC.esc(it.desc || '')}</p>
         </button>`).join('')}
       </div>
@@ -502,7 +502,7 @@ function renderPanel() {
     <div>
       <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">수가표</p>
       <div class="space-y-1">${p.rows.map((r) => `
-        <div class="flex justify-between gap-2 p-2.5 rounded-lg bg-white/5 text-sm"><span class="text-slate-300">${PC.esc(r.item)}</span><span class="text-brand-300 font-bold whitespace-nowrap">${PC.esc(r.price)}</span></div>`).join('')}
+        <div class="flex justify-between gap-2 p-2.5 rounded-lg bg-white/5 text-sm"><span class="text-slate-300">${PC.esc(r.item)}</span><span class="text-teal-300 font-bold whitespace-nowrap">${PC.esc(r.price)}</span></div>`).join('')}
       </div>
     </div>` : ''}
     <div id="caution-box"></div>
@@ -511,10 +511,10 @@ function renderPanel() {
       <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">상담 메모</p>
       <input id="patient-label" placeholder="환자 표시명 (예: 김○○님)" value="${PC.esc(S.session.patient_label)}"
         onchange="S.session.patient_label=this.value"
-        class="w-full h-12 px-4 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 mb-2">
+        class="w-full h-12 px-4 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400 mb-2">
       <textarea id="slide-note" placeholder="이 자료에 대한 메모" rows="3"
         onchange="setNote(this.value)"
-        class="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 text-[15px]">${PC.esc(S.session.slides[S.assetId]?.note || '')}</textarea>
+        class="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400 text-[15px]">${PC.esc(S.session.slides[S.assetId]?.note || '')}</textarea>
     </div>` : ''}
   </div>`
   loadCautions()
@@ -577,19 +577,22 @@ window.sendToPatient = async () => {
   const modal = document.getElementById('send-modal')
   modal.classList.remove('hidden')
   modal.innerHTML = `
-  <div class="card-in w-full max-w-md bg-white rounded-3xl p-7 shadow-2xl">
-    <div class="w-16 h-16 mx-auto rounded-2xl bg-brand-50 flex items-center justify-center"><i class="fas fa-paper-plane text-2xl text-brand-600"></i></div>
-    <h3 class="mt-4 text-center text-2xl font-extrabold text-slate-900">환자 전송 링크 생성 완료</h3>
-    <p class="mt-1 text-center text-slate-500">오늘 설명드린 자료와 그림, 주의사항이 담겨 있습니다</p>
-    <div class="mt-5 flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
-      <input id="share-url" readonly value="${url}" class="flex-1 bg-transparent text-sm text-slate-600 focus:outline-none">
-      <button onclick="copyShare()" class="btn-touch px-4 rounded-lg bg-slate-900 text-white text-sm font-bold">복사</button>
+  <div class="card-in grad-border w-full max-w-md glass-strong rounded-3xl p-7">
+    <div class="relative w-16 h-16 mx-auto">
+      <div class="absolute inset-0 rounded-2xl bg-teal-400/40 blur-xl"></div>
+      <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-400 to-sky-500 flex items-center justify-center"><i class="fas fa-paper-plane text-2xl text-white"></i></div>
+    </div>
+    <h3 class="mt-5 text-center text-2xl font-black text-white">환자 전송 링크 생성 완료</h3>
+    <p class="mt-1.5 text-center text-slate-400">오늘 설명드린 자료와 그림, 주의사항이 담겨 있습니다</p>
+    <div class="mt-6 flex items-center gap-2 p-3 rounded-2xl bg-white/5 border border-white/10">
+      <input id="share-url" readonly value="${url}" class="flex-1 bg-transparent text-sm text-slate-300 focus:outline-none">
+      <button onclick="copyShare()" class="btn-touch px-4 rounded-xl btn-ghost text-sm">복사</button>
     </div>
     <div class="mt-3 grid grid-cols-2 gap-2">
-      <button onclick="kakaoShare('${url}')" class="btn-touch rounded-xl bg-[#FEE500] text-[#191919] font-bold"><i class="fas fa-comment mr-2"></i>카카오톡 공유</button>
-      <a href="${url}" target="_blank" class="btn-touch rounded-xl bg-brand-600 text-white font-bold flex items-center justify-center"><i class="fas fa-eye mr-2"></i>미리보기</a>
+      <button onclick="kakaoShare('${url}')" class="btn-touch rounded-2xl btn-kakao"><i class="fas fa-comment mr-2"></i>카카오톡 공유</button>
+      <a href="${url}" target="_blank" class="btn-touch rounded-2xl btn-primary flex items-center justify-center"><i class="fas fa-eye mr-2"></i>미리보기</a>
     </div>
-    <button onclick="document.getElementById('send-modal').classList.add('hidden')" class="btn-touch w-full mt-3 rounded-xl text-slate-400 font-semibold hover:bg-slate-50">닫기</button>
+    <button onclick="document.getElementById('send-modal').classList.add('hidden')" class="btn-touch w-full mt-3 rounded-2xl text-slate-500 font-bold hover:bg-white/5 transition">닫기</button>
   </div>`
 }
 

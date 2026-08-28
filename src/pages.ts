@@ -25,8 +25,8 @@ tailwind.config = {
 ${extra}
 </head>`
 
-export const pageHome = () => `${head('페이션트 커넥트 — 치과 상담 설명자료 라이브러리')}
-<body class="bg-slate-50 font-sans antialiased">
+export const pageHome = () => `${head('페이션트 커넥트 — 진료 상담 설명자료 라이브러리')}
+<body class="font-sans antialiased">
 <div id="app"></div>
 <script src="/static/common.js"></script>
 <script src="/static/home.js"></script>
@@ -34,28 +34,28 @@ export const pageHome = () => `${head('페이션트 커넥트 — 치과 상담 
 </body></html>`
 
 export const pageConsult = () => `${head('상담 화면 — 페이션트 커넥트')}
-<body class="bg-slate-950 font-sans antialiased overflow-hidden">
+<body class="font-sans antialiased overflow-hidden">
 <div id="app"></div>
 <script src="/static/common.js"></script>
 <script src="/static/consult.js"></script>
 </body></html>`
 
 export const pageCases = () => `${head('비포·애프터 갤러리 — 페이션트 커넥트')}
-<body class="bg-slate-50 font-sans antialiased">
+<body class="font-sans antialiased">
 <div id="app"></div>
 <script src="/static/common.js"></script>
 <script src="/static/cases.js"></script>
 </body></html>`
 
 export const pageManage = () => `${head('우리 병원 자료 관리 — 페이션트 커넥트')}
-<body class="bg-slate-50 font-sans antialiased">
+<body class="font-sans antialiased">
 <div id="app"></div>
 <script src="/static/common.js"></script>
 <script src="/static/manage.js"></script>
 </body></html>`
 
 export const pageAdmin = () => `${head('운영자 콘솔 — 페이션트 커넥트')}
-<body class="bg-slate-50 font-sans antialiased">
+<body class="font-sans antialiased">
 <div id="app"></div>
 <script src="/static/common.js"></script>
 <script src="/static/admin.js"></script>
@@ -69,17 +69,18 @@ export const pageLogin = () => `${head('로그인 — 페이션트 커넥트')}
 </body></html>`
 
 export const pageShare = () => `${head('오늘 설명드린 자료')}
-<body class="bg-slate-50 font-sans antialiased">
+<body class="font-sans antialiased">
 <div id="app"></div>
 <script src="/static/common.js"></script>
 <script src="/static/share.js"></script>
 </body></html>`
 
 export const pageNotFound = (msg: string) => `${head('준비 중 — 페이션트 커넥트')}
-<body class="bg-slate-50 font-sans antialiased">
-<div class="min-h-screen flex flex-col items-center justify-center gap-4 p-8">
-  <div class="w-20 h-20 rounded-3xl bg-brand-50 flex items-center justify-center"><i class="fas fa-hammer text-3xl text-brand-600"></i></div>
-  <h1 class="text-2xl font-bold text-slate-800">${msg}</h1>
-  <a href="/" class="mt-2 px-6 py-3 bg-brand-600 text-white rounded-xl font-semibold hover:bg-brand-700 transition">라이브러리로 돌아가기</a>
+<body class="font-sans antialiased">
+<div class="min-h-screen flex flex-col items-center justify-center gap-5 p-8">
+  <div class="w-24 h-24 rounded-[2rem] card flex items-center justify-center float-y"><i class="fas fa-hammer text-4xl text-teal-400"></i></div>
+  <h1 class="text-2xl font-black text-white">${msg}</h1>
+  <a href="/" class="mt-2 px-7 py-3.5 btn-primary rounded-2xl">라이브러리로 돌아가기</a>
 </div>
+<script src="/static/common.js"></script>
 </body></html>`

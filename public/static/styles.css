@@ -1,61 +1,182 @@
-/* 페이션트 커넥트 공통 스타일 */
+/* ============================================================
+   페이션트 커넥트 — Design System v2 "AURORA DARK"
+   다크 프리미엄 · 글래스 · 글로우 · 큰 타이포
+   ============================================================ */
 * { -webkit-tap-highlight-color: transparent; }
-html { font-size: 16px; }
-body { letter-spacing: -0.01em; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  letter-spacing: -0.02em;
+  background: #070b14;
+  color: #e6edf7;
+}
 
-/* 스크롤바 */
+/* ---------- 배경 오로라 ---------- */
+.aurora-bg { position: relative; isolation: isolate; }
+.aurora-bg::before {
+  content: ''; position: fixed; inset: 0; z-index: -2;
+  background:
+    radial-gradient(ellipse 55% 42% at 78% -8%, rgba(45,212,191,0.16), transparent 60%),
+    radial-gradient(ellipse 48% 38% at 12% 8%, rgba(99,102,241,0.14), transparent 58%),
+    radial-gradient(ellipse 60% 50% at 50% 115%, rgba(14,116,144,0.12), transparent 55%),
+    #070b14;
+}
+.aurora-bg::after {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(rgba(255,255,255,0.028) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 30%, transparent 100%);
+}
+
+/* ---------- 스크롤바 ---------- */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
-.dark-scroll::-webkit-scrollbar-thumb { background: #334155; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.4); }
 
-/* 글래스 */
-.glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-.glass-dark { background: rgba(10,15,25,0.72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+/* ---------- 글래스 ---------- */
+.glass {
+  background: rgba(13,20,33,0.66);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+.glass-strong, .glass-dark {
+  background: rgba(10,16,28,0.85);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid rgba(255,255,255,0.08);
+}
 
-/* 카드 등장 애니메이션 */
-@keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-.card-in { animation: cardIn .45s cubic-bezier(.22,1,.36,1) both; }
+/* ---------- 카드 ---------- */
+.card {
+  background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.075);
+  border-radius: 24px;
+  transition: transform .3s cubic-bezier(.22,1,.36,1), border-color .3s, box-shadow .3s;
+}
+.card-hover:hover {
+  transform: translateY(-5px);
+  border-color: rgba(45,212,191,0.35);
+  box-shadow: 0 24px 60px -18px rgba(45,212,191,0.22), 0 0 0 1px rgba(45,212,191,0.12);
+}
 
-/* 카드 호버 */
-.asset-card { transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s; }
-.asset-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px -12px rgba(13,148,136,.25); }
+/* ---------- 그라데이션 텍스트/보더 ---------- */
+.grad-text {
+  background: linear-gradient(100deg, #5eead4 0%, #7dd3fc 45%, #a5b4fc 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.grad-border { position: relative; }
+.grad-border::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px;
+  background: linear-gradient(135deg, rgba(94,234,212,0.7), rgba(125,211,252,0.3) 40%, rgba(165,180,252,0.6));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  pointer-events: none;
+}
 
-/* 큰 터치 타깃 */
+/* ---------- 버튼 ---------- */
 .btn-touch { min-height: 48px; min-width: 48px; }
+.btn-primary {
+  background: linear-gradient(135deg, #14b8a6, #0ea5e9);
+  color: #fff; font-weight: 800;
+  box-shadow: 0 8px 28px -6px rgba(20,184,166,0.5), inset 0 1px 0 rgba(255,255,255,0.25);
+  transition: all .25s cubic-bezier(.22,1,.36,1);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 14px 36px -6px rgba(20,184,166,0.6), inset 0 1px 0 rgba(255,255,255,0.25); filter: brightness(1.08); }
+.btn-primary:active { transform: translateY(0); }
+.btn-ghost {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #cbd5e1; font-weight: 700;
+  transition: all .2s;
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.18); color: #fff; }
+.btn-kakao { background: #FEE500; color: #191919; font-weight: 800; }
 
-/* 드로잉 캔버스 */
+/* ---------- 인풋 ---------- */
+.input-dark {
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #e6edf7;
+  border-radius: 16px;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.input-dark::placeholder { color: #64748b; }
+.input-dark:focus { outline: none; border-color: rgba(45,212,191,0.6); box-shadow: 0 0 0 4px rgba(45,212,191,0.14); background: rgba(255,255,255,0.08); }
+select.input-dark option { background: #0d1421; color: #e6edf7; }
+
+/* ---------- 칩/탭 ---------- */
+.chip {
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.04);
+  color: #94a3b8; font-weight: 700;
+  transition: all .2s;
+}
+.chip:hover { color: #e6edf7; background: rgba(255,255,255,0.08); }
+.chip.on {
+  background: linear-gradient(135deg, rgba(20,184,166,0.22), rgba(14,165,233,0.18));
+  border-color: rgba(45,212,191,0.5);
+  color: #5eead4;
+  box-shadow: 0 4px 20px -4px rgba(20,184,166,0.35);
+}
+
+/* ---------- 애니메이션 ---------- */
+@keyframes cardIn { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
+.card-in { animation: cardIn .5s cubic-bezier(.22,1,.36,1) both; }
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+.fade-in { animation: fadeIn .4s ease both; }
+@keyframes floatY { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+.float-y { animation: floatY 5s ease-in-out infinite; }
+@keyframes pulseGlow { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+.pulse-glow { animation: pulseGlow 3s ease-in-out infinite; }
+
+/* ---------- 스켈레톤 ---------- */
+@keyframes shimmer { 0% { background-position: -400px 0 } 100% { background-position: 400px 0 } }
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+  background-size: 800px 100%; animation: shimmer 1.4s infinite;
+}
+
+/* ---------- 드로잉 ---------- */
 #draw-canvas { touch-action: none; cursor: crosshair; }
 
-/* 필름스트립 */
-.filmstrip { scrollbar-width: thin; }
-.film-thumb { transition: all .2s; }
-.film-thumb.active { outline: 3px solid #2dd4bf; outline-offset: 2px; transform: scale(1.05); }
+/* ---------- 필름스트립 ---------- */
+.film-thumb { transition: all .22s cubic-bezier(.22,1,.36,1); opacity: .55; }
+.film-thumb:hover { opacity: .9; }
+.film-thumb.active { opacity: 1; outline: 2.5px solid #2dd4bf; outline-offset: 2px; transform: scale(1.06); box-shadow: 0 8px 24px -6px rgba(45,212,191,.5); }
 
-/* 비교 슬라이더 */
+/* ---------- 비교 슬라이더 ---------- */
 .compare-wrap { position: relative; overflow: hidden; user-select: none; -webkit-user-select: none; }
 .compare-after { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--split, 50%)); }
-.compare-handle { position: absolute; top: 0; bottom: 0; width: 4px; background: #fff; box-shadow: 0 0 12px rgba(0,0,0,.5); left: var(--split, 50%); transform: translateX(-50%); }
+.compare-handle { position: absolute; top: 0; bottom: 0; width: 3px; background: linear-gradient(#5eead4, #38bdf8); box-shadow: 0 0 16px rgba(94,234,212,.7); left: var(--split, 50%); transform: translateX(-50%); }
 
-/* 마소너리 */
-.masonry { columns: 2 260px; column-gap: 1rem; }
-.masonry > * { break-inside: avoid; margin-bottom: 1rem; }
+/* ---------- 마소너리 ---------- */
+.masonry { columns: 2 280px; column-gap: 1.25rem; }
+.masonry > * { break-inside: avoid; margin-bottom: 1.25rem; }
 
-/* 로딩 스켈레톤 */
-@keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
-.skeleton { background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 800px 100%; animation: shimmer 1.4s infinite; }
-
-/* 인쇄 (수가표 A4) */
+/* ---------- 인쇄 ---------- */
 @media print {
+  body { background: #fff !important; }
   .no-print { display: none !important; }
   .print-area { box-shadow: none !important; border: none !important; }
 }
 
-/* 상담 화면 큰 글자 */
+/* ---------- 상담 화면 텍스트 ---------- */
 .consult-text { font-size: 20px; line-height: 1.7; }
 
-/* 토스트 */
-@keyframes toastIn { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
+/* ---------- 토스트 ---------- */
+@keyframes toastIn { from { opacity: 0; transform: translateY(16px) scale(.96) } to { opacity: 1; transform: none } }
 .toast { animation: toastIn .3s cubic-bezier(.22,1,.36,1) both; }
 
-/* 헤더 병원명 그라데이션 */
-.clinic-title { background: linear-gradient(135deg, #0f766e, #0d9488 55%, #2dd4bf); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* ---------- 병원명 타이포 ---------- */
+.clinic-title {
+  background: linear-gradient(100deg, #f0fdfa 10%, #5eead4 55%, #7dd3fc 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 14px rgba(94,234,212,0.25));
+}
+
+/* ---------- 히어로 대형 타이틀 ---------- */
+.hero-title { font-size: clamp(2.2rem, 5.5vw, 4.2rem); line-height: 1.08; font-weight: 900; letter-spacing: -0.04em; }
+
+/* ---------- 라이트 표면(수가표·환자 페이지 카드 등) ---------- */
+.surface-light { background: #ffffff; color: #0f172a; }
