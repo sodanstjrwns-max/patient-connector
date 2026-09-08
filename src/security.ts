@@ -198,6 +198,10 @@ export function snapshot(a: any) {
     media_urls: p.media_urls,
     payload: p.payload,
     reviewer_name: p.reviewer_name,
+    review_status: p.review_status || "unreviewed",
+    reviewed_at: p.reviewed_at || null,
+    source_url: p.source_url || "",
+    usage_rights: p.usage_rights || "unconfirmed",
     tags: p.tags,
   };
 }
@@ -206,7 +210,7 @@ export function sharedFiles(slides: any[]) {
     ...urlsIn(s.asset?.media_urls || []),
     ...urlsIn(
       (s.asset?.payload?.steps || s.asset?.payload?.stages || []).map(
-        (x: any) => x.image,
+        (x: any) => x?.image,
       ),
     ),
     ...urlsIn([s.asset?.payload?.before, s.asset?.payload?.after]),
@@ -232,8 +236,10 @@ export async function activeShare(env: Bindings, token: string) {
     .first<any>();
 }
 export async function shareSlides(env: Bindings, row: any) {
+  if (row.share_snapshot) return JSON.parse(row.share_snapshot).slides || [];
   const out: any[] = [];
   for (const s of JSON.parse(row.slides || "[]").slice(0, 40)) {
+    if (s.include_in_share === false) continue;
     let a = s.asset;
     if (!a) {
       const raw = await env.DB.prepare(
@@ -244,6 +250,22 @@ export async function shareSlides(env: Bindings, row: any) {
       if (raw) a = snapshot(raw);
     }
     if (!a || a.type === "compare") continue;
+    // Do not leak unselected sibling stages or their private file URLs through the asset payload.
+    a = structuredClone(a);
+    const selectedIndex = Number(s.sub_index) || 0;
+    if (a.payload?.steps)
+      a.payload.steps = a.payload.steps.map((x: any, i: number) =>
+        i === selectedIndex ? x : null,
+      );
+    if (a.payload?.stages)
+      a.payload.stages = a.payload.stages.map((x: any, i: number) =>
+        i === selectedIndex ? x : null,
+      );
+    if (["image", "video"].includes(a.type))
+      a.media_urls = (a.media_urls || []).map((url: string, i: number) =>
+        i === selectedIndex ? url : "",
+      );
+    else if (["steps", "progression"].includes(a.type)) a.media_urls = [];
     out.push({
       asset_id: s.asset_id,
       sub_index: s.sub_index || 0,

@@ -54,6 +54,31 @@ window.Editor = {
         "",
       )}</select></label><label class="field">감수 원장<input name="reviewer_name" class="input" required maxlength="100" value="${PC.esc(a.reviewer_name)}"></label><label class="field span-2">설명<textarea name="description" class="input" rows="3" maxlength="5000">${PC.esc(a.description)}</textarea></label></div>
     <section>${this.payloadForm()}</section>
+    <section class="governance-panel"><h3>출처·검토·사용 권한</h3><div class="form-grid"><label class="field span-2">출처 URL<input class="input" name="source_url" type="url" placeholder="https://" maxlength="1800" value="${PC.esc(a.source_url || "")}"></label><label class="field span-2">출처 / 권한 확인 기록<textarea class="input" name="source_note" maxlength="1500" rows="2">${PC.esc(a.source_note || "")}</textarea><small>본문 참고 출처와 이미지·영상의 사용 권한은 별개입니다.</small></label><label class="field">사용 권한<select class="input" name="usage_rights">${[
+      ["unconfirmed", "미확인"],
+      ["owned", "직접 제작"],
+      ["licensed", "이용 허락/라이선스"],
+      ["consented", "환자 사용 동의 확인"],
+      ["public_domain", "퍼블릭 도메인"],
+    ]
+      .map(
+        ([v, l]) =>
+          `<option value="${v}" ${a.usage_rights === v ? "selected" : ""}>${l}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label><label class="field">검토 상태<select class="input" name="review_status">${[
+      ["unreviewed", "검토 미확인"],
+      ["draft", "검토 전 초안"],
+      ["reviewed", "검토 확인"],
+    ]
+      .map(
+        ([v, l]) =>
+          `<option value="${v}" ${a.review_status === v ? "selected" : ""}>${l}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label><label class="field span-2">직원용 설명 가이드 (환자 전송 제외)<textarea class="input" name="staff_note" maxlength="4000" rows="3">${PC.esc(a.staff_note || "")}</textarea></label><label class="review-confirm span-2"><input type="checkbox" name="review_confirmed">현재 자료의 임상 내용과 사용 권한을 직접 확인했습니다.</label><p class="help-note span-2">검토 확인은 대표/운영자 계정의 명시적인 확인 시에만 기록됩니다. 자료를 수정하면 재검토가 필요합니다. 최근 검토: ${PC.date(a.reviewed_at, true)} · 수정: ${PC.date(a.updated_at, true)}</p></div></section>
     <div class="form-grid"><label class="field">태그 <small>쉼표로 구분</small><input class="input" name="tags" value="${PC.esc(a.tags?.join(", "))}" maxlength="1000" placeholder="임플란트, 관리"></label><label class="field">노출 순서 <small>작은 숫자가 먼저 표시됩니다</small><input class="input" name="sort_order" type="number" min="-999" max="9999" value="${Number(a.sort_order) || 0}"></label></div><p class="notice ${this.public ? "" : "green"}"><i class="fas ${this.public ? "fa-globe" : "fa-lock"}"></i>${this.public ? "공개 라이브러리에 등록됩니다. 환자 식별정보와 저작권을 확인해 주세요." : "우리 병원 계정에서만 사용할 수 있습니다. 실제 환자 사진은 사용 동의를 확인해 주세요."}</p><p id="editor-error" class="error-message hidden" role="alert"></p></form>`,
       `<button type="button" class="btn-ghost" onclick="PC.closeModal()">취소</button><button class="btn-primary" id="editor-save" type="submit" form="asset-form"><i class="fas fa-check"></i>자료 저장</button>`,
     );
@@ -116,6 +141,8 @@ window.Editor = {
           .filter(Boolean);
       else this.data[k] = v;
     }
+    this.data.review_confirmed =
+      new FormData(f).get("review_confirmed") === "on";
     const p = this.data.payload || (this.data.payload = {});
     f.querySelectorAll("[data-payload]").forEach(
       (el) => (p[el.dataset.payload] = el.value),

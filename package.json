@@ -7,6 +7,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node tests/integration.mjs",
     "test:browser": "node tests/browser.mjs",
+    "test:workflow": "node tests/workflow.mjs && node tests/workflow-browser.mjs",
+    "test:all": "npm run typecheck && npm test && npm run test:browser && npm run test:workflow",
     "db:migrate:local": "wrangler d1 migrations apply webapp-production --local",
     "preview": "wrangler pages dev",
     "deploy": "npm run build && wrangler pages deploy",

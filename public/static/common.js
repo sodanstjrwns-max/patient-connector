@@ -52,6 +52,7 @@ window.PC = {
       box.setAttribute("aria-live", "polite");
       document.body.append(box);
     }
+    while (box.children.length >= 2) box.firstElementChild.remove();
     const el = document.createElement("div");
     el.className = "toast" + (type === "err" ? " error" : "");
     el.innerHTML = `<i class="fas ${type === "err" ? "fa-circle-exclamation" : "fa-check"}" aria-hidden="true"></i> &nbsp;${this.esc(msg)}`;
@@ -130,6 +131,8 @@ window.PC = {
       clinic = u?.clinic_name || "함께 만드는 진료 경험",
       labels = {
         home: "설명자료 라이브러리",
+        prepare: "오늘 상담 준비",
+        followup: "후속 확인",
         favorites: "즐겨찾기",
         cases: "비포·애프터",
         manage: "병원 자료",
@@ -142,7 +145,7 @@ window.PC = {
     return `<div class="app-shell"><button class="sb-backdrop" id="sb-backdrop" aria-label="메뉴 닫기" onclick="PC.toggleSidebar(false)"></button>
       <aside class="sidebar" id="sidebar">${this.brand()}<div class="clinic-switch"><span class="clinic-avatar"><i class="fas fa-house-medical" aria-hidden="true"></i></span><div class="grow"><p class="truncate" style="font-size:12px;font-weight:700">${this.esc(clinic)}</p><p class="subtle" style="font-size:10px">${this.esc(u?.clinic_specialty || "모든 병원을 위한 무료 도구")}</p></div><i class="fas fa-chevron-down subtle" style="font-size:8px" aria-hidden="true"></i></div>
       <nav aria-label="주 메뉴"><p class="nav-label">CONSULTATION</p>${nav("/", "설명자료 라이브러리", "fa-book-open", "home")}${nav("/?view=favorites", "즐겨찾기", "fa-bookmark", "favorites")}${nav("/cases", "비포·애프터", "fa-clone", "cases")}
-      ${u?.clinic_id ? `<p class="nav-label">MY WORKSPACE</p>${nav("/manage", "병원 자료", "fa-folder-open", "manage")}${nav("/manage?tab=sessions", "상담 이력", "fa-clock-rotate-left", "sessions")}${nav("/manage?tab=settings", "병원 설정", "fa-sliders", "settings")}` : ""}
+      ${u?.clinic_id ? `<p class="nav-label">MY WORKSPACE</p>${nav("/prepare", "오늘 상담 준비", "fa-list-check", "prepare")}${nav("/prepare?tab=followup", "후속 확인", "fa-comments", "followup")}${nav("/manage", "병원 자료", "fa-folder-open", "manage")}${nav("/manage?tab=sessions", "상담 이력", "fa-clock-rotate-left", "sessions")}${nav("/manage?tab=settings", "병원 설정", "fa-sliders", "settings")}` : ""}
       ${u?.role === "admin" ? `<p class="nav-label">ADMINISTRATION</p>${nav("/admin", "운영자 콘솔", "fa-chart-simple", "admin")}` : ""}</nav>
       <div class="sidebar-note"><i class="fas fa-seedling" style="margin-bottom:9px;color:#8d9f7c"></i><p>좋은 설명이 만드는<br><b>더 나은 환자 경험.</b></p><p style="font-size:10px;margin-top:9px">모든 병원에, 언제나 무료입니다.</p></div>
       <div class="user-box">${u ? `<div class="row"><span class="avatar">${this.esc(u.name[0])}</span><div class="grow"><b style="font-size:12px">${this.esc(u.name)}</b><p class="subtle truncate" style="font-size:10px">${this.esc(u.email)}</p></div><button class="icon-btn" onclick="PC.logout()" title="로그아웃" aria-label="로그아웃"><i class="fas fa-arrow-right-from-bracket"></i></button></div>` : `<a href="/login" class="btn-primary" style="width:100%">병원 로그인 <i class="fas fa-arrow-right"></i></a>`}</div></aside>
@@ -275,7 +278,7 @@ window.PC = {
     return `<div class="asset-cover tone-${tone}"><span class="cover-label">${{ cost: "TREATMENT COST", faq: "QUESTION & ANSWER", steps: "STEP BY STEP", progression: "UNDERSTAND THE CHANGE" }[a.type] || "PATIENT EDUCATION"}</span><svg viewBox="0 0 200 170" aria-hidden="true">${shape}</svg><span class="example-label">설명용 예시</span><span class="cover-number">${String(a.id).padStart(2, "0")}</span></div>`;
   },
   assetCard(a) {
-    return `<article class="asset-card"><button class="favorite-btn ${a.favorite ? "is-favorite" : ""}" aria-label="${a.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}" aria-pressed="${!!a.favorite}" onclick="toggleFavorite(${Number(a.id)})"><i class="${a.favorite ? "fas" : "far"} fa-bookmark"></i></button><a class="cover-link" href="/consult/${Number(a.id)}">${this.cover(a)}</a><div class="asset-info"><div class="row" style="gap:6px">${this.typeBadge(a.type)}${a.clinic_id ? '<span class="badge badge-accent">우리 병원</span>' : ""}<span class="subtle" style="font-size:10px;margin-left:auto">${this.esc(a.treatment_name || "공통")}</span></div><a href="/consult/${Number(a.id)}"><h3>${this.esc(a.title)}</h3></a><p>${this.esc(a.description || "환자의 이해를 돕는 상담 설명자료")}</p><div class="asset-meta"><span><span class="reviewer-dot"><i class="fas fa-user-doctor"></i></span>감수 ${this.esc(a.reviewer_name || "미지정")}</span><a href="/consult/${Number(a.id)}" class="open-arrow" aria-label="${this.esc(a.title)} 상담 시작">상담 열기 &nbsp;<i class="fas fa-arrow-up-right-from-square" style="font-size:8px"></i></a></div></div></article>`;
+    return `<article class="asset-card"><button class="favorite-btn ${a.favorite ? "is-favorite" : ""}" aria-label="${a.favorite ? "즐겨찾기 해제" : "즐겨찾기 추가"}" aria-pressed="${!!a.favorite}" onclick="toggleFavorite(${Number(a.id)})"><i class="${a.favorite ? "fas" : "far"} fa-bookmark"></i></button><a class="cover-link" href="/consult/${Number(a.id)}">${this.cover(a)}</a><div class="asset-info"><div class="row" style="gap:6px">${this.typeBadge(a.type)}${a.clinic_id ? '<span class="badge badge-accent">우리 병원</span>' : ""}<span class="subtle" style="font-size:10px;margin-left:auto">${this.esc(a.treatment_name || "공통")}</span></div><a href="/consult/${Number(a.id)}"><h3>${this.esc(a.title)}</h3></a><p>${this.esc(a.description || "환자의 이해를 돕는 상담 설명자료")}</p><div class="asset-meta"><span><span class="reviewer-dot"><i class="fas fa-user-doctor"></i></span>${this.esc(a.reviewer_name || "작성자 미지정")}</span>${this.reviewBadge ? this.reviewBadge(a) : ""}<a href="/consult/${Number(a.id)}" class="open-arrow" aria-label="${this.esc(a.title)} 상담 시작">상담 열기 &nbsp;<i class="fas fa-arrow-up-right-from-square" style="font-size:8px"></i></a></div><button class="btn-ghost add-to-consult" onclick="PC.addToConsult(${Number(a.id)})"><i class="fas fa-plus"></i>상담에 담기</button></div></article>`;
   },
   observeReveals() {},
 };

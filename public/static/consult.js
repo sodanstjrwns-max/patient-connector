@@ -4,8 +4,19 @@ const S = {
   sub: 0,
   assets: new Map(),
   related: [],
+  staffGuides: new Map(),
   slides: new Map(),
-  session: { id: null, version: 1, patient_label: "", schedule_note: "" },
+  session: {
+    id: null,
+    version: 1,
+    client_key: crypto.randomUUID(),
+    status: "draft",
+    patient_label: "",
+    schedule_note: "",
+    internal_note: "",
+  },
+  saver: null,
+  saveState: "saved",
   tool: "pen",
   color: "#d95f4c",
   size: 5,
@@ -38,14 +49,16 @@ let canvas,
   resizeObserver;
 function touch() {
   S.dirty = true;
+  S.saver?.mark();
   status();
 }
 function status() {
   const el = document.getElementById("save-status");
   if (el)
-    el.innerHTML = `<span class="save-dot ${!S.dirty ? "saved" : ""}"></span>${S.saving ? "저장 중…" : S.dirty ? "저장하지 않은 변경사항" : "모든 변경사항 저장됨"}`;
+    el.innerHTML = `<span class="save-dot ${!S.dirty ? "saved" : ""}"></span>${{ saving: "서버 저장 중…", offline: "연결 끊김 · 화면을 닫지 마세요", conflict: "다른 화면에서 변경됨", error: "저장 실패 · 다시 저장", dirty: "자동저장 대기" }[S.saveState] || (S.dirty ? "자동저장 대기" : "서버 저장 완료")}`;
   const count = document.getElementById("slide-count");
-  if (count) count.textContent = `상담에 포함된 자료 ${S.slides.size}장`;
+  if (count)
+    count.textContent = `오늘 상담에 담은 자료 ${[...S.slides.values()].filter((s) => s._selected).length}장`;
 }
 async function init() {
   try {
@@ -66,8 +79,17 @@ async function init() {
           }
         }
         S.assets.set(a.id, a);
-        S.slides.set(keyOf(a.id, sub), { ...s, asset: a, sub_index: sub });
+        S.slides.set(keyOf(a.id, sub), {
+          ...s,
+          _selected: true,
+          asset: a,
+          sub_index: sub,
+        });
       }
+      const orderedFirst = [...S.slides.values()].find(
+        (s) => s.asset_id === S.assetId,
+      );
+      if (orderedFirst) S.sub = orderedFirst.sub_index;
       if (!S.assets.has(S.assetId)) {
         const first = S.slides.values().next().value;
         if (first) {
@@ -82,6 +104,58 @@ async function init() {
         (await axios.get(`/api/assets/${S.assetId}`)).data.asset,
       );
     if (!asset()) throw new Error("상담에 연결된 자료가 없습니다.");
+    S.saver = new PC.DraftSaver({
+      read: () => ({
+        ...S.session,
+        slides: [...S.slides.values()]
+          .filter((s) => s._selected)
+          .map((s) => ({
+            asset_id: s.asset_id,
+            sub_index: s.sub_index,
+            note: s.note || "",
+            internal_note: s.internal_note || "",
+            include_in_share: s.include_in_share !== false,
+            drawing_png: s.drawing_png || null,
+            drawing_url: s.drawing_png ? null : s.drawing_url || null,
+            aspect: 1.5,
+          })),
+      }),
+      onState: (state) => {
+        S.saveState = state;
+        S.dirty = state !== "saved";
+        status();
+      },
+      onSaved: (data, sent) => {
+        S.session.id = data.id;
+        S.session.version = data.version;
+        PC.rememberDraft(data.id);
+        for (const saved of data.slides) {
+          const current = S.slides.get(keyOf(saved.asset_id, saved.sub_index)),
+            source = sent.slides.find(
+              (x) =>
+                x.asset_id === saved.asset_id &&
+                x.sub_index === saved.sub_index,
+            );
+          if (current && current.drawing_png === source?.drawing_png) {
+            current.drawing_url = saved.drawing_url;
+            current.drawing_png = null;
+          }
+          if (current) current.asset = saved.asset;
+        }
+        history.replaceState(
+          null,
+          "",
+          `/consult/${S.assetId}?session=${data.id}`,
+        );
+      },
+      onConflict: () =>
+        PC.modal(
+          "다른 화면에서 상담이 수정되었습니다.",
+          '<p class="help-note">현재 입력은 화면에 남아 있습니다. 내용을 확인하고 새로 불러오세요. 이 화면을 닫으면 저장되지 않은 변경은 사라집니다.</p>',
+          '<button class="btn-ghost" onclick="PC.closeModal()">현재 입력 유지</button><button class="btn-primary" onclick="location.reload()">서버 내용 다시 열기</button>',
+          true,
+        ),
+    });
     render();
     await showSlide();
     await loadRelated();
@@ -95,7 +169,7 @@ async function init() {
 }
 function render() {
   document.getElementById("app").innerHTML =
-    `<main id="main-content" class="studio"><div id="studio-shell" style="display:contents"><header class="studio-header"><a class="icon-btn" href="/" title="라이브러리로 돌아가기" aria-label="라이브러리로 돌아가기"><i class="fas fa-arrow-left"></i></a><span class="header-brand">${PC.mark()}</span><div class="grow"><h1 id="studio-title"></h1><p>${PC.esc(PC.user?.clinic_name || "Patient Connect")} &nbsp;·&nbsp; <span id="save-status"></span></p></div>${PC.user?.clinic_id ? '<button class="btn-ghost" id="save-button" onclick="saveSession()"><i class="far fa-floppy-disk"></i><span class="desktop-only">상담 </span>저장</button><button class="btn-primary" id="send-button" onclick="sendToPatient()"><i class="far fa-paper-plane"></i><span class="desktop-only">환자에게 </span>전송</button>' : '<a href="/login" class="btn-primary">로그인 후 저장</a>'}<button class="icon-btn desktop-only" onclick="toggleFullscreen()" title="전체화면" aria-label="전체화면"><i class="fas fa-expand"></i></button><button class="icon-btn" onclick="togglePanel()" title="설명·메모 패널" aria-label="설명 및 메모 패널"><i class="fas fa-table-columns"></i></button></header><div class="studio-body"><section class="stage-workspace" aria-label="상담 자료"><div class="stage-topline"><span id="stage-label"></span><div id="page-controls" class="studio-page-controls"></div></div><div class="stage-viewport" id="stage-viewport"><div class="stage-frame" id="stage-frame"><div class="stage-plane" id="stage-plane"><div class="stage-content" id="stage-content"></div><canvas class="stage-canvas" id="draw-canvas" width="1200" height="800" aria-label="상담 판서 영역"></canvas></div></div></div><nav class="studio-tools" id="studio-tools" aria-label="판서 도구"></nav><nav class="studio-filmstrip" id="filmstrip" aria-label="다른 설명자료"></nav></section><aside id="studio-panel" class="studio-panel ${S.panel ? "" : "hidden"}" aria-label="설명과 상담 메모"></aside></div></div></main>`;
+    `<main id="main-content" class="studio"><div id="studio-shell" style="display:contents"><header class="studio-header"><a class="icon-btn" href="/" title="라이브러리로 돌아가기" aria-label="라이브러리로 돌아가기"><i class="fas fa-arrow-left"></i></a><span class="header-brand">${PC.mark()}</span><nav class="studio-flow desktop-only"><button onclick="goPrepare()">01 준비</button><b>02 진행</b><button onclick="sendToPatient()">03 전달</button></nav><div class="grow"><h1 id="studio-title"></h1><p>${PC.esc(PC.user?.clinic_name || "Patient Connect")} &nbsp;·&nbsp; <span id="save-status"></span></p></div>${PC.user?.clinic_id ? '<button class="btn-ghost" id="save-button" onclick="saveSession()"><i class="far fa-floppy-disk"></i><span class="desktop-only">상담 </span>저장</button><button class="btn-primary" id="send-button" onclick="sendToPatient()"><i class="far fa-paper-plane"></i><span class="desktop-only">환자에게 </span>전송</button>' : '<a href="/login" class="btn-primary">로그인 후 저장</a>'}<button class="icon-btn" onclick="newStudioPatient()" title="새 환자 상담" aria-label="새 환자 상담"><i class="fas fa-user-plus"></i></button><button class="icon-btn desktop-only" onclick="toggleFullscreen()" title="전체화면" aria-label="전체화면"><i class="fas fa-expand"></i></button><button class="icon-btn" onclick="togglePanel()" title="설명·메모 패널" aria-label="설명 및 메모 패널"><i class="fas fa-table-columns"></i></button></header><div class="studio-body"><section class="stage-workspace" aria-label="상담 자료"><div class="stage-topline"><span id="stage-label"></span><div id="page-controls" class="studio-page-controls"></div></div><div class="stage-viewport" id="stage-viewport"><div class="stage-frame" id="stage-frame"><div class="stage-plane" id="stage-plane"><div class="stage-content" id="stage-content"></div><canvas class="stage-canvas" id="draw-canvas" width="1200" height="800" aria-label="상담 판서 영역"></canvas></div></div></div><nav class="studio-tools" id="studio-tools" aria-label="판서 도구"></nav><nav class="studio-filmstrip" id="filmstrip" aria-label="다른 설명자료"></nav></section><aside id="studio-panel" class="studio-panel ${S.panel ? "" : "hidden"}" aria-label="설명과 상담 메모"></aside></div></div></main>`;
   canvas = document.getElementById("draw-canvas");
   ctx = canvas.getContext("2d");
   ctx.lineCap = "round";
@@ -147,8 +221,10 @@ async function showSlide() {
       note: "",
       drawing_url: null,
       aspect: 1.5,
+      _selected: false,
+      include_in_share: false,
+      internal_note: "",
     });
-    touch();
   }
   const a = asset(),
     p = a.payload || {},
@@ -161,7 +237,7 @@ async function showSlide() {
   document.getElementById("studio-title").textContent = a.title;
   document.title = a.title + " · 상담 스튜디오";
   document.getElementById("stage-label").innerHTML =
-    `${PC.typeBadge(a.type)} <span style="margin-left:8px">${PC.esc(it.title || "설명자료")}</span>`;
+    `${PC.typeBadge(a.type)} <span style="margin-left:8px">${PC.esc(it.title || "설명자료")}</span><button id="add-current-slide" class="btn-ghost btn-sm" style="margin-left:10px" onclick="addCurrentSlide()">${slide()._selected ? "상담에 담김" : "이 단계 상담에 담기"}</button>`;
   document.getElementById("page-controls").innerHTML =
     items.length > 1
       ? `<button onclick="subMove(-1)" aria-label="이전 단계" ${S.sub === 0 ? "disabled" : ""}><i class="fas fa-chevron-left"></i></button><span>${S.sub + 1} / ${items.length}</span><button onclick="subMove(1)" aria-label="다음 단계" ${S.sub === items.length - 1 ? "disabled" : ""}><i class="fas fa-chevron-right"></i></button>`
@@ -194,6 +270,17 @@ async function showSlide() {
   renderFilmstrip();
   status();
   setTool(S.tool);
+  const selected = [...S.slides.values()].filter((x) => x._selected),
+    order = selected.findIndex(
+      (x) => x.asset_id === S.assetId && x.sub_index === S.sub,
+    );
+  if (selected.length > 1)
+    document
+      .getElementById("page-controls")
+      .insertAdjacentHTML(
+        "beforeend",
+        `<span style="margin-left:10px">상담 ${order >= 0 ? order + 1 : "—"}/${selected.length}</span><button onclick="moveSelected(-1)" aria-label="이전 상담자료"><i class="fas fa-backward-step"></i></button><button onclick="moveSelected(1)" aria-label="다음 상담자료"><i class="fas fa-forward-step"></i></button>`,
+      );
   history.replaceState(
     null,
     "",
@@ -210,6 +297,13 @@ async function loadRelated() {
       params: { treatment: asset().treatment_id || "all" },
     });
     S.related = data.assets;
+    for (const a of data.assets)
+      if (a.staff_note) S.staffGuides.set(a.id, a.staff_note);
+    const guide = document.getElementById("staff-guide-text");
+    if (guide)
+      guide.textContent =
+        S.staffGuides.get(S.assetId) ||
+        "직원용 보충 설명이 등록되지 않았습니다.";
     for (const a of data.assets) if (!S.assets.has(a.id)) S.assets.set(a.id, a);
     renderFilmstrip();
   } catch (e) {
@@ -235,10 +329,10 @@ function renderPanel() {
   const a = asset(),
     items = itemsOf(a);
   document.getElementById("studio-panel").innerHTML =
-    `<div class="row spread"><span class="eyebrow" style="color:#96ad88">CONSULTATION NOTES</span><button class="icon-btn mobile-only" style="color:#bcd0b1" onclick="togglePanel()" aria-label="패널 닫기"><i class="fas fa-xmark"></i></button></div><h2 style="margin-top:15px">${PC.esc(a.title)}</h2><p class="description">${PC.esc(a.description)}</p><p style="font-size:10px;color:#94ae83;margin-top:12px"><i class="fas fa-user-doctor"></i> &nbsp;감수 ${PC.esc(a.reviewer_name || "미지정")}</p>${items.length > 1 ? `<p class="panel-label">단계별 설명</p>${items.map((it, i) => `<button class="stage-step ${i === S.sub ? "active" : ""}" onclick="subGo(${i})"><span class="step-number">${String(i + 1).padStart(2, "0")}</span><span><b>${PC.esc(it.title || "자료 " + (i + 1))}</b><small>${PC.esc(it.desc || "")}</small></span></button>`).join("")}` : ""}
+    `<div class="row spread"><span class="eyebrow" style="color:#96ad88">CONSULTATION NOTES</span><button class="icon-btn mobile-only" style="color:#bcd0b1" onclick="togglePanel()" aria-label="패널 닫기"><i class="fas fa-xmark"></i></button></div><h2 style="margin-top:15px">${PC.esc(a.title)}</h2><p class="description">${PC.esc(a.description)}</p><p style="font-size:10px;color:#94ae83;margin-top:12px"><i class="fas fa-user-doctor"></i> &nbsp;${PC.esc(a.reviewer_name || "작성자 미지정")} · ${PC.reviewBadge(a)}</p>${items.length > 1 ? `<p class="panel-label">단계별 설명</p>${items.map((it, i) => `<button class="stage-step ${i === S.sub ? "active" : ""}" onclick="subGo(${i})"><span class="step-number">${String(i + 1).padStart(2, "0")}</span><span><b>${PC.esc(it.title || "자료 " + (i + 1))}</b><small>${PC.esc(it.desc || "")}</small></span></button>`).join("")}` : ""}
  ${a.type === "compare" ? '<p class="panel-label">전후 비교</p><div class="row"><span class="small">Before</span><input aria-label="전후 비교" class="studio-compare-range" type="range" value="50" oninput="document.getElementById(\'stage-compare\').style.setProperty(\'--split\',this.value+\'%\')"><span class="small">After</span></div><p class="caution-item">비포·애프터는 환자 공유 링크에서 제외됩니다.</p>' : ""}
- <div id="studio-cautions">${cautionsHTML()}</div>
- ${PC.user?.clinic_id ? `<p class="panel-label">환자에게 전해질 메모</p><div class="stack" style="gap:11px"><label class="field">환자 표시명<input class="input" id="patient-label" maxlength="100" placeholder="예: 김○○님" value="${PC.esc(S.session.patient_label)}" oninput="S.session.patient_label=this.value;touch()"></label><label class="field">이 단계의 메모<textarea class="input" id="slide-note" rows="3" maxlength="2000" placeholder="환자에게 강조할 내용을 적어주세요" oninput="slide().note=this.value;touch()">${PC.esc(slide().note)}</textarea></label><label class="field">다음 일정 / 안내<textarea class="input" id="schedule-note" rows="2" maxlength="2000" placeholder="다음 내원 시 참고할 안내" oninput="S.session.schedule_note=this.value;touch()">${PC.esc(S.session.schedule_note)}</textarea></label></div><p id="slide-count" class="studio-bottom-note"></p><button class="btn-ghost btn-sm" style="width:100%;background:#ffffff05;color:#afc29f;border-color:#ffffff18" onclick="removeSlide()">현재 단계를 상담에서 빼기</button><p class="studio-bottom-note">표시명과 메모에 불필요한 개인정보를 입력하지 마세요.<br>저장한 상담은 병원 계정에서 다시 열 수 있습니다.</p>` : '<p class="caution-item">로그인하면 상담 저장과 환자 전송을 이용할 수 있습니다.</p>'}`;
+ <details class="caution-item"><summary>직원용 설명 가이드 · 환자 전송 제외</summary><p id="staff-guide-text" style="white-space:pre-wrap;margin-top:8px">${PC.esc(a.staff_note || S.staffGuides.get(a.id) || "직원용 보충 설명이 등록되지 않았습니다.")}</p></details><div id="studio-cautions">${cautionsHTML()}</div>
+ ${PC.user?.clinic_id ? `<p class="panel-label">환자에게 전해질 메모</p><p class="studio-bottom-note">${slide()._selected ? "이 단계가 오늘 상담에 담겨 있습니다." : "먼저 ‘이 단계 상담에 담기’를 눌러주세요."}</p><div class="stack" style="gap:11px"><label class="field">환자 표시명<input class="input" id="patient-label" maxlength="100" placeholder="예: 김○○님" value="${PC.esc(S.session.patient_label)}" oninput="S.session.patient_label=this.value;touch()"></label><label class="field">이 단계의 메모<textarea class="input" id="slide-note" ${slide()._selected ? "" : "disabled"} rows="3" maxlength="2000" placeholder="환자에게 강조할 내용을 적어주세요" oninput="slide().note=this.value;touch()">${PC.esc(slide().note)}</textarea></label><label class="field"><i class="fas fa-lock"></i>이 단계 내부 메모<textarea id="internal-note" class="input" rows="2" maxlength="2000" ${slide()._selected ? "" : "disabled"} oninput="slide().internal_note=this.value;touch()">${PC.esc(slide().internal_note || "")}</textarea><small>환자에게 전송하지 않습니다.</small></label><label class="field">다음 일정 / 안내<textarea class="input" id="schedule-note" rows="2" maxlength="2000" placeholder="다음 내원 시 참고할 안내" oninput="S.session.schedule_note=this.value;touch()">${PC.esc(S.session.schedule_note)}</textarea></label></div><p id="slide-count" class="studio-bottom-note"></p><button class="btn-ghost btn-sm" style="width:100%;background:#ffffff05;color:#afc29f;border-color:#ffffff18" onclick="removeSlide()">현재 단계를 상담에서 빼기</button><p class="studio-bottom-note">표시명과 메모에 불필요한 개인정보를 입력하지 마세요.<br>저장한 상담은 병원 계정에서 다시 열 수 있습니다.</p>` : '<p class="caution-item">로그인하면 상담 저장과 환자 전송을 이용할 수 있습니다.</p>'}`;
   status();
 }
 function cautionsHTML() {
@@ -287,20 +381,18 @@ window.subGo = async (i) => {
 };
 window.subMove = (d) => subGo(S.sub + d);
 window.removeSlide = () => {
-  if (S.slides.size === 1) return PC.toast("최소 한 장은 포함되어야 합니다.");
+  if (!slide()._selected) return;
   PC.confirm(
-    "현재 단계를 상담에서 뺄까요?",
-    "이 단계의 메모와 판서도 상담에서 제외됩니다.",
+    "이 단계를 오늘 상담에서 뺄까요?",
+    "저장 목록과 환자 전송 대상에서 제외됩니다.",
     async () => {
-      const k = keyOf();
-      S.slides.delete(k);
-      S.history.delete(k);
-      S.future.delete(k);
-      const next = S.slides.values().next().value;
-      S.assetId = next.asset_id;
-      S.sub = next.sub_index;
+      slide()._selected = false;
+      slide().include_in_share = false;
       touch();
-      await showSlide();
+      document.getElementById("add-current-slide").textContent =
+        "이 단계 상담에 담기";
+      renderPanel();
+      status();
     },
     "빼기",
   );
@@ -352,6 +444,10 @@ function point(e) {
   };
 }
 function drawStart(e) {
+  if (!slide()?._selected) {
+    PC.toast("먼저 이 단계를 상담에 담아 주세요.");
+    return;
+  }
   if (S.busy || S.saving || !drawable() || S.tool === "move") return;
   e.preventDefault();
   canvas.setPointerCapture(e.pointerId);
@@ -582,80 +678,67 @@ window.toggleFullscreen = () =>
       await document.documentElement.requestFullscreen();
     else PC.toast("이 브라우저는 전체화면을 지원하지 않습니다.");
   });
+window.moveSelected = async (d) => {
+  if (S.busy) return;
+  const list = [...S.slides.values()].filter((s) => s._selected),
+    i = list.findIndex(
+      (s) => s.asset_id === S.assetId && s.sub_index === S.sub,
+    ),
+    next = list[i + d];
+  if (!next) return;
+  S.assetId = next.asset_id;
+  S.sub = next.sub_index;
+  await showSlide();
+};
+window.addCurrentSlide = () => {
+  slide()._selected = true;
+  slide().include_in_share = true;
+  touch();
+  document.getElementById("add-current-slide").textContent = "상담에 담김";
+  renderPanel();
+  status();
+};
 window.saveSession = async (silent = false) => {
   if (!PC.user?.clinic_id) {
     location.href = "/login";
     return null;
   }
-  if (S.saving || S.busy) return null;
-  S.saving = true;
-  status();
-  document.getElementById("studio-shell").inert = true;
+  if (S.busy) return null;
   try {
-    const slides = [...S.slides.values()].map((s) => ({
-      asset_id: s.asset_id,
-      sub_index: s.sub_index,
-      drawing_png: s.drawing_png || null,
-      drawing_url: s.drawing_png ? null : s.drawing_url || null,
-      note: s.note || "",
-      aspect: 1.5,
-    }));
-    const { data } = await axios.post("/api/sessions", {
-      ...S.session,
-      slides,
-    });
-    S.session.id = data.id;
-    S.session.version = data.version;
-    S.slides = new Map(
-      data.slides.map((s) => [keyOf(s.asset_id, s.sub_index), s]),
-    );
-    S.dirty = false;
-    history.replaceState(null, "", `/consult/${S.assetId}?session=${data.id}`);
-    if (!silent) PC.toast("상담과 단계별 판서를 저장했습니다.");
-    return data.id;
+    await S.saver.flush();
+    if (!silent) PC.toast("상담 초안을 서버에 저장했습니다.");
+    return S.session.id;
   } catch (e) {
     PC.error(e);
     return null;
-  } finally {
-    S.saving = false;
-    document.getElementById("studio-shell").inert = false;
-    status();
   }
+};
+window.goPrepare = async () => {
+  const id = await saveSession(true);
+  if (id) location.href = "/prepare?session=" + id;
+  else if (!S.dirty) location.href = "/prepare";
 };
 window.sendToPatient = async () => {
   const id = await saveSession(true);
-  if (!id) return;
-  const excluded = [...S.slides.values()].filter(
-    (s) => s.asset?.type === "compare",
-  ).length;
-  PC.modal(
-    "환자에게 상담 안내 보내기",
-    `<div class="stack"><p class="help-note">자료와 판서, 메모를 한 장의 안내로 연결합니다.<br>링크를 가진 사람이 볼 수 있으니 필요한 환자에게만 전달해 주세요.</p>${excluded ? `<p class="notice"><i class="fas fa-shield-halved"></i>비포·애프터 ${excluded}장은 공유에서 제외됩니다.</p>` : ""}<label class="field">공유 기간<select class="input" id="share-days"><option value="7">7일</option><option value="30" selected>30일</option><option value="90">90일</option><option value="1">1일</option></select><small>이 상담의 기존 공유 링크가 있다면 새 링크로 교체됩니다.</small></label></div>`,
-    `<button class="btn-ghost" onclick="PC.closeModal()">취소</button><button id="generate-link" class="btn-primary" onclick="generateLink()">공유 링크 만들기</button>`,
-    true,
+  if (id) location.href = "/prepare?session=" + id + "&review=1";
+  else if (![...S.slides.values()].some((s) => s._selected))
+    PC.toast("환자에게 보낼 자료를 먼저 담아 주세요.");
+};
+window.newStudioPatient = () =>
+  PC.confirm(
+    "새 환자 상담을 시작할까요?",
+    "현재 상담을 서버에 저장하고 환자 표시명·메모·자료를 모두 비웁니다.",
+    async () => {
+      const id = await saveSession(true);
+      if (S.dirty && !id) throw new Error("먼저 현재 상담을 저장해 주세요.");
+      PC.rememberDraft(null);
+      location.href = "/prepare?new=1";
+    },
+    "새 상담 시작",
   );
-};
-window.generateLink = async () => {
-  const btn = document.getElementById("generate-link");
-  btn.disabled = true;
-  try {
-    const { data } = await axios.post(`/api/sessions/${S.session.id}/share`, {
-      days: Number(document.getElementById("share-days").value),
-    });
-    const url = location.origin + data.url;
-    PC.modal(
-      "상담 안내가 준비되었습니다.",
-      `<div class="stack"><p class="notice green"><i class="fas fa-check-circle"></i>${data.days}일 동안 열람할 수 있습니다.</p><label class="field">환자 공유 링크<input class="input" readonly value="${PC.esc(url)}" onclick="this.select()"></label><button class="btn-primary" id="copy-share"><i class="fas fa-link"></i>링크 복사</button><button class="btn-ghost" id="system-share"><i class="fas fa-share-nodes"></i>기기로 공유하기</button><a class="btn-ghost" href="${PC.url(data.url)}" target="_blank" rel="noopener">환자 안내장 미리보기 <i class="fas fa-arrow-up-right-from-square"></i></a><p class="help-note">상담 이력에서 공유를 종료하거나 환자의 열람 여부를 확인할 수 있습니다.</p></div>`,
-      "",
-      true,
-    );
-    document.getElementById("copy-share").onclick = () => PC.copy(url);
-    document.getElementById("system-share").onclick = () => PC.share(url);
-  } catch (e) {
-    PC.error(e);
-    btn.disabled = false;
-  }
-};
+addEventListener("online", () => {
+  if (S.dirty) S.saver?.flush().catch(() => {});
+});
 window.addEventListener("beforeunload", (e) => {
   if (S.dirty && PC.user?.clinic_id) {
     e.preventDefault();

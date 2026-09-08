@@ -144,7 +144,7 @@ function renderRows() {
               s.share_token &&
               !s.share_revoked_at &&
               !PC.expired(s.share_expires_at);
-            return `<tr><td>${s.first_asset_id ? `<a class="table-title" href="/consult/${s.first_asset_id}?session=${s.id}">${PC.esc(s.patient_label || "표시명 없는 상담")}<small>${s.slide_count || 0}장 · 상담 이어서 열기 <i class="fas fa-arrow-up-right-from-square"></i></small></a>` : `<span class="table-title">${PC.esc(s.patient_label || "표시명 없는 상담")}<small>설명자료가 없는 이전 상담 기록</small></span>`}</td><td class="subtle">${PC.date(s.updated_at, true)}</td><td><span class="badge ${shared ? "badge-ok" : "badge-neutral"}">${shared ? "공유 중" : s.share_revoked_at ? "공유 종료" : s.share_token ? "기간 만료" : "미전송"}</span>${shared ? `<p class="subtle" style="font-size:10px;margin-top:4px">${PC.date(s.share_expires_at)}까지</p>` : ""}</td><td><b>${s.view_count || 0}회</b><p class="subtle" style="font-size:10px">${s.last_viewed ? PC.datetime(s.last_viewed) : "아직 열람 기록 없음"}</p></td><td><div class="inline-actions"><button class="btn-ghost btn-sm" onclick="shareSession(${s.id})" ${!s.slide_count && !shared ? 'disabled title="공유할 설명자료가 없습니다"' : ""}>${shared ? "공유 관리" : s.slide_count ? "링크 생성" : "자료 없음"}</button><button class="icon-btn" title="상담 삭제" aria-label="상담 삭제" onclick="deleteSession(${s.id})"><i class="far fa-trash-can"></i></button></div></td></tr>`;
+            return `<tr><td>${s.first_asset_id ? `<a class="table-title" href="/prepare?session=${s.id}">${PC.esc(s.patient_label || "표시명 없는 상담")}<small>${s.slide_count || 0}장 · ${s.status === "draft" ? "초안 이어하기" : "상담 준비로 열기"} <i class="fas fa-arrow-up-right-from-square"></i></small></a>` : `<span class="table-title">${PC.esc(s.patient_label || "표시명 없는 상담")}<small>설명자료가 없는 이전 상담 기록</small></span>`}</td><td class="subtle">${PC.date(s.updated_at, true)}</td><td><span class="badge ${shared ? "badge-ok" : "badge-neutral"}">${shared ? "공유 중" : s.share_revoked_at ? "공유 종료" : s.share_token ? "기간 만료" : "미전송"}</span>${shared ? `<p class="subtle" style="font-size:10px;margin-top:4px">${PC.date(s.share_expires_at)}까지</p>` : ""}</td><td><b>${s.view_count || 0}회</b><p class="subtle" style="font-size:10px">${s.last_viewed ? PC.datetime(s.last_viewed) : "아직 열람 기록 없음"}</p></td><td><div class="inline-actions"><button class="btn-ghost btn-sm" onclick="shareSession(${s.id})" ${!s.slide_count && !shared ? 'disabled title="공유할 설명자료가 없습니다"' : ""}>${shared ? "공유 관리" : s.slide_count ? "링크 생성" : "자료 없음"}</button><button class="icon-btn" title="상담 삭제" aria-label="상담 삭제" onclick="deleteSession(${s.id})"><i class="far fa-trash-can"></i></button></div></td></tr>`;
           })
           .join("")}</tbody></table></div>`
       : PC.empty(
@@ -238,22 +238,9 @@ window.shareSession = (id) => {
     true,
   );
 };
-window.createShare = (id) =>
-  PC.run(async () => {
-    const btn = document.getElementById("make-share");
-    btn.disabled = true;
-    try {
-      const { data } = await axios.post(`/api/sessions/${id}/share`, {
-        days: Number(document.getElementById("share-days").value),
-      });
-      await load();
-      renderRows();
-      shareSession(id);
-      PC.toast("새 공유 링크가 생성되었습니다.");
-    } finally {
-      if (btn.isConnected) btn.disabled = false;
-    }
-  });
+window.createShare = (id) => {
+  location.href = "/prepare?session=" + id + "&review=1";
+};
 window.revokeShare = (id) =>
   PC.run(async () => {
     await axios.delete(`/api/sessions/${id}/share`);

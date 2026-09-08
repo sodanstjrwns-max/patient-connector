@@ -35,6 +35,8 @@ const clinicIds =
 const sessions = `SELECT id FROM consult_sessions WHERE clinic_id IN (${clinicIds})`;
 const assets = `SELECT id FROM assets WHERE clinic_id IN (${clinicIds}) OR (title='QA 공개 FAQ' AND reviewer_name='검증 원장')`;
 execute(`
+DELETE FROM patient_feedback WHERE session_id IN (${sessions});
+DELETE FROM consult_sets WHERE clinic_id IN (${clinicIds});
 DELETE FROM share_views WHERE session_id IN (${sessions});
 DELETE FROM favorites WHERE user_id IN (${userIds}) OR asset_id IN (${assets});
 DELETE FROM consult_sessions WHERE clinic_id IN (${clinicIds});

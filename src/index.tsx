@@ -1,3 +1,5 @@
+import workflow, { governance, patientSnapshot } from "./workflow";
+import { saveConsultation } from "./session-store";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
@@ -34,6 +36,7 @@ import {
 } from "./security";
 import {
   pageHome,
+  pagePrepare,
   pageConsult,
   pageCases,
   pageManage,
@@ -370,11 +373,19 @@ app.get("/api/assets", async (c) => {
   )
     .bind(...binds)
     .all();
-  return c.json({ assets: results.map(parseAsset) });
+  return c.json({
+    assets: results.map((r: any) => {
+      const a = parseAsset(r);
+      if (!u) delete a.staff_note;
+      return a;
+    }),
+  });
 });
 app.get("/api/assets/:id", async (c) => {
-  const a = await assetFor(c.env, c.req.param("id"), await getUser(c));
-  return c.json({ asset: parseAsset(a) });
+  const u = await getUser(c),
+    a = parseAsset(await assetFor(c.env, c.req.param("id"), u));
+  if (!u) delete a.staff_note;
+  return c.json({ asset: a });
 });
 app.post("/api/assets/:id/use", async (c) => {
   const a = await assetFor(c.env, c.req.param("id"), await getUser(c));
@@ -394,10 +405,11 @@ app.post("/api/assets", async (c) => {
     b = await c.req.json(),
     a = validateAsset(b);
   await checkMediaOwnership(c.env, a, u);
+  const meta = governance(b, u);
   const isPublic = u.role === "admin" && b.is_public ? 1 : 0,
     clinic = isPublic ? null : requireClinic(u);
   const r = await c.env.DB.prepare(
-    "INSERT INTO assets(clinic_id,treatment_id,category,type,title,description,media_urls,payload,reviewer_name,tags,is_public,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+    "INSERT INTO assets(clinic_id,treatment_id,category,type,title,description,media_urls,payload,reviewer_name,tags,is_public,sort_order,staff_note,source_url,source_note,usage_rights,review_status,reviewed_at,reviewed_by,is_hidden,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))",
   )
     .bind(
       clinic,
@@ -412,6 +424,14 @@ app.post("/api/assets", async (c) => {
       JSON.stringify(a.tags),
       isPublic,
       a.sort_order,
+      meta.staff_note,
+      meta.source_url,
+      meta.source_note,
+      meta.usage_rights,
+      meta.review_status,
+      meta.reviewed_at,
+      meta.reviewed_by,
+      isPublic && meta.review_status === "draft" ? 1 : a.is_hidden,
     )
     .run();
   return c.json({ ok: true, id: r.meta.last_row_id }, 201);
@@ -422,9 +442,10 @@ app.put("/api/assets/:id", async (c) => {
   if (!canEdit(raw, u)) fail("수정 권한이 없습니다.", 403);
   const b = await c.req.json(),
     a = validateAsset({ ...parseAsset(raw), ...b });
+  const meta = governance(b, u, parseAsset(raw));
   await checkMediaOwnership(c.env, a, u);
   await c.env.DB.prepare(
-    "UPDATE assets SET title=?,description=?,treatment_id=?,category=?,type=?,media_urls=?,payload=?,reviewer_name=?,tags=?,is_hidden=?,sort_order=? WHERE id=?",
+    "UPDATE assets SET title=?,description=?,treatment_id=?,category=?,type=?,media_urls=?,payload=?,reviewer_name=?,tags=?,is_hidden=?,sort_order=?,staff_note=?,source_url=?,source_note=?,usage_rights=?,review_status=?,reviewed_at=?,reviewed_by=?,updated_at=datetime('now') WHERE id=?",
   )
     .bind(
       a.title,
@@ -436,8 +457,15 @@ app.put("/api/assets/:id", async (c) => {
       JSON.stringify(a.payload),
       a.reviewer_name,
       JSON.stringify(a.tags),
-      a.is_hidden,
+      raw.is_public && meta.review_status === "draft" ? 1 : a.is_hidden,
       a.sort_order,
+      meta.staff_note,
+      meta.source_url,
+      meta.source_note,
+      meta.usage_rights,
+      meta.review_status,
+      meta.reviewed_at,
+      meta.reviewed_by,
       raw.id,
     )
     .run();
@@ -694,120 +722,12 @@ app.delete("/api/cases/:id", async (c) => {
   return c.json({ ok: true });
 });
 
-// Store each slide separately by asset + sub-index, with server-owned content snapshots.
-app.post("/api/sessions", async (c) => {
-  const u = await requireUser(c),
-    clinic = requireClinic(u),
-    b = await c.req.json();
-  if (!Array.isArray(b.slides) || !b.slides.length || b.slides.length > 40)
-    fail("상담 자료는 1~40장으로 저장해 주세요.");
-  let existing: any = null;
-  await rateLimit(c, `save:${u.id}`, 120, 3600);
-  if (b.id) {
-    existing = await c.env.DB.prepare(
-      "SELECT * FROM consult_sessions WHERE id=? AND clinic_id=?",
-    )
-      .bind(idOf(b.id), clinic)
-      .first();
-    if (!existing) fail("상담을 찾을 수 없습니다.", 404);
-    if (Number(b.version) !== existing.version)
-      fail("다른 화면에서 수정된 상담입니다. 새로 열어 확인해 주세요.", 409);
-  }
-  const oldSlides = JSON.parse(existing?.slides || "[]"),
-    slides: any[] = [],
-    seen = new Set<string>();
-  for (const s of b.slides) {
-    if (!s || typeof s !== "object") fail("슬라이드 형식을 확인해 주세요.");
-    const id = idOf(s.asset_id),
-      sub = s.sub_index == null ? 0 : Number(s.sub_index),
-      key = `${id}:${sub}`;
-    if (seen.has(key)) fail("중복된 슬라이드입니다.");
-    seen.add(key);
-    const old = oldSlides.find(
-      (x: any) => x.asset_id === id && (x.sub_index || 0) === sub,
-    );
-    const a = old?.asset || snapshot(await assetFor(c.env, id, u));
-    const items = a.payload.steps || a.payload.stages || a.media_urls;
-    if (
-      !Number.isInteger(sub) ||
-      sub < 0 ||
-      sub >= Math.max(1, items?.length || 0)
-    )
-      fail("자료 단계를 확인해 주세요.");
-    let drawing_url: string | null = null;
-    if (s.drawing_png) {
-      if (
-        typeof s.drawing_png !== "string" ||
-        s.drawing_png.length > 700000 ||
-        !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(s.drawing_png)
-      )
-        fail("판서 이미지가 너무 크거나 잘못된 형식입니다.");
-      const bytes = Uint8Array.from(atob(s.drawing_png.split(",")[1]), (ch) =>
-        ch.charCodeAt(0),
-      );
-      if (bytes[0] !== 137 || bytes[1] !== 80)
-        fail("잘못된 판서 이미지입니다.");
-      const fileKey = `clinic${clinic}/drawings/${randomToken(20)}.png`;
-      await c.env.R2.put(fileKey, bytes, {
-        httpMetadata: { contentType: "image/png" },
-      });
-      drawing_url = "/files/" + fileKey;
-    } else if (s.drawing_url) {
-      if (s.drawing_url !== old?.drawing_url)
-        fail("다른 상담의 판서는 연결할 수 없습니다.", 403);
-      drawing_url = old.drawing_url;
-    }
-    slides.push({
-      asset_id: id,
-      sub_index: sub,
-      asset: a,
-      note: text(s.note, 2000),
-      drawing_url,
-      aspect: Math.min(3, Math.max(0.4, Number(s.aspect) || 1.5)),
-    });
-  }
-  const json = JSON.stringify(slides);
-  if (new TextEncoder().encode(json).length > 900000)
-    fail("상담 내용이 너무 많습니다. 나누어 저장해 주세요.", 413);
-  let id = b.id,
-    version = 1;
-  if (existing) {
-    const r = await c.env.DB.prepare(
-      "UPDATE consult_sessions SET patient_label=?,slides=?,schedule_note=?,updated_at=datetime('now'),version=version+1 WHERE id=? AND clinic_id=? AND version=?",
-    )
-      .bind(
-        text(b.patient_label, 100),
-        json,
-        text(b.schedule_note, 2000),
-        existing.id,
-        clinic,
-        existing.version,
-      )
-      .run();
-    if (!r.meta.changes)
-      fail("다른 화면에서 수정되었습니다. 새로 열어 주세요.", 409);
-    version = existing.version + 1;
-  } else {
-    const r = await c.env.DB.prepare(
-      "INSERT INTO consult_sessions(clinic_id,user_id,patient_label,slides,schedule_note) VALUES(?,?,?,?,?)",
-    )
-      .bind(
-        clinic,
-        u.id,
-        text(b.patient_label, 100),
-        json,
-        text(b.schedule_note, 2000),
-      )
-      .run();
-    id = r.meta.last_row_id;
-  }
-  return c.json({ ok: true, id, version, slides });
-});
+app.post("/api/sessions", saveConsultation);
 app.get("/api/sessions", async (c) => {
   const u = await requireUser(c),
     q = (c.req.query("q") || "").slice(0, 100);
   const { results } = await c.env.DB.prepare(
-    `SELECT s.id,s.patient_label,s.share_token,s.share_expires_at,s.share_revoked_at,s.share_count,s.version,s.created_at,s.updated_at,json_array_length(s.slides) as slide_count,json_extract(s.slides,'$[0].asset_id') as first_asset_id,(SELECT COUNT(*) FROM share_views v WHERE v.session_id=s.id) as view_count,(SELECT MAX(viewed_at) FROM share_views v WHERE v.session_id=s.id) as last_viewed FROM consult_sessions s WHERE s.clinic_id=? AND s.patient_label LIKE ? ORDER BY s.updated_at DESC,s.id DESC LIMIT 200`,
+    `SELECT s.id,s.patient_label,s.share_token,s.share_expires_at,s.share_revoked_at,s.share_count,s.version,s.status,s.created_at,s.updated_at,json_array_length(s.slides) as slide_count,json_extract(s.slides,'$[0].asset_id') as first_asset_id,(SELECT COUNT(*) FROM share_views v WHERE v.session_id=s.id) as view_count,(SELECT MAX(viewed_at) FROM share_views v WHERE v.session_id=s.id) as last_viewed FROM consult_sessions s WHERE s.clinic_id=? AND s.patient_label LIKE ? ORDER BY s.updated_at DESC,s.id DESC LIMIT 200`,
   )
     .bind(requireClinic(u), `%${q}%`)
     .all();
@@ -833,6 +753,9 @@ app.delete("/api/sessions/:id", async (c) => {
     .first();
   if (!s) fail("상담을 찾을 수 없습니다.", 404);
   await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM patient_feedback WHERE session_id=?").bind(
+      id,
+    ),
     c.env.DB.prepare("DELETE FROM share_views WHERE session_id=?").bind(id),
     c.env.DB.prepare("DELETE FROM consult_sessions WHERE id=?").bind(id),
   ]);
@@ -847,20 +770,26 @@ app.post("/api/sessions/:id/share", async (c) => {
       .bind(idOf(c.req.param("id")), requireClinic(u))
       .first<any>();
   if (!s) fail("상담을 찾을 수 없습니다.", 404);
-  if (!(await shareSlides(c.env, s)).length)
+  if (b.version !== undefined && Number(b.version) !== s.version)
+    fail("상담이 변경되었습니다. 전송 내용을 다시 확인해 주세요.", 409);
+  const publication = await patientSnapshot(c.env, {
+    ...s,
+    share_snapshot: null,
+  });
+  if (!publication.slides.length)
     fail("전송할 자료가 없습니다. 비포·애프터는 공유에서 제외됩니다.");
   const days = Number(b.days || 30);
   if (![1, 7, 30, 90].includes(days))
     fail("공유 기간은 1, 7, 30, 90일 중 선택해 주세요.");
   const token = randomToken(24);
-  await c.env.DB.prepare(
-    "UPDATE consult_sessions SET share_token=?,share_expires_at=datetime('now',?),share_revoked_at=NULL,share_count=share_count+1 WHERE id=?",
+  const published = await c.env.DB.prepare(
+    "UPDATE consult_sessions SET share_token=?,share_expires_at=datetime('now',?),share_revoked_at=NULL,share_count=share_count+1,status='saved',share_snapshot=? WHERE id=? AND version=?",
   )
-    .bind(token, `+${days} days`, s.id)
+    .bind(token, `+${days} days`, JSON.stringify(publication), s.id, s.version)
     .run();
-  const ids = [
-    ...new Set((await shareSlides(c.env, s)).map((x) => x.asset_id)),
-  ];
+  if (!published.meta.changes)
+    fail("상담이 변경되었습니다. 다시 확인해 주세요.", 409);
+  const ids = [...new Set(publication.slides.map((x: any) => x.asset_id))];
   if (ids.length)
     await c.env.DB.prepare(
       `UPDATE assets SET send_count=send_count+1 WHERE id IN (${ids.map(() => "?").join(",")})`,
@@ -883,31 +812,16 @@ app.get("/api/share/:token", async (c) => {
   const token = c.req.param("token"),
     s = await activeShare(c.env, token);
   if (!s) fail("공유가 종료되었거나 유효하지 않은 링크입니다.", 404);
-  const slides = await shareSlides(c.env, s),
-    clinic = await c.env.DB.prepare(
-      "SELECT name,phone,address,emergency_info FROM clinics WHERE id=?",
-    )
-      .bind(s.clinic_id)
-      .first<any>();
-  const ids = [
-    ...new Set(slides.map((x) => x.asset.treatment_id).filter(Boolean)),
-  ];
-  let cautions: any[] = [];
-  if (ids.length) {
-    const r = await c.env.DB.prepare(
-      `SELECT title,description FROM assets WHERE category='caution' AND type!='compare' AND is_hidden=0 AND (is_public=1 OR clinic_id=?) AND treatment_id IN (${ids.map(() => "?").join(",")}) ORDER BY sort_order`,
-    )
-      .bind(s.clinic_id, ...ids)
-      .all();
-    cautions = r.results;
-  }
+  const publication = await patientSnapshot(c.env, s);
+  const clinic = await c.env.DB.prepare(
+    "SELECT name,phone,address,emergency_info FROM clinics WHERE id=?",
+  )
+    .bind(s.clinic_id)
+    .first<any>();
   return c.json({
+    ...publication,
     clinic,
-    slides: withShareUrls(slides, token),
-    cautions,
-    patient_label: s.patient_label,
-    schedule_note: s.schedule_note,
-    created_at: s.created_at,
+    slides: withShareUrls(publication.slides, token),
     expires_at: s.share_expires_at,
   });
 });
@@ -968,6 +882,8 @@ app.get("/api/admin/stats", async (c) => {
     session_count: sessions?.cnt || 0,
   });
 });
+app.route("/api", workflow);
+app.get("/prepare", (c) => c.html(pagePrepare()));
 app.get("/", (c) => c.html(pageHome()));
 app.get("/consult/:assetId", (c) => c.html(pageConsult()));
 app.get("/cases", (c) => c.html(pageCases()));

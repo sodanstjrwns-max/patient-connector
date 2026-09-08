@@ -121,11 +121,13 @@ try {
   await page.waitForSelector("#draw-canvas");
   await page.waitForFunction(() => !S.busy);
   await page.locator("#patient-label").fill("브라우저 검증 환자");
+  await page.locator("#add-current-slide").click();
   await page.locator("#slide-note").fill("첫 단계 상담 메모");
   await draw(page, [0.2, 0.35], [0.45, 0.5]);
   const first = await page.evaluate(() => slide().drawing_png);
   await page.getByRole("button", { name: "다음 단계", exact: true }).click();
   await page.waitForFunction(() => S.sub === 1 && !S.busy);
+  await page.locator("#add-current-slide").click();
   await page.locator("#slide-note").fill("두 번째 단계 메모");
   await draw(page, [0.6, 0.25], [0.7, 0.6]);
   const second = await page.evaluate(() => slide().drawing_png);
@@ -183,9 +185,10 @@ try {
     "Reopened step two restores its own note",
   );
   await page.locator("#send-button").click();
-  await page.waitForSelector("#generate-link");
-  await page.locator("#generate-link").click();
-  await page.waitForSelector("#copy-share");
+  await page.waitForSelector("#delivery-confirm");
+  await page.locator("#delivery-confirm").check();
+  await page.locator("#publish-prepared").click();
+  await page.waitForSelector("#copy-prepared-link");
   const shareURL = await page
     .locator("#pc-modal a[target=_blank]")
     .getAttribute("href");
