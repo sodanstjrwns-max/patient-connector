@@ -1,5 +1,5 @@
 // The application uses versioned, self-hosted JS and CSS; no runtime Tailwind compiler.
-const V = "care-20260908-1";
+const V = "care-20260908-2";
 const head = (title: string) => `<!DOCTYPE html>
 <html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#285847"><meta name="description" content="좋은 설명이 만드는 더 나은 환자 경험. 병원 상담 자료와 판서, 환자 안내를 연결하는 페이션트 커넥트."><title>${title}</title><link rel="manifest" href="/manifest.json"><link rel="icon" href="/static/icon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/static/icon-192.png"><link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"><link rel="stylesheet" href="/static/styles.css?v=${V}"><script src="/static/axios.min.js?v=${V}" defer></script></head>`;
 function page(title: string, script: string, cls = "", editor = false) {
