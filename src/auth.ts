@@ -73,7 +73,9 @@ export async function newSession(
   setCookie(c, "pc_session", token, {
     path: "/",
     httpOnly: true,
-    secure: new URL(c.req.url).protocol === "https:",
+    // TLS can terminate at the preview/edge proxy; never weaken cookies based on the internal HTTP hop.
+    // Modern browsers allow Secure cookies on localhost for local development.
+    secure: true,
     sameSite: "Lax",
     maxAge: 2592000,
   });

@@ -103,8 +103,9 @@ const login = await request("/api/auth/login", {
 });
 check(login.status === 200 && login.cookie, "Case-insensitive login succeeds");
 check(
-  login.headers.get("set-cookie").includes("HttpOnly"),
-  "Session cookie is HttpOnly",
+  login.headers.get("set-cookie").includes("HttpOnly") &&
+    login.headers.get("set-cookie").includes("Secure"),
+  "Session cookie is Secure and HttpOnly",
 );
 const logout = await request("/api/auth/logout", {
   method: "POST",
