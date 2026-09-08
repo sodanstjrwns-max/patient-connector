@@ -334,6 +334,27 @@ await request(`/api/assets/${id}`, {
   cookie: A.cookie,
   body: { is_hidden: 0 },
 });
+const legacyClone = await request("/api/assets/1/duplicate", {
+  method: "POST",
+  cookie: A.cookie,
+});
+check(
+  legacyClone.status === 200,
+  "Legacy public treatment material can be duplicated",
+);
+const legacyEdit = await request(`/api/assets/${legacyClone.data.id}`, {
+  method: "PUT",
+  cookie: A.cookie,
+  body: { title: "QA legacy placeholder editing", is_hidden: 1 },
+});
+check(
+  legacyEdit.status === 200,
+  "Legacy Korean and space-containing placeholder URLs remain editable",
+);
+await request(`/api/assets/${legacyClone.data.id}`, {
+  method: "DELETE",
+  cookie: A.cookie,
+});
 const png =
   "data:image/png;base64," +
   readFileSync("public/static/icon-192.png").toString("base64");

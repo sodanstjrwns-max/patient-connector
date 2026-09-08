@@ -45,6 +45,15 @@ export async function assetFor(env: Bindings, id: unknown, u: AuthUser | null) {
 export function mediaURL(value: unknown) {
   const url = text(value, 1800);
   if (!url) return "";
+  // Existing library seeds contain Korean titles and spaces in /ph query strings.
+  // Canonicalize only this fixed local endpoint; keep active protocols and file paths restricted.
+  if (/^\/ph(?:\?|$)/.test(url) && !/[\u0000-\u001f]/.test(url)) {
+    const placeholder = new URL(url, "https://placeholder.invalid");
+    if (placeholder.pathname === "/ph") {
+      const query = placeholder.searchParams.toString();
+      return "/ph" + (query ? "?" + query : "");
+    }
+  }
   if (
     /^\/(?:files\/[a-zA-Z0-9/_\-.]+|ph(?:\?[^<>"'\s]*)?)$/.test(url) &&
     !url.includes("..")
