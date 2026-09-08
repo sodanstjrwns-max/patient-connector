@@ -1,611 +1,684 @@
-// 상담 화면 — 스테이지 + 드로잉 + 필름스트립 + 세션 저장/전송
+// Consultation Studio — stable 1200x800 annotation coordinates, per-step state.
 const S = {
-  assetId: parseInt(location.pathname.split('/').pop()),
-  asset: null,          // 현재 자료
-  related: [],          // 같은 카테고리 필름스트립
-  subIndex: 0,          // steps/progression 내부 인덱스
-  session: { id: null, patient_label: '', slides: {} }, // slides: {assetId: {drawing_png, note}}
-  panelOpen: window.innerWidth >= 1024,
-  drawings: {},         // assetId -> dataURL (로컬 캐시)
-  tool: 'pen', color: '#ef4444', size: 4,
-  zoom: 1, panX: 0, panY: 0,
+  assetId: Number(location.pathname.split("/").pop()),
+  sub: 0,
+  assets: new Map(),
+  related: [],
+  slides: new Map(),
+  session: { id: null, version: 1, patient_label: "", schedule_note: "" },
+  tool: "pen",
+  color: "#d95f4c",
+  size: 5,
+  zoom: 1,
+  panX: 0,
+  panY: 0,
+  panel: innerWidth >= 1024,
+  dirty: false,
+  busy: false,
+  saving: false,
+  history: new Map(),
+  future: new Map(),
+  cautions: [],
+};
+const keyOf = (id = S.assetId, sub = S.sub) => `${id}:${sub}`;
+const asset = () => S.assets.get(S.assetId);
+const slide = () => S.slides.get(keyOf());
+const itemsOf = (a) =>
+  a.payload?.steps ||
+  a.payload?.stages ||
+  ((["image", "video"].includes(a.type) ? a.media_urls : []) || []).map(
+    (image, i) => ({ image, title: `자료 ${i + 1}` }),
+  );
+const drawable = () =>
+  ["image", "steps", "progression", "compare"].includes(asset()?.type);
+let canvas,
+  ctx,
+  stroke = null,
+  restoreVersion = 0,
+  resizeObserver;
+function touch() {
+  S.dirty = true;
+  status();
 }
-
+function status() {
+  const el = document.getElementById("save-status");
+  if (el)
+    el.innerHTML = `<span class="save-dot ${!S.dirty ? "saved" : ""}"></span>${S.saving ? "저장 중…" : S.dirty ? "저장하지 않은 변경사항" : "모든 변경사항 저장됨"}`;
+  const count = document.getElementById("slide-count");
+  if (count) count.textContent = `상담에 포함된 자료 ${S.slides.size}장`;
+}
 async function init() {
-  await PC.loadMe()
   try {
-    const { data } = await axios.get(`/api/assets/${S.assetId}`)
-    S.asset = data.asset
+    await PC.loadMe();
+    const sessionId = new URLSearchParams(location.search).get("session");
+    if (sessionId) {
+      const { data } = await axios.get(`/api/sessions/${sessionId}`);
+      S.session = { ...data.session };
+      delete S.session.slides;
+      for (const s of data.session.slides) {
+        const sub = Number(s.sub_index) || 0;
+        let a = s.asset;
+        if (!a) {
+          try {
+            a = (await axios.get(`/api/assets/${s.asset_id}`)).data.asset;
+          } catch {
+            continue;
+          }
+        }
+        S.assets.set(a.id, a);
+        S.slides.set(keyOf(a.id, sub), { ...s, asset: a, sub_index: sub });
+      }
+      if (!S.assets.has(S.assetId)) {
+        const first = S.slides.values().next().value;
+        if (first) {
+          S.assetId = first.asset_id;
+          S.sub = first.sub_index;
+        }
+      }
+    }
+    if (!S.assets.has(S.assetId))
+      S.assets.set(
+        S.assetId,
+        (await axios.get(`/api/assets/${S.assetId}`)).data.asset,
+      );
+    if (!asset()) throw new Error("상담에 연결된 자료가 없습니다.");
+    render();
+    await showSlide();
+    await loadRelated();
+    loadCautions();
+    axios.post(`/api/assets/${S.assetId}/use`, {}).catch(() => {});
   } catch (e) {
-    document.getElementById('app').innerHTML = `<div class="min-h-screen flex flex-col items-center justify-center text-white gap-4">
-      <p class="text-xl font-bold">${e.response?.data?.error || '자료를 불러올 수 없습니다'}</p>
-      <a href="/" class="px-6 py-3 btn-primary rounded-xl font-bold inline-flex items-center">라이브러리로</a></div>`
-    return
+    document.getElementById("app").innerHTML =
+      `<main class="page" style="padding-top:100px;text-align:center;color:var(--ink)">${PC.empty("상담 화면을 열 수 없습니다.", e.response?.data?.error || e.message, "fa-lock")}<a href="/" class="btn-primary" style="margin-top:20px">라이브러리로 돌아가기</a></main>`;
+    document.body.classList.remove("cinema");
   }
-  render()
-  loadRelated()
 }
-
-async function loadRelated() {
-  const { data } = await axios.get('/api/assets', { params: { treatment: S.asset.treatment_id || 'all', category: S.asset.category } })
-  S.related = data.assets
-  renderFilmstrip()
-}
-
-// ==================== 렌더 ====================
 function render() {
-  const a = S.asset
-  const u = PC.user
-  document.getElementById('app').innerHTML = `
-  <div class="h-screen flex flex-col select-none">
-    <!-- 상단 바 -->
-    <header class="glass-strong shrink-0 z-30">
-      <div class="px-3 sm:px-5 h-[68px] flex items-center gap-3">
-        <a href="/" class="btn-touch flex items-center justify-center w-12 rounded-xl text-slate-400 hover:text-white hover:bg-white/8 transition"><i class="fas fa-arrow-left text-lg"></i></a>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2.5">
-            <span class="clinic-title text-xl font-black truncate">${PC.esc(u?.clinic_name || '페이션트 커넥트')}</span>
-            <span class="hidden sm:inline text-slate-600 text-[10px] font-bold tracking-[0.28em] uppercase">Consult</span>
-          </div>
-          <h1 class="text-slate-300 font-bold truncate text-[14px] leading-tight">${PC.esc(a.title)}</h1>
-        </div>
-        ${u?.clinic_id ? `
-        <button onclick="saveSession(false)" class="btn-touch btn-ghost hidden sm:flex items-center gap-2 px-4 rounded-xl"><i class="fas fa-floppy-disk"></i>상담 저장</button>
-        <button onclick="sendToPatient()" class="btn-touch btn-primary flex items-center gap-2 px-4 sm:px-5 rounded-xl"><i class="fas fa-paper-plane"></i><span class="hidden sm:inline">환자에게 전송</span></button>
-        ` : `<a href="/login" class="btn-touch btn-primary flex items-center gap-2 px-4 rounded-xl"><i class="fas fa-lock"></i><span class="hidden sm:inline">로그인 후 전송</span></a>`}
-        <button onclick="toggleFullscreen()" class="btn-touch hidden sm:flex items-center justify-center w-12 rounded-xl text-slate-300 hover:bg-white/10 transition"><i class="fas fa-expand text-lg"></i></button>
-        <button onclick="togglePanel()" class="btn-touch flex items-center justify-center w-12 rounded-xl text-slate-300 hover:bg-white/10 transition"><i class="fas fa-sidebar fa-table-columns text-lg"></i></button>
-      </div>
-    </header>
-
-    <div class="flex-1 flex min-h-0">
-      <!-- 스테이지 영역 -->
-      <main class="flex-1 flex flex-col min-w-0">
-        <div id="stage-wrap" class="relative flex-1 min-h-0" style="background:radial-gradient(ellipse 70% 55% at 50% 40%, #16161c 0%, #060608 100%)">
-          <div id="stage" class="absolute inset-0 flex items-center justify-center overflow-hidden"></div>
-          <canvas id="draw-canvas" class="absolute inset-0 w-full h-full z-10"></canvas>
-          <!-- 드로잉 툴바 -->
-          <div id="toolbar" class="absolute left-1/2 -translate-x-1/2 bottom-4 z-20 glass-dark rounded-2xl px-3 py-2 flex items-center gap-1.5 shadow-2xl border border-white/10 max-w-[calc(100%-1rem)] overflow-x-auto"></div>
-          <!-- 서브 내비 (steps/progression) -->
-          <div id="subnav" class="absolute left-1/2 -translate-x-1/2 top-4 z-20"></div>
-        </div>
-        <!-- 필름스트립 -->
-        <div class="shrink-0 glass-dark border-t border-white/10">
-          <div id="filmstrip" class="filmstrip flex gap-2.5 px-4 py-3 overflow-x-auto dark-scroll"></div>
-        </div>
-      </main>
-
-      <!-- 우측 패널 -->
-      <aside id="side-panel" class="${S.panelOpen ? '' : 'hidden'} w-[340px] shrink-0 glass overflow-y-auto dark-scroll"></aside>
-    </div>
-  </div>
-
-  <!-- 전송 모달 -->
-  <div id="send-modal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"></div>`
-
-  renderStage()
-  renderToolbar()
-  renderPanel()
-  renderFilmstrip()
-  initCanvas()
+  document.getElementById("app").innerHTML =
+    `<main id="main-content" class="studio"><div id="studio-shell" style="display:contents"><header class="studio-header"><a class="icon-btn" href="/" title="라이브러리로 돌아가기" aria-label="라이브러리로 돌아가기"><i class="fas fa-arrow-left"></i></a><span class="header-brand">${PC.mark()}</span><div class="grow"><h1 id="studio-title"></h1><p>${PC.esc(PC.user?.clinic_name || "Patient Connect")} &nbsp;·&nbsp; <span id="save-status"></span></p></div>${PC.user?.clinic_id ? '<button class="btn-ghost" id="save-button" onclick="saveSession()"><i class="far fa-floppy-disk"></i><span class="desktop-only">상담 </span>저장</button><button class="btn-primary" id="send-button" onclick="sendToPatient()"><i class="far fa-paper-plane"></i><span class="desktop-only">환자에게 </span>전송</button>' : '<a href="/login" class="btn-primary">로그인 후 저장</a>'}<button class="icon-btn desktop-only" onclick="toggleFullscreen()" title="전체화면" aria-label="전체화면"><i class="fas fa-expand"></i></button><button class="icon-btn" onclick="togglePanel()" title="설명·메모 패널" aria-label="설명 및 메모 패널"><i class="fas fa-table-columns"></i></button></header><div class="studio-body"><section class="stage-workspace" aria-label="상담 자료"><div class="stage-topline"><span id="stage-label"></span><div id="page-controls" class="studio-page-controls"></div></div><div class="stage-viewport" id="stage-viewport"><div class="stage-frame" id="stage-frame"><div class="stage-plane" id="stage-plane"><div class="stage-content" id="stage-content"></div><canvas class="stage-canvas" id="draw-canvas" width="1200" height="800" aria-label="상담 판서 영역"></canvas></div></div></div><nav class="studio-tools" id="studio-tools" aria-label="판서 도구"></nav><nav class="studio-filmstrip" id="filmstrip" aria-label="다른 설명자료"></nav></section><aside id="studio-panel" class="studio-panel ${S.panel ? "" : "hidden"}" aria-label="설명과 상담 메모"></aside></div></div></main>`;
+  canvas = document.getElementById("draw-canvas");
+  ctx = canvas.getContext("2d");
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  canvas.addEventListener("pointerdown", drawStart);
+  canvas.addEventListener("pointermove", drawMove);
+  canvas.addEventListener("pointerup", drawEnd);
+  canvas.addEventListener("pointercancel", drawEnd);
+  const frame = document.getElementById("stage-frame");
+  frame.addEventListener("pointerdown", panStart);
+  frame.addEventListener("pointermove", panMove);
+  frame.addEventListener("pointerup", panEnd);
+  frame.addEventListener("pointercancel", panEnd);
+  resizeObserver = new ResizeObserver(fitFrame);
+  resizeObserver.observe(document.getElementById("stage-viewport"));
+  fitFrame();
+  renderTools();
 }
-
-// ==================== 스테이지 타입별 렌더 ====================
-function currentImage() {
-  const a = S.asset, p = a.payload || {}
-  if (a.type === 'steps' && p.steps) return p.steps[S.subIndex]?.image
-  if (a.type === 'progression' && p.stages) return p.stages[S.subIndex]?.image
-  return a.media_urls?.[0]
+function fitFrame() {
+  const viewport = document.getElementById("stage-viewport"),
+    frame = document.getElementById("stage-frame");
+  if (!viewport || !frame) return;
+  const css = getComputedStyle(viewport),
+    w =
+      viewport.clientWidth -
+      parseFloat(css.paddingLeft) -
+      parseFloat(css.paddingRight),
+    h =
+      viewport.clientHeight -
+      parseFloat(css.paddingTop) -
+      parseFloat(css.paddingBottom);
+  frame.style.width = Math.max(1, Math.min(w, h * 1.5, 1100)) + "px";
 }
-
-function renderStage() {
-  const a = S.asset, p = a.payload || {}
-  const stage = document.getElementById('stage')
-  S.zoom = 1; S.panX = 0; S.panY = 0
-
-  if (a.type === 'video') {
-    stage.innerHTML = `<video id="stage-video" src="${a.media_urls[0]}" class="max-w-full max-h-full" controls playsinline loop></video>`
-    renderSubnav('')
-  } else if (a.type === 'compare') {
-    const before = p.before || a.media_urls[0], after = p.after || a.media_urls[1]
-    stage.innerHTML = `
-    <div class="compare-wrap w-full h-full max-w-[1100px] max-h-full mx-auto" id="compare-box" style="--split:50%">
-      <img src="${before}" class="absolute inset-0 w-full h-full object-contain" draggable="false">
-      <div class="compare-after"><img src="${after}" class="absolute inset-0 w-full h-full object-contain" draggable="false"></div>
-      <div class="compare-handle"><div class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-1/2 w-12 h-12 rounded-full bg-white shadow-xl flex items-center justify-center"><i class="fas fa-arrows-left-right text-slate-700"></i></div></div>
-      <span class="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-black/60 text-white font-bold">Before</span>
-      <span class="absolute top-4 right-4 px-3 py-1.5 rounded-lg font-bold text-white" style="background:linear-gradient(120deg,rgba(0,113,227,.92),rgba(94,92,230,.92))">After</span>
-    </div>`
-    initCompare()
-    renderSubnav('')
-  } else if (a.type === 'cost') {
-    const rows = p.rows || []
-    stage.innerHTML = `
-    <div class="w-full h-full overflow-auto dark-scroll flex items-start justify-center p-4 sm:p-8">
-      <div class="print-area w-full max-w-[900px] bg-white rounded-3xl shadow-2xl overflow-hidden">
-        <div class="px-8 py-6" style="background:linear-gradient(120deg,#0071e3,#5e5ce6)">
-          <p class="text-sky-100 font-bold text-sm">${PC.esc(PC.user?.clinic_name || '페이션트 커넥트')}</p>
-          <h2 class="text-white text-2xl font-extrabold mt-0.5">${PC.esc(a.title)}</h2>
-        </div>
-        <table class="w-full consult-text">
-          <thead><tr class="bg-slate-50 text-slate-500 text-base">
-            <th class="text-left px-8 py-4 font-bold">항목</th><th class="text-right px-4 py-4 font-bold">비용</th><th class="text-center px-4 py-4 font-bold">보험</th><th class="text-left px-6 py-4 font-bold hidden sm:table-cell">비고</th>
-          </tr></thead>
-          <tbody>${rows.map((r, i) => `
-            <tr class="${i % 2 ? 'bg-slate-50/60' : ''} border-t border-slate-100">
-              <td class="px-8 py-4 font-bold text-slate-800">${PC.esc(r.item)}</td>
-              <td class="px-4 py-4 text-right font-extrabold text-[#0071e3] whitespace-nowrap">${PC.esc(r.price)}</td>
-              <td class="px-4 py-4 text-center"><span class="px-2.5 py-1 rounded-full text-sm font-bold ${r.insurance === '급여' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">${PC.esc(r.insurance)}</span></td>
-              <td class="px-6 py-4 text-slate-500 text-base hidden sm:table-cell">${PC.esc(r.note || '')}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-        ${p.note ? `<p class="px-8 py-5 text-slate-400 text-sm border-t border-slate-100">${PC.esc(p.note)}</p>` : ''}
-      </div>
-    </div>`
-    renderSubnav(`<button onclick="window.print()" class="no-print btn-touch px-4 rounded-xl glass-dark text-white font-semibold border border-white/10"><i class="fas fa-print mr-2"></i>A4 출력</button>`)
-  } else if (a.type === 'faq') {
-    stage.innerHTML = `
-    <div class="w-full h-full flex items-center justify-center p-6">
-      <div class="max-w-[800px] w-full">
-        <div class="grad-border rounded-3xl"><div class="glass-strong rounded-3xl p-8 sm:p-12">
-          <p class="grad-text font-extrabold text-lg"><i class="fas fa-circle-question mr-2 text-sky-300"></i>자주 묻는 질문</p>
-          <h2 class="mt-3 text-2xl sm:text-4xl font-extrabold text-white leading-snug">${PC.esc(p.question || a.title)}</h2>
-          <p class="mt-6 consult-text text-slate-300 sm:text-2xl sm:leading-relaxed">${PC.esc(p.answer || a.description || '')}</p>
-          ${a.reviewer_name ? `<p class="mt-8 text-sky-300 font-bold"><i class="fas fa-user-doctor mr-1.5"></i>감수 · ${PC.esc(a.reviewer_name)}</p>` : ''}
-        </div></div>
-      </div>
-    </div>`
-    renderSubnav('')
-  } else if (a.type === 'steps' || a.type === 'progression') {
-    const items = a.type === 'steps' ? (p.steps || []) : (p.stages || [])
-    const it = items[S.subIndex] || {}
-    stage.innerHTML = `<img id="stage-img" src="${it.image}" class="max-w-full max-h-full object-contain" draggable="false">`
-    const isProg = a.type === 'progression'
-    renderSubnav(`
-    <div class="glass-dark rounded-2xl px-3 py-2 flex items-center gap-2 border border-white/10 shadow-2xl">
-      <button onclick="subMove(-1)" class="btn-touch w-11 rounded-xl text-white hover:bg-white/10 flex items-center justify-center"><i class="fas fa-chevron-left"></i></button>
-      <div class="flex items-center gap-1.5">
-        ${items.map((x, i) => `<button onclick="subGo(${i})" class="btn-touch min-w-[44px] px-2 rounded-xl font-extrabold text-sm transition ${i === S.subIndex ? (isProg ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/40' : 'btn-primary') : 'text-slate-400 hover:text-white hover:bg-white/10'}">${isProg ? (x.label || i + 1) : (i + 1)}</button>`).join('')}
-      </div>
-      <button onclick="subMove(1)" class="btn-touch w-11 rounded-xl text-white hover:bg-white/10 flex items-center justify-center"><i class="fas fa-chevron-right"></i></button>
-    </div>
-    <div class="mt-2 mx-auto max-w-[640px] glass-dark rounded-2xl px-5 py-3 border border-white/10 text-center">
-      <p class="text-white font-extrabold text-lg">${PC.esc(it.title || '')}</p>
-      <p class="text-slate-300 text-[15px] mt-0.5 leading-relaxed">${PC.esc(it.desc || '')}</p>
-    </div>`)
-    initPinchZoom()
-  } else {
-    // image
-    stage.innerHTML = `<img id="stage-img" src="${a.media_urls?.[0] || PC.thumbOf(a)}" class="max-w-full max-h-full object-contain" draggable="false">
-    ${a.description ? `<div class="absolute bottom-20 left-1/2 -translate-x-1/2 max-w-[720px] w-[calc(100%-2rem)] glass-dark rounded-2xl px-5 py-3 border border-white/10 text-center pointer-events-none"><p class="text-white consult-text">${PC.esc(a.description)}</p></div>` : ''}`
-    renderSubnav(`
-    <div class="glass-dark rounded-2xl px-2 py-1.5 flex items-center gap-1 border border-white/10">
-      <button onclick="zoomBy(1.3)" class="btn-touch w-11 rounded-xl text-white hover:bg-white/10"><i class="fas fa-magnifying-glass-plus"></i></button>
-      <button onclick="zoomBy(1/1.3)" class="btn-touch w-11 rounded-xl text-white hover:bg-white/10"><i class="fas fa-magnifying-glass-minus"></i></button>
-      <button onclick="zoomReset()" class="btn-touch px-3 rounded-xl text-white hover:bg-white/10 text-sm font-bold">100%</button>
-    </div>`)
-    initPinchZoom()
-  }
-  restoreDrawing()
+function slideImage(a, index) {
+  const items = itemsOf(a);
+  return items[index]?.image || a.media_urls?.[index] || PC.thumbOf(a);
 }
-
-function renderSubnav(html) { document.getElementById('subnav').innerHTML = html }
-
-window.subMove = (d) => { const items = itemsOf(); S.subIndex = Math.max(0, Math.min(items.length - 1, S.subIndex + d)); persistDrawing(); renderStage() }
-window.subGo = (i) => { persistDrawing(); S.subIndex = i; renderStage() }
-function itemsOf() { const p = S.asset.payload || {}; return S.asset.type === 'steps' ? (p.steps || []) : (p.stages || []) }
-
-// 이미지 줌
-function applyZoom() {
-  const img = document.getElementById('stage-img')
-  if (img) img.style.transform = `translate(${S.panX}px,${S.panY}px) scale(${S.zoom})`
-}
-window.zoomBy = (f) => { S.zoom = Math.max(0.5, Math.min(6, S.zoom * f)); applyZoom() }
-window.zoomReset = () => { S.zoom = 1; S.panX = 0; S.panY = 0; applyZoom() }
-
-function initPinchZoom() {
-  const stage = document.getElementById('stage')
-  let pointers = new Map(), lastDist = 0
-  stage.addEventListener('pointerdown', (e) => { if (S.tool !== 'move') return; pointers.set(e.pointerId, e) })
-  stage.addEventListener('pointermove', (e) => {
-    if (!pointers.has(e.pointerId)) return
-    const prev = pointers.get(e.pointerId); pointers.set(e.pointerId, e)
-    if (pointers.size === 2) {
-      const [a, b] = [...pointers.values()]
-      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
-      if (lastDist) S.zoom = Math.max(0.5, Math.min(6, S.zoom * dist / lastDist))
-      lastDist = dist; applyZoom()
-    } else if (pointers.size === 1 && S.zoom > 1) {
-      S.panX += e.clientX - prev.clientX; S.panY += e.clientY - prev.clientY; applyZoom()
+async function showSlide() {
+  S.busy = true;
+  if (!slide()) {
+    if (S.slides.size >= 40) {
+      S.busy = false;
+      throw new Error("한 상담에는 최대 40장을 담을 수 있습니다.");
     }
-  })
-  const up = (e) => { pointers.delete(e.pointerId); lastDist = 0 }
-  stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up)
-}
-
-// 비교 슬라이더
-function initCompare() {
-  const box = document.getElementById('compare-box')
-  let dragging = false, hoverAuto = false
-  const setSplit = (clientX) => {
-    const r = box.getBoundingClientRect()
-    const pct = Math.max(0, Math.min(100, ((clientX - r.left) / r.width) * 100))
-    box.style.setProperty('--split', pct + '%')
+    S.slides.set(keyOf(), {
+      asset_id: S.assetId,
+      sub_index: S.sub,
+      asset: asset(),
+      note: "",
+      drawing_url: null,
+      aspect: 1.5,
+    });
+    touch();
   }
-  box.addEventListener('pointerdown', (e) => { dragging = true; setSplit(e.clientX); box.setPointerCapture(e.pointerId) })
-  box.addEventListener('pointermove', (e) => { if (dragging) setSplit(e.clientX); else if (hoverAuto && e.pointerType === 'mouse') setSplit(e.clientX) })
-  box.addEventListener('pointerup', () => dragging = false)
-  // 탭 토글
-  let lastTap = 0
-  box.addEventListener('click', (e) => {
-    const now = Date.now()
-    if (now - lastTap < 350) {
-      const cur = parseFloat(box.style.getPropertyValue('--split'))
-      box.style.setProperty('--split', cur > 50 ? '2%' : '98%')
-    }
-    lastTap = now
-  })
+  const a = asset(),
+    p = a.payload || {},
+    items = itemsOf(a),
+    it = items[S.sub] || {};
+  S.zoom = 1;
+  S.panX = 0;
+  S.panY = 0;
+  applyZoom();
+  document.getElementById("studio-title").textContent = a.title;
+  document.title = a.title + " · 상담 스튜디오";
+  document.getElementById("stage-label").innerHTML =
+    `${PC.typeBadge(a.type)} <span style="margin-left:8px">${PC.esc(it.title || "설명자료")}</span>`;
+  document.getElementById("page-controls").innerHTML =
+    items.length > 1
+      ? `<button onclick="subMove(-1)" aria-label="이전 단계" ${S.sub === 0 ? "disabled" : ""}><i class="fas fa-chevron-left"></i></button><span>${S.sub + 1} / ${items.length}</span><button onclick="subMove(1)" aria-label="다음 단계" ${S.sub === items.length - 1 ? "disabled" : ""}><i class="fas fa-chevron-right"></i></button>`
+      : "";
+  let content = "";
+  if (a.type === "cost" || a.type === "faq") content = documentHTML(a);
+  else if (a.type === "video")
+    content = `<video src="${PC.url(a.media_urls?.[S.sub])}" controls playsinline preload="metadata"></video>`;
+  else if (a.type === "compare")
+    content = `<div class="stage-compare" id="stage-compare"><img src="${PC.url(p.before || a.media_urls[0])}" alt="치료 전"><div class="after"><img src="${PC.url(p.after || a.media_urls[1])}" alt="치료 후"></div><div class="divider"></div></div>`;
+  else
+    content = `<img src="${PC.url(slideImage(a, S.sub))}" alt="${PC.esc(it.title || a.title)}" draggable="false">`;
+  document.getElementById("stage-content").innerHTML = content;
+  ctx.clearRect(0, 0, 1200, 800);
+  try {
+    await restore(slide().drawing_png || slide().drawing_url);
+  } catch (e) {
+    PC.error(new Error("저장된 판서를 불러오지 못했습니다. 다시 열어 주세요."));
+    S.busy = false;
+    canvas.style.pointerEvents = "none";
+    return;
+  }
+  if (!S.history.has(keyOf()))
+    S.history.set(keyOf(), [
+      slide().drawing_png || slide().drawing_url || null,
+    ]);
+  S.busy = false;
+  renderPanel();
+  renderTools();
+  renderFilmstrip();
+  status();
+  setTool(S.tool);
+  history.replaceState(
+    null,
+    "",
+    `/consult/${S.assetId}${S.session.id ? "?session=" + S.session.id : ""}`,
+  );
 }
-
-// ==================== 드로잉 캔버스 ====================
-const COLORS = [['#ef4444', '빨강'], ['#3b82f6', '파랑'], ['#facc15', '노랑'], ['#ffffff', '흰색']]
-let ctx, canvas, drawing = false, strokes = [], redoStack = [], curStroke = null, startPt = null, snapshot = null
-
-function drawKey() { return `${S.assetId}:${S.subIndex}` }
-
-function initCanvas() {
-  canvas = document.getElementById('draw-canvas')
-  ctx = canvas.getContext('2d')
-  resizeCanvas()
-  window.addEventListener('resize', () => { const img = canvas.toDataURL(); resizeCanvas(); drawFromURL(img) })
-
-  canvas.addEventListener('pointerdown', onDown)
-  canvas.addEventListener('pointermove', onMove)
-  canvas.addEventListener('pointerup', onUp)
-  canvas.addEventListener('pointercancel', onUp)
+function documentHTML(a) {
+  const p = a.payload || {};
+  return `<article class="stage-document"><p class="eyebrow">${a.type === "cost" ? "TREATMENT COST" : "QUESTION & ANSWER"}</p><h2>${PC.esc(a.type === "faq" ? p.question || a.title : a.title)}</h2>${a.type === "cost" ? `<table><tbody>${(p.rows || []).map((r) => `<tr><td>${PC.esc(r.item)}${r.note ? `<small style="display:block;font-size:11px;color:var(--ink-3)">${PC.esc(r.note)}</small>` : ""}</td><td>${PC.esc(r.price)}</td><td><span class="badge badge-neutral">${PC.esc(r.insurance)}</span></td></tr>`).join("")}</tbody></table><p class="cost-note">${PC.esc(p.note || "정확한 치료 계획과 비용은 진단 후 안내드립니다.")}</p>` : `<p>${PC.esc(p.answer || a.description || "")}</p>`}</article>`;
 }
-
-function resizeCanvas() {
-  const wrap = document.getElementById('stage-wrap')
-  canvas.width = wrap.clientWidth * devicePixelRatio
-  canvas.height = wrap.clientHeight * devicePixelRatio
-  canvas.style.width = wrap.clientWidth + 'px'
-  canvas.style.height = wrap.clientHeight + 'px'
-  ctx.scale(devicePixelRatio, devicePixelRatio)
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round'
-}
-
-function pt(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, p: e.pressure || 0.5 } }
-
-function onDown(e) {
-  if (S.tool === 'move') { canvas.style.pointerEvents = 'none'; return }
-  e.preventDefault()
-  canvas.setPointerCapture(e.pointerId)
-  drawing = true; startPt = pt(e); redoStack = []
-  snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height)
-  if (S.tool === 'pen' || S.tool === 'hl' || S.tool === 'eraser') {
-    curStroke = [startPt]
-  } else if (S.tool === 'text') {
-    drawing = false
-    const text = prompt('입력할 텍스트')
-    if (text) {
-      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
-      ctx.font = '800 26px Pretendard, sans-serif'
-      ctx.fillStyle = S.color
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 5
-      ctx.strokeText(text, startPt.x, startPt.y)
-      ctx.fillText(text, startPt.x, startPt.y)
-      commitHistory()
-    }
+async function loadRelated() {
+  try {
+    const { data } = await axios.get("/api/assets", {
+      params: { treatment: asset().treatment_id || "all" },
+    });
+    S.related = data.assets;
+    for (const a of data.assets) if (!S.assets.has(a.id)) S.assets.set(a.id, a);
+    renderFilmstrip();
+  } catch (e) {
+    PC.error(e);
   }
 }
-
-function onMove(e) {
-  if (!drawing) return
-  e.preventDefault()
-  const p = pt(e)
-  if (S.tool === 'pen' || S.tool === 'hl' || S.tool === 'eraser') {
-    curStroke.push(p)
-    drawStrokeSegment(curStroke)
-  } else if (S.tool === 'arrow' || S.tool === 'circle') {
-    ctx.putImageData(snapshot, 0, 0)
-    if (S.tool === 'arrow') drawArrow(startPt, p)
-    else drawEllipse(startPt, p)
-  }
-}
-
-function onUp(e) {
-  if (!drawing) return
-  drawing = false
-  commitHistory()
-  persistDrawing()
-}
-
-function setupStroke() {
-  ctx.strokeStyle = S.color
-  if (S.tool === 'hl') { ctx.globalAlpha = 0.35; ctx.lineWidth = 16; ctx.globalCompositeOperation = 'source-over' }
-  else if (S.tool === 'eraser') { ctx.globalAlpha = 1; ctx.lineWidth = 28; ctx.globalCompositeOperation = 'destination-out' }
-  else { ctx.globalAlpha = 1; ctx.lineWidth = S.size; ctx.globalCompositeOperation = 'source-over' }
-}
-
-function drawStrokeSegment(stroke) {
-  if (stroke.length < 2) return
-  setupStroke()
-  const n = stroke.length
-  ctx.beginPath()
-  ctx.moveTo(stroke[n - 2].x, stroke[n - 2].y)
-  ctx.lineTo(stroke[n - 1].x, stroke[n - 1].y)
-  ctx.stroke()
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'
-}
-
-function drawArrow(a, b) {
-  setupStroke(); ctx.lineWidth = Math.max(S.size, 4)
-  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
-  const ang = Math.atan2(b.y - a.y, b.x - a.x), len = 18
-  ctx.beginPath()
-  ctx.moveTo(b.x, b.y)
-  ctx.lineTo(b.x - len * Math.cos(ang - 0.45), b.y - len * Math.sin(ang - 0.45))
-  ctx.moveTo(b.x, b.y)
-  ctx.lineTo(b.x - len * Math.cos(ang + 0.45), b.y - len * Math.sin(ang + 0.45))
-  ctx.stroke()
-}
-
-function drawEllipse(a, b) {
-  setupStroke(); ctx.lineWidth = Math.max(S.size, 4)
-  ctx.beginPath()
-  ctx.ellipse((a.x + b.x) / 2, (a.y + b.y) / 2, Math.abs(b.x - a.x) / 2, Math.abs(b.y - a.y) / 2, 0, 0, Math.PI * 2)
-  ctx.stroke()
-}
-
-let history = []
-function commitHistory() {
-  history.push(canvas.toDataURL())
-  if (history.length > 30) history.shift()
-}
-
-window.undoDraw = () => {
-  if (!history.length) return
-  history.pop()
-  const prev = history[history.length - 1]
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  if (prev) drawFromURL(prev)
-  persistDrawing()
-}
-
-window.clearDraw = () => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  history = []
-  persistDrawing()
-}
-
-function drawFromURL(url) {
-  const img = new Image()
-  img.onload = () => { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); ctx.restore() }
-  img.src = url
-}
-
-function persistDrawing() {
-  if (!canvas) return
-  // 빈 캔버스 체크
-  const blank = document.createElement('canvas')
-  blank.width = canvas.width; blank.height = canvas.height
-  S.drawings[drawKey()] = canvas.toDataURL() === blank.toDataURL() ? null : canvas.toDataURL('image/png')
-}
-
-function restoreDrawing() {
-  if (!ctx) return
-  history = []
-  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.restore()
-  const saved = S.drawings[drawKey()]
-  if (saved) { drawFromURL(saved); history.push(saved) }
-}
-
-// ==================== 툴바 ====================
-const TOOLS = [
-  ['move', 'fa-hand', '이동/줌'],
-  ['pen', 'fa-pen', '펜'],
-  ['hl', 'fa-highlighter', '형광펜'],
-  ['arrow', 'fa-arrow-right-long', '화살표'],
-  ['circle', 'fa-circle-notch', '동그라미'],
-  ['text', 'fa-font', '텍스트'],
-  ['eraser', 'fa-eraser', '지우개'],
-]
-
-function renderToolbar() {
-  const tb = document.getElementById('toolbar')
-  tb.innerHTML = `
-    ${TOOLS.map(([key, icon, label]) => `
-      <button onclick="setTool('${key}')" title="${label}" class="btn-touch w-12 rounded-xl flex items-center justify-center text-lg transition ${S.tool === key ? 'btn-primary' : 'text-slate-400 hover:text-white hover:bg-white/10'}"><i class="fas ${icon}"></i></button>`).join('')}
-    <div class="w-px h-8 bg-white/15 mx-1"></div>
-    ${COLORS.map(([c, name]) => `
-      <button onclick="setColor('${c}')" title="${name}" class="btn-touch w-11 rounded-xl flex items-center justify-center transition ${S.color === c ? 'bg-white/15' : 'hover:bg-white/10'}">
-        <span class="w-6 h-6 rounded-full border-2 ${S.color === c ? 'border-white scale-110' : 'border-white/30'}" style="background:${c}"></span>
-      </button>`).join('')}
-    <div class="w-px h-8 bg-white/15 mx-1"></div>
-    <button onclick="undoDraw()" title="실행취소" class="btn-touch w-12 rounded-xl text-slate-300 hover:bg-white/10 flex items-center justify-center text-lg"><i class="fas fa-rotate-left"></i></button>
-    <button onclick="clearDraw()" title="전체 지우기" class="btn-touch w-12 rounded-xl text-slate-300 hover:bg-red-500/20 hover:text-red-400 flex items-center justify-center text-lg"><i class="fas fa-trash-can"></i></button>`
-}
-
-window.setTool = (t) => {
-  S.tool = t
-  canvas.style.pointerEvents = t === 'move' ? 'none' : 'auto'
-  canvas.style.cursor = t === 'move' ? 'grab' : 'crosshair'
-  renderToolbar()
-}
-window.setColor = (c) => { S.color = c; if (S.tool === 'move' || S.tool === 'eraser') S.tool = 'pen'; renderToolbar(); setTool(S.tool) }
-
-// ==================== 필름스트립 ====================
 function renderFilmstrip() {
-  const fs = document.getElementById('filmstrip')
-  if (!fs) return
-  if (!S.related.length) { fs.innerHTML = '<div class="h-16"></div>'; return }
-  fs.innerHTML = S.related.map((a) => `
-    <button onclick="gotoAsset(${a.id})" class="film-thumb ${a.id === S.assetId ? 'active' : ''} shrink-0 relative w-28 h-[72px] rounded-xl overflow-hidden bg-slate-800">
-      <img src="${PC.thumbOf(a)}" class="w-full h-full object-cover" loading="lazy">
-      <span class="absolute inset-x-0 bottom-0 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-semibold truncate text-left">${PC.esc(a.title)}</span>
-    </button>`).join('')
+  const list = [
+    ...new Map(
+      [...S.slides.values()]
+        .map((s) => [s.asset_id, S.assets.get(s.asset_id)])
+        .concat(S.related.map((a) => [a.id, a])),
+    ).values(),
+  ].filter(Boolean);
+  document.getElementById("filmstrip").innerHTML = list
+    .map(
+      (a) =>
+        `<button class="film-thumb ${a.id === S.assetId ? "active" : ""}" onclick="gotoAsset(${a.id})" title="${PC.esc(a.title)}"><span class="film-image">${a.type === "video" ? '<i class="fas fa-play" style="color:var(--accent)"></i>' : `<img src="${PC.url(PC.thumbOf(a))}" alt="" loading="lazy">`}</span><p>${PC.esc(a.title)}</p></button>`,
+    )
+    .join("");
 }
-
-window.gotoAsset = async (id) => {
-  if (id === S.assetId) return
-  persistDrawing()
-  S.assetId = id; S.subIndex = 0
-  const { data } = await axios.get(`/api/assets/${id}`)
-  S.asset = data.asset
-  history = []
-  document.title = S.asset.title + ' — 상담 화면'
-  window.history.replaceState(null, '', `/consult/${id}`)
-  renderStage(); renderPanel(); renderFilmstrip()
-}
-
-// 키보드 좌우
-document.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-    const items = itemsOf()
-    if (items.length > 1) { subMove(e.key === 'ArrowRight' ? 1 : -1); return }
-    const idx = S.related.findIndex((a) => a.id === S.assetId)
-    if (idx < 0) return
-    const next = S.related[idx + (e.key === 'ArrowRight' ? 1 : -1)]
-    if (next) gotoAsset(next.id)
-  }
-})
-
-// ==================== 우측 패널 ====================
 function renderPanel() {
-  const a = S.asset, p = a.payload || {}
-  const panel = document.getElementById('side-panel')
-  const items = a.type === 'steps' ? p.steps : a.type === 'progression' ? p.stages : null
-  panel.innerHTML = `
-  <div class="p-5 space-y-5">
-    <div>
-      <div class="flex items-center gap-2 flex-wrap">${PC.typeBadge(a.type)}
-        ${a.reviewer_name ? `<span class="text-sky-300 text-sm font-bold"><i class="fas fa-user-doctor mr-1"></i>감수 ${PC.esc(a.reviewer_name)}</span>` : ''}
-      </div>
-      <h2 class="mt-2 text-white text-xl font-extrabold leading-snug">${PC.esc(a.title)}</h2>
-      ${a.description ? `<p class="mt-2 text-slate-300 text-[15px] leading-relaxed">${PC.esc(a.description)}</p>` : ''}
-    </div>
-    ${items ? `
-    <div>
-      <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">단계 목록</p>
-      <div class="space-y-1.5">
-        ${items.map((it, i) => `
-        <button onclick="subGo(${i})" class="w-full text-left p-3 rounded-xl transition ${i === S.subIndex ? 'bg-sky-500/20 border border-sky-400/40' : 'bg-white/5 hover:bg-white/10 border border-transparent'}">
-          <p class="font-bold text-[15px] ${i === S.subIndex ? 'text-sky-300' : 'text-slate-200'}">${PC.esc(it.label ? it.label + ' · ' + it.title : it.title)}</p>
-          <p class="text-slate-400 text-[13px] mt-0.5 line-clamp-2">${PC.esc(it.desc || '')}</p>
-        </button>`).join('')}
-      </div>
-    </div>` : ''}
-    ${p.rows ? `
-    <div>
-      <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">수가표</p>
-      <div class="space-y-1">${p.rows.map((r) => `
-        <div class="flex justify-between gap-2 p-2.5 rounded-lg bg-white/5 text-sm"><span class="text-slate-300">${PC.esc(r.item)}</span><span class="text-sky-300 font-bold whitespace-nowrap">${PC.esc(r.price)}</span></div>`).join('')}
-      </div>
-    </div>` : ''}
-    <div id="caution-box"></div>
-    ${PC.user?.clinic_id ? `
-    <div>
-      <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">상담 메모</p>
-      <input id="patient-label" placeholder="환자 표시명 (예: 김○○님)" value="${PC.esc(S.session.patient_label)}"
-        onchange="S.session.patient_label=this.value"
-        class="w-full h-12 px-4 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400 mb-2">
-      <textarea id="slide-note" placeholder="이 자료에 대한 메모" rows="3"
-        onchange="setNote(this.value)"
-        class="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-[15px]">${PC.esc(S.session.slides[S.assetId]?.note || '')}</textarea>
-    </div>` : ''}
-  </div>`
-  loadCautions()
+  const a = asset(),
+    items = itemsOf(a);
+  document.getElementById("studio-panel").innerHTML =
+    `<div class="row spread"><span class="eyebrow" style="color:#96ad88">CONSULTATION NOTES</span><button class="icon-btn mobile-only" style="color:#bcd0b1" onclick="togglePanel()" aria-label="패널 닫기"><i class="fas fa-xmark"></i></button></div><h2 style="margin-top:15px">${PC.esc(a.title)}</h2><p class="description">${PC.esc(a.description)}</p><p style="font-size:10px;color:#94ae83;margin-top:12px"><i class="fas fa-user-doctor"></i> &nbsp;감수 ${PC.esc(a.reviewer_name || "미지정")}</p>${items.length > 1 ? `<p class="panel-label">단계별 설명</p>${items.map((it, i) => `<button class="stage-step ${i === S.sub ? "active" : ""}" onclick="subGo(${i})"><span class="step-number">${String(i + 1).padStart(2, "0")}</span><span><b>${PC.esc(it.title || "자료 " + (i + 1))}</b><small>${PC.esc(it.desc || "")}</small></span></button>`).join("")}` : ""}
+ ${a.type === "compare" ? '<p class="panel-label">전후 비교</p><div class="row"><span class="small">Before</span><input aria-label="전후 비교" class="studio-compare-range" type="range" value="50" oninput="document.getElementById(\'stage-compare\').style.setProperty(\'--split\',this.value+\'%\')"><span class="small">After</span></div><p class="caution-item">비포·애프터는 환자 공유 링크에서 제외됩니다.</p>' : ""}
+ <div id="studio-cautions">${cautionsHTML()}</div>
+ ${PC.user?.clinic_id ? `<p class="panel-label">환자에게 전해질 메모</p><div class="stack" style="gap:11px"><label class="field">환자 표시명<input class="input" id="patient-label" maxlength="100" placeholder="예: 김○○님" value="${PC.esc(S.session.patient_label)}" oninput="S.session.patient_label=this.value;touch()"></label><label class="field">이 단계의 메모<textarea class="input" id="slide-note" rows="3" maxlength="2000" placeholder="환자에게 강조할 내용을 적어주세요" oninput="slide().note=this.value;touch()">${PC.esc(slide().note)}</textarea></label><label class="field">다음 일정 / 안내<textarea class="input" id="schedule-note" rows="2" maxlength="2000" placeholder="다음 내원 시 참고할 안내" oninput="S.session.schedule_note=this.value;touch()">${PC.esc(S.session.schedule_note)}</textarea></label></div><p id="slide-count" class="studio-bottom-note"></p><button class="btn-ghost btn-sm" style="width:100%;background:#ffffff05;color:#afc29f;border-color:#ffffff18" onclick="removeSlide()">현재 단계를 상담에서 빼기</button><p class="studio-bottom-note">표시명과 메모에 불필요한 개인정보를 입력하지 마세요.<br>저장한 상담은 병원 계정에서 다시 열 수 있습니다.</p>` : '<p class="caution-item">로그인하면 상담 저장과 환자 전송을 이용할 수 있습니다.</p>'}`;
+  status();
 }
-
+function cautionsHTML() {
+  return S.cautions.length
+    ? `<p class="panel-label">설명할 주의사항</p>${S.cautions.map((c) => `<p class="caution-item">${PC.esc(c.title)}</p>`).join("")}`
+    : "";
+}
 async function loadCautions() {
-  const box = document.getElementById('caution-box')
-  if (!box || !S.asset.treatment_id || S.asset.category === 'caution') return
-  const { data } = await axios.get('/api/assets', { params: { treatment: S.asset.treatment_id, category: 'caution' } })
-  if (!data.assets.length) return
-  box.innerHTML = `
-    <p class="text-slate-400 text-xs font-bold tracking-widest uppercase mb-2">주의사항 체크리스트</p>
-    <div class="space-y-1.5">${data.assets.map((c) => `
-      <label class="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 cursor-pointer">
-        <input type="checkbox" class="mt-1 w-5 h-5 accent-amber-500">
-        <span class="text-amber-200/90 text-[14px] leading-snug">${PC.esc(c.title)}</span>
-      </label>`).join('')}
-    </div>`
+  const id = asset().treatment_id;
+  if (!id) return;
+  try {
+    const { data } = await axios.get("/api/assets", {
+      params: { treatment: id, category: "caution" },
+    });
+    if (asset().treatment_id !== id) return;
+    S.cautions = data.assets;
+    const el = document.getElementById("studio-cautions");
+    if (el) el.innerHTML = cautionsHTML();
+  } catch {}
 }
-
-window.setNote = (v) => {
-  if (!S.session.slides[S.assetId]) S.session.slides[S.assetId] = {}
-  S.session.slides[S.assetId].note = v
-}
-
-window.togglePanel = () => { S.panelOpen = !S.panelOpen; document.getElementById('side-panel').classList.toggle('hidden', !S.panelOpen) }
-window.toggleFullscreen = () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen() }
-
-// ==================== 세션 저장 / 전송 ====================
-function collectSlides() {
-  persistDrawing()
-  // 방문한 자료들의 드로잉 병합 (자료별 첫 드로잉 우선)
-  const byAsset = {}
-  for (const key of Object.keys(S.drawings)) {
-    const [aid] = key.split(':')
-    if (S.drawings[key] && !byAsset[aid]) byAsset[aid] = S.drawings[key]
+window.gotoAsset = async (id) => {
+  if (S.busy || S.saving) return;
+  try {
+    if (id === S.assetId) return;
+    if (S.slides.size >= 40 && !S.slides.has(keyOf(id, 0)))
+      throw new Error("한 상담에 최대 40장까지 담을 수 있습니다.");
+    if (!S.assets.has(id))
+      S.assets.set(id, (await axios.get(`/api/assets/${id}`)).data.asset);
+    S.assetId = id;
+    S.sub = 0;
+    S.cautions = [];
+    await showSlide();
+    loadCautions();
+  } catch (e) {
+    PC.error(e);
   }
-  const assetIds = new Set([...Object.keys(byAsset), ...Object.keys(S.session.slides), String(S.assetId)])
-  return [...assetIds].map((aid) => ({
-    asset_id: parseInt(aid),
-    drawing_png: byAsset[aid] || null,
-    note: S.session.slides[aid]?.note || '',
-  }))
+};
+window.subGo = async (i) => {
+  if (S.busy || S.saving) return;
+  const count = Math.max(1, itemsOf(asset()).length);
+  if (i < 0 || i >= count || i === S.sub) return;
+  if (S.slides.size >= 40 && !S.slides.has(keyOf(S.assetId, i)))
+    return PC.toast("최대 40장까지 담을 수 있습니다.", "err");
+  S.sub = i;
+  await showSlide();
+};
+window.subMove = (d) => subGo(S.sub + d);
+window.removeSlide = () => {
+  if (S.slides.size === 1) return PC.toast("최소 한 장은 포함되어야 합니다.");
+  PC.confirm(
+    "현재 단계를 상담에서 뺄까요?",
+    "이 단계의 메모와 판서도 상담에서 제외됩니다.",
+    async () => {
+      const k = keyOf();
+      S.slides.delete(k);
+      S.history.delete(k);
+      S.future.delete(k);
+      const next = S.slides.values().next().value;
+      S.assetId = next.asset_id;
+      S.sub = next.sub_index;
+      touch();
+      await showSlide();
+    },
+    "빼기",
+  );
+};
+const tools = [
+  ["move", "fa-hand", "이동"],
+  ["pen", "fa-pen", "펜"],
+  ["highlight", "fa-highlighter", "형광펜"],
+  ["arrow", "fa-arrow-right-long", "화살표"],
+  ["circle", "fa-circle", "동그라미"],
+  ["text", "fa-font", "텍스트"],
+  ["eraser", "fa-eraser", "지우개"],
+];
+function renderTools() {
+  const draw = drawable();
+  document.getElementById("studio-tools").innerHTML = draw
+    ? `<div class="toolgroup">${tools.map(([k, i, l]) => `<button class="icon-btn ${S.tool === k ? "active" : ""}" aria-label="${l}" title="${l}" aria-pressed="${S.tool === k}" onclick="setTool('${k}')"><i class="fas ${i}"></i></button>`).join("")}</div><div class="toolgroup">${[
+        ["#d95f4c", "빨강"],
+        ["#4287bd", "파랑"],
+        ["#e9bc44", "노랑"],
+        ["#ffffff", "흰색"],
+      ]
+        .map(
+          ([c, l]) =>
+            `<button class="icon-btn ${S.color === c ? "selected" : ""}" onclick="setColor('${c}')" aria-label="${l}" title="${l}"><span class="color-dot" style="background:${c}"></span></button>`,
+        )
+        .join(
+          "",
+        )}<span class="tool-divider"></span><button class="icon-btn" onclick="undoDraw()" title="실행취소 (Ctrl+Z)" aria-label="실행취소"><i class="fas fa-rotate-left"></i></button><button class="icon-btn" onclick="redoDraw()" title="다시 실행" aria-label="다시 실행"><i class="fas fa-rotate-right"></i></button><button class="icon-btn" onclick="clearDraw()" title="현재 판서 지우기" aria-label="판서 지우기"><i class="far fa-trash-can"></i></button></div><div class="toolgroup zoom-tools"><button class="icon-btn" onclick="zoomBy(1.25)" aria-label="확대"><i class="fas fa-plus"></i></button><button class="icon-btn" onclick="zoomBy(.8)" aria-label="축소"><i class="fas fa-minus"></i></button><button class="icon-btn" onclick="zoomReset()" aria-label="확대 초기화"><i class="fas fa-compress"></i></button></div>`
+    : `<span class="small" style="color:#98ad8c">${asset().type === "video" ? "영상의 재생 버튼으로 설명하세요." : "읽기 모드 · 긴 내용은 자료 안에서 스크롤하세요."} 판서는 이미지 자료에서 사용할 수 있습니다.</span>${asset().type === "cost" ? '<button class="btn-ghost btn-sm" onclick="window.print()"><i class="fas fa-print"></i>수가표 출력</button>' : ""}`;
 }
-
-window.saveSession = async (silent) => {
-  if (!PC.user?.clinic_id) { location.href = '/login'; return null }
-  const label = document.getElementById('patient-label')?.value || S.session.patient_label
-  const { data } = await axios.post('/api/sessions', { id: S.session.id, patient_label: label, slides: collectSlides() })
-  S.session.id = data.id
-  if (!silent) PC.toast('상담이 저장되었습니다')
-  return data.id
+window.setTool = (t) => {
+  S.tool = t;
+  canvas.style.pointerEvents =
+    t === "move" || !drawable() || S.busy ? "none" : "auto";
+  renderTools();
+};
+window.setColor = (c) => {
+  S.color = c;
+  if (["move", "eraser"].includes(S.tool)) S.tool = "pen";
+  setTool(S.tool);
+};
+function point(e) {
+  const r = canvas.getBoundingClientRect();
+  return {
+    x: ((e.clientX - r.left) / r.width) * 1200,
+    y: ((e.clientY - r.top) / r.height) * 800,
+    pressure: e.pointerType === "pen" ? Math.max(0.3, e.pressure) : 0.5,
+  };
 }
-
+function drawStart(e) {
+  if (S.busy || S.saving || !drawable() || S.tool === "move") return;
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  const p = point(e);
+  if (S.tool === "text") {
+    PC.modal(
+      "설명 텍스트 추가",
+      '<label class="field">짧은 설명<input id="drawing-text" class="input" maxlength="60" placeholder="예: 이 부분을 확인해 주세요"></label>',
+      '<button class="btn-ghost" onclick="PC.closeModal()">취소</button><button class="btn-primary" onclick="addDrawingText()">추가</button>',
+      true,
+    );
+    window.addDrawingText = () => {
+      const text = document.getElementById("drawing-text").value.trim();
+      if (text) {
+        ctx.save();
+        ctx.font = "600 30px sans-serif";
+        ctx.fillStyle = S.color;
+        ctx.fillText(text, p.x, p.y);
+        ctx.restore();
+        commitDrawing();
+      }
+      PC.closeModal();
+    };
+    return;
+  }
+  stroke = {
+    start: p,
+    last: p,
+    background: ["arrow", "circle"].includes(S.tool)
+      ? ctx.getImageData(0, 0, 1200, 800)
+      : null,
+  };
+  drawSegment(p, p);
+}
+function styleStroke() {
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = S.color;
+  ctx.fillStyle = S.color;
+  ctx.globalCompositeOperation =
+    S.tool === "eraser" ? "destination-out" : "source-over";
+  ctx.globalAlpha = S.tool === "highlight" ? 0.25 : 1;
+  ctx.lineWidth =
+    S.tool === "eraser" ? 35 : S.tool === "highlight" ? 22 : S.size;
+}
+function drawSegment(a, b) {
+  ctx.save();
+  styleStroke();
+  if (S.tool === "pen") ctx.lineWidth = S.size * (0.6 + b.pressure);
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x + 0.01, b.y + 0.01);
+  ctx.stroke();
+  ctx.restore();
+}
+function drawMove(e) {
+  if (!stroke) return;
+  e.preventDefault();
+  const p = point(e);
+  if (stroke.background) {
+    ctx.putImageData(stroke.background, 0, 0);
+    ctx.save();
+    styleStroke();
+    const a = stroke.start;
+    ctx.beginPath();
+    if (S.tool === "circle")
+      ctx.ellipse(
+        (a.x + p.x) / 2,
+        (a.y + p.y) / 2,
+        Math.abs(p.x - a.x) / 2,
+        Math.abs(p.y - a.y) / 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+    else {
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(p.x, p.y);
+      const ang = Math.atan2(p.y - a.y, p.x - a.x);
+      ctx.moveTo(
+        p.x - 22 * Math.cos(ang - 0.45),
+        p.y - 22 * Math.sin(ang - 0.45),
+      );
+      ctx.lineTo(p.x, p.y);
+      ctx.lineTo(
+        p.x - 22 * Math.cos(ang + 0.45),
+        p.y - 22 * Math.sin(ang + 0.45),
+      );
+    }
+    ctx.stroke();
+    ctx.restore();
+  } else drawSegment(stroke.last, p);
+  stroke.last = p;
+}
+function drawEnd() {
+  if (!stroke) return;
+  stroke = null;
+  commitDrawing();
+}
+function commitDrawing() {
+  const png = canvas.toDataURL("image/png");
+  slide().drawing_png = png;
+  slide().drawing_url = null;
+  const h = S.history.get(keyOf()) || [null];
+  h.push(png);
+  if (h.length > 20) h.splice(1, 1);
+  S.history.set(keyOf(), h);
+  S.future.set(keyOf(), []);
+  touch();
+}
+function restore(url) {
+  const version = ++restoreVersion;
+  ctx.clearRect(0, 0, 1200, 800);
+  if (!url) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      if (version === restoreVersion) {
+        ctx.clearRect(0, 0, 1200, 800);
+        ctx.drawImage(img, 0, 0, 1200, 800);
+      }
+      resolve();
+    };
+    img.onerror = () => reject(new Error("판서를 불러올 수 없습니다."));
+    img.src = url;
+  });
+}
+async function setHistoryDrawing(url) {
+  S.busy = true;
+  try {
+    await restore(url);
+    slide().drawing_png = url ? canvas.toDataURL("image/png") : null;
+    slide().drawing_url = null;
+    touch();
+  } catch (e) {
+    PC.error(e);
+  } finally {
+    S.busy = false;
+    setTool(S.tool);
+  }
+}
+window.undoDraw = async () => {
+  if (S.busy || S.saving) return;
+  const h = S.history.get(keyOf()) || [];
+  if (h.length < 2) return;
+  const f = S.future.get(keyOf()) || [];
+  f.push(h.pop());
+  S.future.set(keyOf(), f);
+  await setHistoryDrawing(h.at(-1));
+};
+window.redoDraw = async () => {
+  if (S.busy || S.saving) return;
+  const f = S.future.get(keyOf()) || [];
+  if (!f.length) return;
+  const url = f.pop();
+  S.history.get(keyOf()).push(url);
+  await setHistoryDrawing(url);
+};
+window.clearDraw = () => {
+  if (S.busy || S.saving) return;
+  PC.confirm(
+    "이 단계의 판서를 지울까요?",
+    "다른 자료와 단계에 그린 판서는 유지됩니다.",
+    async () => {
+      ctx.clearRect(0, 0, 1200, 800);
+      slide().drawing_png = null;
+      slide().drawing_url = null;
+      S.history.get(keyOf()).push(null);
+      S.future.set(keyOf(), []);
+      touch();
+    },
+    "지우기",
+  );
+};
+function applyZoom() {
+  const p = document.getElementById("stage-plane");
+  if (p)
+    p.style.transform = `translate(${S.panX}px,${S.panY}px) scale(${S.zoom})`;
+}
+window.zoomBy = (f) => {
+  S.zoom = Math.min(4, Math.max(1, S.zoom * f));
+  if (S.zoom === 1) {
+    S.panX = 0;
+    S.panY = 0;
+  }
+  applyZoom();
+};
+window.zoomReset = () => {
+  S.zoom = 1;
+  S.panX = 0;
+  S.panY = 0;
+  applyZoom();
+};
+const pointers = new Map();
+let lastDistance = 0;
+function panStart(e) {
+  if (S.tool !== "move" || !drawable()) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  e.currentTarget.setPointerCapture(e.pointerId);
+}
+function panMove(e) {
+  if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    if (lastDistance) zoomBy(dist / lastDistance);
+    lastDistance = dist;
+  } else if (S.zoom > 1) {
+    S.panX += e.clientX - prev.x;
+    S.panY += e.clientY - prev.y;
+    applyZoom();
+  }
+}
+function panEnd(e) {
+  pointers.delete(e.pointerId);
+  lastDistance = 0;
+}
+window.togglePanel = () => {
+  S.panel = !S.panel;
+  document.getElementById("studio-panel").classList.toggle("hidden", !S.panel);
+};
+window.toggleFullscreen = () =>
+  PC.run(async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen)
+      await document.documentElement.requestFullscreen();
+    else PC.toast("이 브라우저는 전체화면을 지원하지 않습니다.");
+  });
+window.saveSession = async (silent = false) => {
+  if (!PC.user?.clinic_id) {
+    location.href = "/login";
+    return null;
+  }
+  if (S.saving || S.busy) return null;
+  S.saving = true;
+  status();
+  document.getElementById("studio-shell").inert = true;
+  try {
+    const slides = [...S.slides.values()].map((s) => ({
+      asset_id: s.asset_id,
+      sub_index: s.sub_index,
+      drawing_png: s.drawing_png || null,
+      drawing_url: s.drawing_png ? null : s.drawing_url || null,
+      note: s.note || "",
+      aspect: 1.5,
+    }));
+    const { data } = await axios.post("/api/sessions", {
+      ...S.session,
+      slides,
+    });
+    S.session.id = data.id;
+    S.session.version = data.version;
+    S.slides = new Map(
+      data.slides.map((s) => [keyOf(s.asset_id, s.sub_index), s]),
+    );
+    S.dirty = false;
+    history.replaceState(null, "", `/consult/${S.assetId}?session=${data.id}`);
+    if (!silent) PC.toast("상담과 단계별 판서를 저장했습니다.");
+    return data.id;
+  } catch (e) {
+    PC.error(e);
+    return null;
+  } finally {
+    S.saving = false;
+    document.getElementById("studio-shell").inert = false;
+    status();
+  }
+};
 window.sendToPatient = async () => {
-  const id = await saveSession(true)
-  if (!id) return
-  const { data } = await axios.post(`/api/sessions/${id}/share`)
-  const url = location.origin + data.url
-  const modal = document.getElementById('send-modal')
-  modal.classList.remove('hidden')
-  modal.innerHTML = `
-  <div class="card-in grad-border w-full max-w-md glass-strong rounded-3xl p-7">
-    <div class="relative w-16 h-16 mx-auto">
-      <div class="absolute inset-0 rounded-2xl bg-sky-400/40 blur-xl"></div>
-      <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0071e3] to-[#5e5ce6] flex items-center justify-center"><i class="fas fa-paper-plane text-2xl text-white"></i></div>
-    </div>
-    <h3 class="mt-5 text-center text-2xl font-black text-white">환자 전송 링크 생성 완료</h3>
-    <p class="mt-1.5 text-center text-slate-400">오늘 설명드린 자료와 그림, 주의사항이 담겨 있습니다</p>
-    <div class="mt-6 flex items-center gap-2 p-3 rounded-2xl bg-white/5 border border-white/10">
-      <input id="share-url" readonly value="${url}" class="flex-1 bg-transparent text-sm text-slate-300 focus:outline-none">
-      <button onclick="copyShare()" class="btn-touch px-4 rounded-xl btn-ghost text-sm">복사</button>
-    </div>
-    <div class="mt-3 grid grid-cols-2 gap-2">
-      <button onclick="kakaoShare('${url}')" class="btn-touch rounded-2xl btn-kakao"><i class="fas fa-comment mr-2"></i>카카오톡 공유</button>
-      <a href="${url}" target="_blank" class="btn-touch rounded-2xl btn-primary flex items-center justify-center"><i class="fas fa-eye mr-2"></i>미리보기</a>
-    </div>
-    <button onclick="document.getElementById('send-modal').classList.add('hidden')" class="btn-touch w-full mt-3 rounded-2xl text-slate-500 font-bold hover:bg-white/5 transition">닫기</button>
-  </div>`
-}
-
-window.copyShare = async () => {
-  const el = document.getElementById('share-url')
-  try { await navigator.clipboard.writeText(el.value) } catch (e) { el.select(); document.execCommand('copy') }
-  PC.toast('링크가 복사되었습니다')
-}
-
-window.kakaoShare = (url) => {
-  // 카카오 SDK 키 없이도 동작하는 공유: 모바일은 시스템 공유, 데스크톱은 복사 안내
-  if (navigator.share) navigator.share({ title: '오늘 설명드린 자료', url })
-  else { navigator.clipboard.writeText(url); PC.toast('링크가 복사되었습니다. 카카오톡에 붙여넣어 주세요') }
-}
-
-init()
+  const id = await saveSession(true);
+  if (!id) return;
+  const excluded = [...S.slides.values()].filter(
+    (s) => s.asset?.type === "compare",
+  ).length;
+  PC.modal(
+    "환자에게 상담 안내 보내기",
+    `<div class="stack"><p class="help-note">자료와 판서, 메모를 한 장의 안내로 연결합니다.<br>링크를 가진 사람이 볼 수 있으니 필요한 환자에게만 전달해 주세요.</p>${excluded ? `<p class="notice"><i class="fas fa-shield-halved"></i>비포·애프터 ${excluded}장은 공유에서 제외됩니다.</p>` : ""}<label class="field">공유 기간<select class="input" id="share-days"><option value="7">7일</option><option value="30" selected>30일</option><option value="90">90일</option><option value="1">1일</option></select><small>이 상담의 기존 공유 링크가 있다면 새 링크로 교체됩니다.</small></label></div>`,
+    `<button class="btn-ghost" onclick="PC.closeModal()">취소</button><button id="generate-link" class="btn-primary" onclick="generateLink()">공유 링크 만들기</button>`,
+    true,
+  );
+};
+window.generateLink = async () => {
+  const btn = document.getElementById("generate-link");
+  btn.disabled = true;
+  try {
+    const { data } = await axios.post(`/api/sessions/${S.session.id}/share`, {
+      days: Number(document.getElementById("share-days").value),
+    });
+    const url = location.origin + data.url;
+    PC.modal(
+      "상담 안내가 준비되었습니다.",
+      `<div class="stack"><p class="notice green"><i class="fas fa-check-circle"></i>${data.days}일 동안 열람할 수 있습니다.</p><label class="field">환자 공유 링크<input class="input" readonly value="${PC.esc(url)}" onclick="this.select()"></label><button class="btn-primary" id="copy-share"><i class="fas fa-link"></i>링크 복사</button><button class="btn-ghost" id="system-share"><i class="fas fa-share-nodes"></i>기기로 공유하기</button><a class="btn-ghost" href="${PC.url(data.url)}" target="_blank" rel="noopener">환자 안내장 미리보기 <i class="fas fa-arrow-up-right-from-square"></i></a><p class="help-note">상담 이력에서 공유를 종료하거나 환자의 열람 여부를 확인할 수 있습니다.</p></div>`,
+      "",
+      true,
+    );
+    document.getElementById("copy-share").onclick = () => PC.copy(url);
+    document.getElementById("system-share").onclick = () => PC.share(url);
+  } catch (e) {
+    PC.error(e);
+    btn.disabled = false;
+  }
+};
+window.addEventListener("beforeunload", (e) => {
+  if (S.dirty && PC.user?.clinic_id) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (
+    S.busy ||
+    S.saving ||
+    document.getElementById("pc-modal") ||
+    ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)
+  )
+    return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    saveSession();
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    e.shiftKey ? redoDraw() : undoDraw();
+  } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    e.preventDefault();
+    subMove(e.key === "ArrowRight" ? 1 : -1);
+  }
+});
+init();

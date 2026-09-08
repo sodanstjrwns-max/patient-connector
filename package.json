@@ -4,6 +4,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node tests/integration.mjs",
+    "test:browser": "node tests/browser.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply webapp-production --local",
     "preview": "wrangler pages dev",
     "deploy": "npm run build && wrangler pages deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings"
@@ -12,8 +16,12 @@
     "hono": "^4.13.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260908.1",
     "@hono/vite-build": "^1.11.1",
     "@hono/vite-dev-server": "^0.26.1",
+    "playwright": "^1.63.0",
+    "prettier": "^3.9.6",
+    "typescript": "^7.0.2",
     "vite": "^8.1.4",
     "wrangler": "^4.110.0"
   }

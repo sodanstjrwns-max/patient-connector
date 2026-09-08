@@ -1,90 +1,200 @@
-# 페이션트 커넥트 (Patient Connect)
+# 페이션트 커넥트 · Care Workspace
 
-## 프로젝트 개요
-- **이름**: 페이션트 커넥트
-- **목표**: 병원(치과·피부·성형·정형·안과·한방 등 전 진료과)이 환자에게 치료를 설명할 때 쓰는 상담 도구 + 모든 병원이 영원히 무료로 쓰는 공개 설명자료 라이브러리
-- **대상**: 원장·상담실장(태블릿/데스크톱, 체어사이드·상담실에서 사용), 환자(공유 링크 열람), 운영자(공개 자료 관리)
-- **디자인 컨셉 (v4 CLINICAL WORKSPACE)**: 실제 최신 B2B 서비스 패턴 학습 기반 재설계 — Linear(조용한 크롬, 단일 악센트 컬러), Stripe(테이블 퍼스트, tabular 숫자), Notion(사이드바 앱 셸), Vercel(색 = 상태·의미 전용). 좌측 248px 사이드바 앱 셸(모바일은 드로어), 인디고 단일 악센트(#4f46e5), 1px 보더 + 8~10px 라운드, 그라데이션/블롭/글래스모피즘 전면 제거. 상담 화면(`/consult/:id`)은 발표용 플랫 다크 유지. 화이트라벨: 사이드바 상단에 병원 이름 표시.
+병원의 설명자료, 상담 중 판서, 환자 안내장, 열람 확인을 연결하는 무료 상담 도구입니다.
+치과·피부미용·성형·정형재활·안과·한방 등 여러 진료 분야를 지원합니다.
 
-## URL
-- **프로덕션**: https://patient-connect.pages.dev
-- **개발 미리보기**: https://3000-inm1c6uo4zqtact2e0j9v-8f57ffe2.sandbox.novita.ai
-- **데모 계정**: 병원 `demo@clinic.com` / `demo1234` · 운영자 `admin@patientconnect.kr` / `admin1234`
+## 현재 상태 — 2026-09-08
+
+- **리뉴얼 미리보기**: https://3000-inm1c6uo4zqtact2e0j9v-8f57ffe2.sandbox.novita.ai
+- **기존 운영 주소**: https://patient-connect.pages.dev
+- **이번 변경은 로컬 미리보기에만 반영**했습니다. 운영 사이트와 운영 D1/R2는 변경하지 않았습니다.
+- 로컬 D1 마이그레이션: `0001` ~ `0004` 적용 완료.
+- 검증: TypeScript 검사·프로덕션 빌드 성공, **API 통합 검사 44개 + Chromium 브라우저 검사 31개 통과**.
+- 데스크톱 1440px 및 모바일 390px에서 주요 화면, 판서, 공유, 자료 관리, 가로 넘침을 검사했습니다. 실제 iPad/Safari 실기기 검증은 별도입니다.
+
+## 디자인
+
+**The Care Workspace**: 포레스트 그린(`#285847`), 따뜻한 종이색, 선명한 한국어 타이포그래피.
+
+- 라이브러리: 상담 안내 히어로, 카테고리별 커버, 검색·진료·형식 필터, 카드/목록 보기.
+- 작업 공간: 병원별 사이드바, 실데이터 현황 카드, 자료/상담 테이블, 구조화된 편집 모달.
+- 상담 스튜디오: 짙은 그린 배경, 중앙 자료, 단계 내비게이션, 판서 도구, 메모 패널.
+- 환자 안내장: 모바일 세로형 카드, 단계별 원본과 판서, 메모·주의사항·병원 연락처.
+- 모바일 사이드바 및 상담 메모 드로어, 키보드 모달 포커스, 본문 건너뛰기, reduced-motion 지원.
+- Tailwind 런타임 CDN 제거. 직접 관리하는 CSS 사용. Axios는 버전 고정 후 자체 호스팅합니다.
+- Pretendard/Font Awesome은 CDN을 사용하며 핵심 기능은 자체 호스팅 JavaScript로 동작합니다.
+- 의료 이미지를 임의로 생성한 것이 아닙니다. 기존 시드의 `/ph` 이미지는 명확히 표시된 **설명용 예시**입니다. 실제 임상 자료 확충·감수는 필요합니다.
+
+## 주요 사용법
+
+1. `/`에서 공개 자료를 둘러보거나 `/login`에서 병원 계정을 만듭니다.
+2. 병원 로그인 시 진료 분야가 자동 적용됩니다. 병원 정보는 설정에서 변경합니다.
+3. 자료를 선택해 `/consult/:assetId`에서 상담을 진행합니다.
+4. 단계별로 설명·판서·메모를 남기고 **상담 저장**을 누릅니다.
+5. **환자에게 전송**에서 유효기간을 선택하고 링크를 복사하거나 기기의 공유 메뉴를 사용합니다.
+6. `/manage?tab=sessions`에서 상담을 다시 열거나 공유 기간·열람 현황을 확인하고 공유를 종료합니다.
+
+### 계정 관련 중요 변경
+
+- 공개적으로 안내되었던 기존 병원/운영자 데모 비밀번호는 로그인에 사용할 수 없도록 차단했습니다.
+- `0004`는 해당 데모 계정의 기존 로그인 세션만 폐기하며, 계정·병원·자료·상담 데이터는 삭제하지 않습니다.
+- 정상적인 기존 비밀번호는 로그인 성공 시 기존 SHA-256 방식에서 개별 salt를 사용하는 PBKDF2 형식으로 자동 전환됩니다.
+- 새로운 병원 계정은 가입 화면에서 생성합니다. 비밀번호는 10~128자입니다.
+- 로컬 운영자 복구: 안전하게 `PC_NEW_PASSWORD` 환경변수를 설정한 뒤 `node scripts/reset-password.mjs --email=계정이메일 --local`을 실행합니다. 이 도구는 비밀번호를 출력하지 않고 기존 세션을 폐기합니다. 원격 실행은 금지되어 있습니다.
+- 운영 반영 시 기존 공개 데모 계정을 실운영 계정으로 사용하고 있었다면 **운영자 비밀번호 재설정 계획을 먼저 준비**해야 합니다.
 
 ## 완료된 기능
-0. **진료과 자동 적용** — 치과 / 피부·미용 / 성형외과 / 정형·재활 / 안과 / 한방. 병원 계정으로 로그인하면 그 병원의 진료과 자료가 **자동으로 표시**(선택 UI 없음, `clinic_specialty`가 로그인 세션에 포함). 비로그인 방문자만 진료과 드롭다운 노출. 가입 시 병원 진료과 1회 선택
-1. **라이브러리 홈** (`/`) — 진료과 칩 + 진료 탭, 좌측 카테고리, 카드 그리드(썸네일·배지·감수원장·공개/병원 라벨), 제목·태그 검색, 지연 로딩
-2. **상담 화면** (`/consult/:id`) — 핵심 화면
-   - 스테이지 6종: image(핀치줌), video(mp4/webm), compare(비포애프터 슬라이더+더블탭 토글), progression(1~4단계 슬라이더), cost(수가표+A4 출력), steps(치료 과정 순차 넘김), faq(카드)
-   - 드로잉 레이어: 펜/형광펜/화살표/동그라미/텍스트/지우개/실행취소/전체 지우기, 색상 4종(빨강·파랑·노랑·흰색), pointer events(애플펜슬 압력 대응)
-   - 그림은 슬라이드(자료×단계)별 유지, 세션 저장 시 PNG로 저장
-   - 하단 필름스트립(같은 카테고리), 키보드 좌우/터치 이동
-   - 우측 패널: 설명, 단계 목록, 주의사항 체크리스트, 수가표, 환자 표시명·메모
-   - 상단: 상담 저장 / 환자에게 전송 / 전체화면
-3. **환자 전송 페이지** (`/p/:token`) — 로그인 불필요, 병원 브랜드 히어로, 슬라이드+그린 그림 합성 표시, 주의사항 자동 첨부, 수가표, 병원 정보·전화·응급안내, 카카오톡 공유/링크 복사, 열람 기록
-4. **비포·애프터 갤러리** (`/cases`) — **비로그인 열람 가능**(원내 체어사이드·상담실 전용 도구, 외부 검색 페이지 아님). 공유 데모 케이스는 모두에게, 로그인 시 자기 병원 케이스 추가 표시. 마소너리 그리드, 호버/탭 before↔after 전환, 케이스 등록/삭제는 로그인 병원만. 단, 환자 공유 링크(`/api/share`)에서는 compare 타입 여전히 제외(의료광고 규정)
-5. **우리 병원 자료 관리** (`/manage`) — 드래그&드롭 다중 업로드(이미지·영상), 공개 자료 "복제해서 편집", 숨기기/삭제/편집(수가표 금액 편집 포함), 상담 이력(전송 링크·열람 여부·시각)
-6. **운영자 콘솔** (`/admin`) — 가입 병원/세션/자료 통계, 자료별 사용·전송 횟수, 노출 순서 변경
-7. **인증** — 병원 가입/로그인(30일 세션 쿠키), 공개 라이브러리는 비로그인 열람 가능
-8. **PWA** — manifest + 서비스워커(정적 자원 캐시), 설치 가능
-9. **시드 데이터** — 치과 자료 24종(임플란트·인비절라인·라미네이트·치주염) + 타 진료과 자료 28종(보톡스·레이저·쌍꺼풀·도수·디스크·라식·추나 등), 진료 항목 21종, 공유 데모 케이스 4건 + 병원 데모 케이스 3건. 실제 이미지 없는 항목은 `/ph` 동적 SVG 플레이스홀더.
 
-## API 요약
-| 경로 | 메서드 | 설명 | 인증 |
-|---|---|---|---|
-| `/api/auth/login·signup·logout·me` | POST/GET | 인증 | - |
-| `/api/treatments` | GET | 진료 과목(?specialty= 필터, specialties 목록 함께 반환) | - |
-| `/api/assets` | GET | 자료 목록(공개+내 병원), ?treatment=&category=&q= | 선택 |
-| `/api/assets/:id` | GET/PUT/DELETE | 자료 상세(사용 횟수 집계)/수정/삭제 | GET 공개자료 무인증 |
-| `/api/assets` | POST | 자료 생성(운영자는 is_public 가능) | 필요 |
-| `/api/assets/:id/duplicate` | POST | 복제해서 편집 | 필요 |
-| `/api/upload` | POST | R2 파일 업로드(100MB 제한) | 필요 |
-| `/files/*` | GET | R2 파일 서빙 | - |
-| `/api/cases` | GET | 비포애프터(공유 데모 + 내 병원) | 불필요 |
-| `/api/cases` | POST/DELETE | 케이스 등록/삭제 | 필요 |
-| `/api/sessions` | GET/POST | 상담 세션 목록/저장 | 필요 |
-| `/api/sessions/:id/share` | POST | 공유 토큰 생성(전송 횟수 집계) | 필요 |
-| `/api/share/:token` | GET | 환자 공개 데이터(compare 타입 제외, 열람 기록) | 불필요 |
-| `/api/admin/stats` | GET | 운영 통계 | admin |
-| `/ph` | GET | 플레이스홀더 SVG (?t=&s=&v=&dark=) | - |
+### 설명자료 및 관리
 
-## 데이터 아키텍처
-- **저장소**: Cloudflare D1(SQLite) — clinics, users, auth_sessions, treatments, assets, cases, consult_sessions, share_views + 2단계 대비(journey_timelines, consent_records)
-- **파일**: Cloudflare R2 — 업로드 이미지/영상 (`/files/*`로 서빙)
-- **드로잉**: Canvas PNG dataURL을 consult_sessions.slides(JSON)에 저장
+- 공개 자료 + 로그인 병원 소유 자료를 구분하여 조회.
+- 진료과·진료 항목·카테고리·형식·검색어 필터, 추천/최신/사용순 정렬.
+- 사용자별 D1 즐겨찾기 및 카드/목록 보기.
+- 병원별 자료 수·상담 수·열람된 상담 수·즐겨찾기 수.
+- 이미지·영상 다중 업로드, 공개 자료 복제, 편집, 숨김 복원, 삭제.
+- 이미지·영상·치료 과정·질환 진행·수가표·FAQ·비교자료 전용 구조화 편집기.
+- 관리자 공개 자료 등록/수정/숨김/삭제 및 통계.
+- 병원 이름·진료과·전화·주소·응급안내 수정, 비밀번호 변경.
+- 동의 확인을 필수로 하는 케이스 등록, 병원별 접근 분리, 전후 비교 슬라이더.
 
-## 반드시 지킨 규칙
-- 공개 라이브러리·비포애프터 비로그인 열람 가능(원내 사용 전제) / 상담 저장·업로드·전송·케이스 등록은 로그인 필요
-- 모든 자료에 감수 원장 필드
-- 환자 공유 링크(`/api/share`)에서는 compare(비포애프터) 타입 필터링 — 의료광고 규정 준수
-- 무료 플랜 기본, 유료 안내 문구 없음
-- 상담 화면 지연 로딩(lazy loading, 스켈레톤)
+### 상담 스튜디오
 
-## 2단계 (DB·라우팅만 준비됨)
-- 치료 여정 타임라인(`/journey`, journey_timelines 테이블), 진료 동의 서명(`/consent`, consent_records 테이블), 자료 공유 마켓(`/market`), 다국어
+- 이미지, 영상, 비교자료, 단계별 치료 과정/질환 진행, 비용 표, FAQ.
+- 이미지 계열 판서: 펜·형광펜·화살표·동그라미·텍스트·지우개·실행취소·다시 실행·지우기.
+- 이미지와 판서가 같은 좌표 평면에서 확대/이동됩니다. 이동 도구에서 터치 핀치 사용 가능.
+- `asset_id + sub_index` 단위로 판서와 메모를 독립적으로 보관합니다.
+- 고정 **1200×800** 좌표계. 새 판서를 R2 PNG로 저장하고 같은 3:2 화면 구성으로 환자 안내장에 표시합니다.
+- 긴 비용표/FAQ와 영상은 읽기·재생 모드입니다. 이 형식의 판서는 지원하지 않으며 이미지 계열에서 사용합니다.
+- 자료를 방문하면 상담에 포함됩니다. 현재 단계를 상담에서 제외할 수 있습니다.
+- 상담 표시명, 단계별 메모, 다음 일정, 저장 상태 표시 및 미저장 이탈 경고.
+- 저장한 상담의 설명내용 스냅샷을 서버에서 생성해 이후 원본 자료 수정과 분리합니다.
+- `?session=`으로 저장한 상담을 다시 열기, 버전 충돌 감지(다른 화면의 변경 덮어쓰기 방지).
+- 키보드 좌우 단계 이동, Ctrl/Cmd+S 저장, Ctrl/Cmd+Z 실행취소, Shift+Ctrl/Cmd+Z 다시 실행.
 
-## 미구현 / 다음 단계 권장
-- 카카오톡 공유는 시스템 공유 API 사용 중 → 카카오 SDK 키 연동 시 카톡 직접 공유 가능
-- 수가표·steps 편집 UI 고도화(현재 prompt 기반 간이 편집)
-- 관리자 공개 자료 등록 전용 폼(현재 API로 가능)
-- 커스텀 도메인 연결(선택)
+### 환자 안내 및 공유
 
-## 개발/실행
+- 로그인 없이 유효한 토큰으로 상담 안내장 열람.
+- 단계별 자료·판서·메모, 자동 주의사항, 다음 일정, 병원 전화/주소/응급안내.
+- 공유 기간 1/7/30/90일, 재발급 시 기존 링크 폐기, 즉시 공유 종료.
+- 비교자료는 화면에서만 숨기는 것이 아니라 **공유 API의 자료·판서·메모에서 모두 제외**합니다.
+- 읽기 진행 표시, 링크 복사, Web Share API. 카카오 SDK 직접 연동은 아닙니다.
+- 열람 이벤트는 같은 브라우저 세션의 30분 내 반복을 제외하고, 병원 소유 계정의 미리보기는 제외합니다. 사람 수/환자 신원 확인 지표가 아닙니다.
+- 토큰 링크를 가진 사람은 열람할 수 있습니다. 환자 본인 인증 또는 비밀번호 보호는 아직 없습니다.
+
+## 보안 강화
+
+- 복제·편집·상담 저장 시 병원별 자료 권한 확인.
+- 사용자가 보낸 자료 스냅샷은 신뢰하지 않습니다. 기존 임의 스냅샷 필드는 `0003`에서 제거합니다.
+- 업로드는 JPG/PNG/WebP/MP4/WebM, MIME 및 파일 시그니처 검사. HTML/SVG 업로드 차단.
+- 비공개 파일은 소유 병원/운영자 또는 유효한 공유에 실제 포함된 파일만 접근 가능.
+- 메모에 임의의 파일 URL을 적는 것으로 공유 권한을 얻을 수 없습니다.
+- 파일 권한 검사 후 HTTP byte-range 지원(동영상 탐색); 잘못된 범위는 416 응답.
+- PBKDF2-SHA256 + 계정별 salt, Workers WebCrypto 한도에 맞춘 100,000회 반복.
+- 로그아웃과 비밀번호 변경 시 서버 세션 폐기. HTTPS에서 Secure, HttpOnly, SameSite=Lax 쿠키.
+- D1 기반 로그인/가입/업로드/저장 등의 요청 제한, Origin/Fetch Metadata 검사, JSON 변경 요청 검사.
+- 보안 헤더, 미디어 URL 검증, 사용자 텍스트 이스케이프, 비공개 응답 `no-store`.
+- 서비스워커는 `/static/`의 성공한 응답만 캐시합니다. 환자 데이터·API·R2 파일은 캐시하지 않습니다.
+- 이 기능들이 의료광고법·개인정보보호 요건 전체의 준수나 보안 인증을 보장하지는 않습니다.
+
+## 화면 및 API
+
+| 경로                                   | 용도                           |
+| -------------------------------------- | ------------------------------ |
+| `/` · `/?view=favorites`               | 라이브러리 / 즐겨찾기          |
+| `/consult/:assetId?session=:sessionId` | 새 상담 또는 저장 상담 복원    |
+| `/cases`                               | 공용 예시 + 로그인 병원 케이스 |
+| `/manage`                              | 병원 자료 관리                 |
+| `/manage?tab=library`                  | 공개 자료 복제                 |
+| `/manage?tab=sessions`                 | 상담 이력·공유 관리            |
+| `/manage?tab=settings`                 | 병원 프로필·계정 보안          |
+| `/manage?new=1`                        | 새 자료 편집기 바로 열기       |
+| `/admin`                               | 운영자 콘솔                    |
+| `/login?mode=signup`                   | 로그인 / 가입                  |
+| `/p/:token`                            | 환자 안내장                    |
+| `/journey`, `/consent`, `/market`      | 준비 중 화면                   |
+
+| API                                                  | 메서드 / 설명                                 |
+| ---------------------------------------------------- | --------------------------------------------- |
+| `/api/auth/signup`, `/login`, `/logout`, `/password` | POST, 인증·계정 보안 (`/api/auth/` 하위)      |
+| `/api/auth/me`                                       | GET, 현재 로그인 사용자                       |
+| `/api/clinic`                                        | GET/PUT, 로그인 병원의 프로필                 |
+| `/api/treatments?specialty=`                         | GET, 진료 항목                                |
+| `/api/assets`                                        | GET/POST, 자료 조회/생성                      |
+| `/api/assets/:id`                                    | GET/PUT/DELETE, 자료 상세/편집/삭제           |
+| `/api/assets/:id/duplicate`, `/favorite`, `/use`     | POST, 복제/즐겨찾기/사용 이벤트               |
+| `/api/upload`                                        | POST multipart 파일 업로드                    |
+| `/files/*`                                           | GET, 권한 확인된 R2 파일, `?share=` 토큰 지원 |
+| `/api/cases` · `/api/cases/:id`                      | GET/POST 목록·등록, DELETE 케이스 삭제        |
+| `/api/sessions` · `/api/sessions/:id`                | GET/POST 목록·저장, GET/DELETE 개별 상담      |
+| `/api/sessions/:id/share`                            | POST 생성·재발급, DELETE 공유 종료            |
+| `/api/share/:token` · `/api/share/:token/view`       | GET 환자 안내, POST 열람 이벤트               |
+| `/api/dashboard` · `/api/admin/stats`                | GET 병원/운영자 통계                          |
+| `/ph?t=&s=&v=`                                       | GET 설명용 SVG 예시                           |
+
+자료 목록 쿼리: `specialty`, `treatment`, `category`, `type`, `q`, `sort=recommended|new|popular`, `favorite=1`, `manage=1`.
+`manage=1`은 권한이 있는 병원/운영자에게 숨긴 자료까지 표시합니다.
+
+## 데이터 구조 및 제한
+
+- **D1**: clinics, users, auth_sessions, treatments, assets, cases, consult_sessions, share_views, favorites, uploads, auth_limits.
+- **미사용 확장 테이블**: journey_timelines, consent_records.
+- **R2**: 업로드 파일 및 단계별 판서 PNG.
+- **상담 slides**: `[{asset_id,sub_index,asset:서버스냅샷,note,drawing_url,aspect}]`.
+- **공유/충돌 관리**: share_token, share_expires_at, share_revoked_at, share_count, version.
+- 업로드 파일당 10MB, 자료당 미디어 12개, 치료 단계 12개, 수가 항목 30개.
+- 상담당 40장, 판서 입력당 base64 700KB 이하, 저장한 상담 JSON 900KB 이하.
+- 현재 자료 조회 최대 500개, 상담 이력 최대 200개. 대규모 운영용 서버 페이지네이션은 후속 과제입니다.
+- 환자 데이터를 localStorage에 저장하지 않습니다. sessionStorage에는 익명 열람 중복 방지 식별자만 저장합니다.
+- 기존 판서 PNG는 보존됩니다. 과거 판서에 원본 좌표 메타데이터가 없으면 정밀한 자동 정렬 보정에는 한계가 있습니다.
+
+## 개발 및 테스트
+
 ```bash
+cd /home/user/webapp
+npm install
+npm run db:migrate:local
+npm run typecheck
 npm run build
-npx wrangler d1 migrations apply webapp-production --local
-npx wrangler d1 execute webapp-production --local --file=./seed.sql
-npx wrangler d1 execute webapp-production --local --file=./seed_assets.sql
-npx wrangler d1 execute webapp-production --local --file=./seed_specialties.sql
-pm2 start ecosystem.config.cjs   # wrangler pages dev dist --d1 --r2 --local :3000
+pm2 start ecosystem.config.cjs
 ```
 
-## 배포
-- **플랫폼**: Cloudflare Pages — ✅ 프로덕션 배포 완료 (사용자 본인 Cloudflare 계정)
-- **프로젝트명**: `patient-connect` · **프로덕션 URL**: https://patient-connect.pages.dev
-- **프로덕션 D1**: `webapp-production` (id `355f055a-f92b-4435-8643-a321d3e1d753`) — 마이그레이션 0001·0002 + 시드 3종 적용 완료(자료 40, 진료 21, 케이스 7)
-- **프로덕션 R2**: `webapp-bucket`
-- **재배포**: `npm run build && npx wrangler pages deploy dist --project-name patient-connect`
-- **프로덕션 DB 콘솔**: `npx wrangler d1 execute webapp-production --remote --command="..."`
-- **기술 스택**: Hono + TypeScript + TailwindCSS(CDN) + D1 + R2 + PWA
-- **최종 업데이트**: 2026-08-28
+기존 DB에 시드 파일을 반복 적용하지 마세요. 신규 설치 때만 스키마 적용 후 seed.sql, seed_assets.sql, seed_specialties.sql을 검토하여 사용합니다.
+시드에 포함된 공개 데모 비밀번호는 신규 인증 로직에서 차단됩니다.
+
+```bash
+# Chromium 설치 (최초 1회)
+npx playwright install chromium
+# 로컬에만 검증용 병원/자료/상담을 생성합니다.
+node scripts/cleanup-test-data.mjs
+npm test
+npm run test:browser
+# 테스트 종료 후 미리보기에서 합성 데이터를 제거합니다.
+node scripts/cleanup-test-data.mjs
+```
+
+- 테스트는 localhost/127.0.0.1 Wrangler만 대상으로 실행합니다.
+- `.test-results/`에 스크린샷·검사 결과·임시 테스트 계정이 기록됩니다. Git에서 제외합니다.
+- cleanup 도구는 `care-qa-...@example.test` 합성 계정과 관련 레코드만 정리합니다. 로컬 요청 제한 카운터도 초기화하므로 운영용이 아닙니다.
+- `scripts/reset-password.mjs`는 로컬 운영자 계정 복구용입니다.
+- `.env*`, `.dev.vars*`, `.wrangler`, 테스트 결과, 로컬 데이터 백업은 Git에서 제외합니다.
+
+## 운영 반영 전 확인
+
+1. 이번 버전은 **아직 운영 배포하지 않았습니다**. 미리보기 승인 후 배포 경로와 운영자 계정 복구 계획을 확인합니다.
+2. 기존 운영 D1을 백업하고 `0003`/`0004`를 검토하여 적용한 뒤 호환되는 앱 버전을 반영합니다.
+3. `0003`은 기존 공유 링크에 마이그레이션 시점부터 30일 유효기간을 부여합니다. 기존 무기한 링크 정책이 바뀝니다.
+4. `0004`는 공개 데모 계정의 세션을 종료합니다. 다른 병원/계정 데이터는 보존합니다.
+5. 기존 설정: Pages 프로젝트 `patient-connect`, D1 `webapp-production`, R2 `webapp-bucket`.
+6. 로컬 DB/R2는 운영 DB/R2와 별개입니다. 미리보기 계정과 업로드는 운영으로 자동 복사되지 않습니다.
+7. 보안 설정이 변경되므로 적용 후 로그인·공유 만료·파일 접근·iPad/Safari를 다시 점검합니다.
+
+## 남은 범위 / 권장 다음 단계
+
+- 실제 의료 이미지·영상의 저작권 확보 및 임상 내용 감수.
+- 실기기(iPad/Apple Pencil/Safari) 테스트, 부하 테스트, 독립적인 보안·법무 검토.
+- 운영용 이메일 인증/비밀번호 찾기, 다중 직원 초대·세분화된 역할, 환자 본인 확인.
+- 사용되지 않는 업로드/교체된 판서의 R2 정리 및 데이터 보존·완전 삭제 정책. 현재 상담/자료 삭제는 관련 목록/공유를 제거하지만 R2 객체를 자동 영구 삭제하지 않습니다.
+- 비용표·FAQ·영상에 대한 판서는 미지원이며 이미지 계열에서만 제공합니다.
+- 대량 자료·상담의 페이지네이션, 세부 통계·감사 로그.
+- 카카오 SDK 직접 연동, 다국어, 치료 여정·전자 동의·자료 마켓.
+- 완전한 오프라인 사용, 클라우드 자동저장, 의료정보 시스템 연동은 구현 범위에 포함되지 않습니다.

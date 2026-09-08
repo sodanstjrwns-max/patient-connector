@@ -6,3 +6,8 @@ dist/
 *.log
 .pm2/
 *.tar.gz
+.test-results/
+.env.*
+.dev.vars.*
+playwright-report/
+test-results/

@@ -3,6 +3,8 @@ ALTER TABLE consult_sessions ADD COLUMN share_expires_at TEXT;
 ALTER TABLE consult_sessions ADD COLUMN share_revoked_at TEXT;
 ALTER TABLE consult_sessions ADD COLUMN share_count INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE consult_sessions ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+-- Legacy clients could submit arbitrary slide fields. Only new server-generated snapshots are trusted.
+UPDATE consult_sessions SET slides = COALESCE((SELECT json_group_array(json_remove(value, '$.asset', '$.drawing_url')) FROM json_each(consult_sessions.slides)), '[]') WHERE json_valid(slides);
 -- Existing public links receive a finite transition window.
 UPDATE consult_sessions SET share_expires_at = datetime('now', '+30 days') WHERE share_token IS NOT NULL;
 CREATE TABLE IF NOT EXISTS auth_limits (
