@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "patient-connect",
+  "compatibility_date": "2026-04-26",
+  "pages_build_output_dir": "./dist",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "patient-connect-production", "database_id": "a38fa276-fe4f-4397-b184-6c0180168064" }
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "patient-connect-assets" }
+  ],
+  "vars": {
+    "APP_BASE_URL": "https://patient-connect.pages.dev",
+    "PLATFORM_FROM_NUMBER": "01044451873",
+    "PLATFORM_PF_ID": "KA01PF260915060458432vfkViHs6vOA"
+  }
+}
