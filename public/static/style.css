@@ -16,3 +16,15 @@
 @media (max-width: 640px) { .ba { grid-template-columns: 1fr; } }
 .tab-active { border-bottom: 2px solid #0284c7; color: #0c4a6e; font-weight: 700; }
 .drag { cursor: grab; }
+/* Purpose-based material types are independent of treatment-topic filters. */
+.material-kind-tabs { display: flex; gap: .5rem; overflow-x: auto; padding: .25rem 0 1rem; margin-bottom: .5rem; }
+.material-kind-tabs button { display: inline-flex; align-items: center; gap: .6rem; white-space: nowrap; padding: .7rem 1rem; border: 1px solid #e2e8f0; border-radius: .7rem; background: #fff; color: #475569; font-size: .875rem; font-weight: 600; }
+.material-kind-tabs button[aria-pressed="true"] { background: #0f172a; color: #fff; border-color: #0f172a; }
+.material-kind-tabs button span { padding: .05rem .4rem; border-radius: .35rem; background: #f1f5f9; color: #64748b; font-size: .75rem; }
+.material-kind-tabs button[aria-pressed="true"] span { background: #334155; color: #e2e8f0; }
+.material-category-filters { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; font-size: .75rem; }
+.material-category-filters > span { color: #64748b; margin-right: .3rem; }
+.material-category-filters button { border: 1px solid #e2e8f0; border-radius: 999px; padding: .25rem .65rem; background: white; }
+.material-category-filters button[aria-pressed="true"] { color: #0369a1; border-color: #7dd3fc; background: #f0f9ff; }
+.material-kind-tabs button:focus-visible, .material-category-filters button:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
+@media (max-width: 640px) { .material-kind-tabs button { padding: .6rem .75rem; gap: .4rem; } }

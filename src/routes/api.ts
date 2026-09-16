@@ -22,7 +22,8 @@ export type Bindings = {
 type Vars = { hid: number }
 const HUB_ORIGIN = 'https://hub.patientfunnel.kr'
 const HUB_SSO_SERVICE = 'connector'
-const KINDS = new Set(['explain', 'before_after', 'cost', 'notice'])
+// Keep notice for existing precautions; disease is a first-class material type.
+const KINDS = new Set(['explain', 'disease', 'cost', 'before_after', 'notice'])
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
 

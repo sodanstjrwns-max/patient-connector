@@ -2,10 +2,13 @@
 (function () {
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const KIND = { explain: '설명', before_after: '비포애프터', cost: '비용 안내', notice: '주의사항' };
-  const KIND_COLOR = { explain: 'bg-sky-100 text-sky-800', before_after: 'bg-violet-100 text-violet-800', cost: 'bg-amber-100 text-amber-800', notice: 'bg-rose-100 text-rose-800' };
+  const KIND = { explain: '진료설명', disease: '질환설명', cost: '비용설명', before_after: '비포애프터', notice: '주의사항' };
+  const LIBRARY_KINDS = ['explain', 'disease', 'cost', 'before_after'];
+  // Legacy precautions remain visible under treatment explanations without rewriting stored snapshots.
+  const groupKind = (kind) => kind === 'notice' ? 'explain' : kind;
+  const KIND_COLOR = { explain: 'bg-sky-100 text-sky-800', disease: 'bg-emerald-100 text-emerald-800', before_after: 'bg-violet-100 text-violet-800', cost: 'bg-amber-100 text-amber-800', notice: 'bg-rose-100 text-rose-800' };
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
-  const state = { me: null, materials: [], today: [], tab: 'library', dispatches: [], stats: null, filter: '', editing: null, present: null };
+  const state = { me: null, materials: [], today: [], tab: 'library', dispatches: [], stats: null, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null };
   const app = $('#app');
 
   async function api(path, opt) {
@@ -64,27 +67,33 @@
     </div>`;
   }
   function renderLibrary(main) {
-    const q = state.filter.trim();
-    const list = state.materials.filter((m) => !q || (m.title + ' ' + (m.category || '') + ' ' + (m.body || '')).includes(q));
+    const q = state.filter.trim().toLocaleLowerCase();
+    const list = state.materials.filter((m) => (!state.kindFilter || groupKind(m.kind) === state.kindFilter) && (!state.categoryFilter || m.category === state.categoryFilter) && (!q || (m.title + ' ' + (m.category || '') + ' ' + (m.body || '')).toLocaleLowerCase().includes(q)));
     const cats = [...new Set(state.materials.map((m) => m.category).filter(Boolean))];
+    const countKind = (kind) => state.materials.filter((m) => !kind || groupKind(m.kind) === kind).length;
     main.innerHTML = `
       <div class="flex flex-wrap items-center gap-3 mb-4">
         <h2 class="text-lg font-bold">자료함 <span class="text-sm font-normal text-slate-500">${state.materials.length}개</span></h2>
-        <input id="q" value="${esc(state.filter)}" placeholder="제목·분류·내용 검색" class="border rounded-lg px-3 py-2 text-sm w-56">
-        <div class="flex gap-1 text-xs">${cats.map((c) => `<button data-cat="${esc(c)}" class="px-2 py-1 rounded-full border ${state.filter === c ? 'bg-slate-900 text-white' : 'bg-white'}">${esc(c)}</button>`).join('')}</div>
+        <input id="q" value="${esc(state.filter)}" aria-label="자료 검색" placeholder="제목·진료 항목·내용 검색" class="border rounded-lg px-3 py-2 text-sm w-56">
         <button id="new" class="ml-auto px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-1"></i>자료 등록</button>
       </div>
-      ${list.length ? `<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map((m) => materialCard(m, `
+      <nav class="material-kind-tabs" aria-label="자료 유형">${[['', '전체'], ...LIBRARY_KINDS.map(k => [k, KIND[k]])].map(([k, label]) => `<button data-kind-filter="${k}" aria-pressed="${state.kindFilter === k}">${label}<span>${countKind(k)}</span></button>`).join('')}</nav>
+      <div class="material-category-filters" aria-label="진료 항목"><span>진료 항목</span><button data-cat="" aria-pressed="${!state.categoryFilter}">전체</button>${cats.map(c => `<button data-cat="${esc(c)}" aria-pressed="${state.categoryFilter === c}">${esc(c)}</button>`).join('')}</div>
+      <p id="material-result-count" class="text-xs text-slate-500 mb-4" aria-live="polite">${state.kindFilter ? KIND[state.kindFilter] : '전체 자료'} · ${list.length}개${state.kindFilter === 'explain' ? ' · 기존 주의사항 포함' : ''}</p>
+      ${list.length ? `<div id="material-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map((m) => materialCard(m, `
           <button data-add="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg ${state.today.includes(m.id) ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 hover:bg-slate-200'}">${state.today.includes(m.id) ? '<i class="fa-solid fa-check mr-1"></i>오늘 설명에 담김' : '<i class="fa-solid fa-plus mr-1"></i>오늘 설명에 담기'}</button>
           <button data-edit="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200"><i class="fa-solid fa-pen"></i></button>`)).join('')}</div>`
         : `<div class="bg-white rounded-xl border p-10 text-center text-slate-500">
             <div class="text-3xl mb-2">🗂️</div>
-            <p class="font-semibold text-slate-700">아직 등록한 자료가 없습니다</p>
-            <p class="text-sm mt-1">임플란트 설명, 교정 전후 사진, 비용표, 발치 후 주의사항처럼 매번 말로 반복하는 설명부터 등록해 보세요.</p>
-            <button id="new2" class="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold">첫 자료 등록</button>
+            <p class="font-semibold text-slate-700">${state.materials.length ? '선택한 조건에 맞는 자료가 없습니다' : '아직 등록한 자료가 없습니다'}</p>
+            <p class="text-sm mt-1">${state.materials.length ? '다른 자료 유형이나 진료 항목을 선택하거나 검색어를 바꿔 보세요.' : '진료 과정, 질환의 원인, 비용표, 치료 전후 자료를 분류해서 등록해 보세요.'}</p>
+            ${state.materials.length ? '<button id="reset-filters" class="mt-4 px-4 py-2 rounded-lg border text-sm font-semibold">필터 초기화</button>' : ''}
+            <button id="new2" class="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold">${state.kindFilter ? KIND[state.kindFilter] + ' 등록' : '첫 자료 등록'}</button>
           </div>`}`;
     $('#q').oninput = (e) => { state.filter = e.target.value; renderLibrary(main); $('#q').focus(); $('#q').setSelectionRange(state.filter.length, state.filter.length); };
-    main.querySelectorAll('[data-cat]').forEach((b) => b.onclick = () => { state.filter = state.filter === b.dataset.cat ? '' : b.dataset.cat; renderLibrary(main); });
+    main.querySelectorAll('[data-kind-filter]').forEach((b) => b.onclick = () => { state.kindFilter = b.dataset.kindFilter; renderLibrary(main); });
+    main.querySelectorAll('[data-cat]').forEach((b) => b.onclick = () => { state.categoryFilter = b.dataset.cat; renderLibrary(main); });
+    const reset = $('#reset-filters'); if (reset) reset.onclick = () => { state.filter = ''; state.kindFilter = ''; state.categoryFilter = ''; renderLibrary(main); };
     const nb = $('#new') || $('#new2'); if (nb) nb.onclick = () => openEditor(null);
     const nb2 = $('#new2'); if (nb2) nb2.onclick = () => openEditor(null);
     main.querySelectorAll('[data-add]').forEach((b) => b.onclick = () => { const id = Number(b.dataset.add); state.today = state.today.includes(id) ? state.today.filter((x) => x !== id) : [...state.today, id]; saveToday(); render(); });
@@ -93,7 +102,7 @@
 
   // ─── 자료 편집 모달 ───
   function openEditor(m) {
-    state.editing = m ? JSON.parse(JSON.stringify(m)) : { kind: 'explain', category: '', title: '', body: '', images: [], cost: [] };
+    state.editing = m ? JSON.parse(JSON.stringify(m)) : { kind: state.kindFilter || 'explain', category: state.categoryFilter, title: '', body: '', images: [], cost: [] };
     renderEditor();
   }
   function renderEditor() {
@@ -107,10 +116,11 @@
       <div class="bg-white rounded-2xl w-full max-w-2xl my-6 fade-in">
         <div class="px-5 py-4 border-b flex items-center"><h3 class="font-bold">${m.id ? '자료 수정' : '자료 등록'}</h3><button id="ed-close" class="ml-auto text-slate-400 hover:text-slate-800 text-xl">&times;</button></div>
         <div class="p-5 space-y-4 text-sm">
-          <div class="flex gap-2">${Object.entries(KIND).map(([k, l]) => `<button data-kind="${k}" class="px-3 py-1.5 rounded-full border ${m.kind === k ? 'bg-slate-900 text-white' : ''}">${l}</button>`).join('')}</div>
+          <div class="flex flex-wrap gap-2" aria-label="자료 유형 선택">${LIBRARY_KINDS.map(k => `<button data-kind="${k}" aria-pressed="${groupKind(m.kind) === k}" class="px-3 py-1.5 rounded-full border ${groupKind(m.kind) === k ? 'bg-slate-900 text-white' : ''}">${KIND[k]}</button>`).join('')}</div>
+          ${m.kind === 'notice' ? '<p class="text-xs text-slate-500">기존 주의사항 자료입니다. 진료설명에 함께 표시하며, 유형을 직접 변경하지 않으면 기존 주의사항 분류를 유지합니다.</p>' : ''}
           <div class="grid grid-cols-3 gap-3">
             <label class="col-span-2">제목<input id="ed-title" value="${esc(m.title)}" maxlength="80" placeholder="예: 임플란트 치료 과정" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
-            <label>진료 분류<input id="ed-cat" value="${esc(m.category || '')}" maxlength="30" placeholder="예: 임플란트" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
+            <label>진료 항목<input id="ed-cat" value="${esc(m.category || '')}" maxlength="30" placeholder="예: 임플란트" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
           </div>
           <label class="block">${m.kind === 'cost' ? '설명(선택)' : '설명 본문'}<span class="text-slate-400 ml-2">줄 앞에 "- "를 붙이면 항목으로 표시됩니다</span>
             <textarea id="ed-body" rows="7" class="mt-1 w-full border rounded-lg px-3 py-2 leading-relaxed" placeholder="${m.kind === 'notice' ? '- 2시간 동안 거즈를 물고 계세요\n- 오늘은 뜨거운 음식·음주·흡연을 피하세요' : '환자분께 말로 설명하던 내용을 그대로 적어 주세요'}">${esc(m.body || '')}</textarea></label>

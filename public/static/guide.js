@@ -3,7 +3,7 @@
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
-  const KIND = { explain: '설명', before_after: '치료 전후', cost: '비용 안내', notice: '주의사항' };
+  const KIND = { explain: '진료설명', disease: '질환설명', cost: '비용설명', before_after: '비포애프터', notice: '주의사항' };
   const app = $('#app');
   const m = location.pathname.match(/^\/(g|optout)\/([0-9a-f]{32})$/);
   if (!m) { app.innerHTML = '<div class="p-10 text-center text-slate-500">잘못된 주소입니다.</div>'; return; }

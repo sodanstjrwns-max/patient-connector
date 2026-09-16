@@ -4,3 +4,8 @@ dist/
 .env
 .dev.vars
 *.log
+.env.*
+.dev.vars.*
+.test-results/
+*.tar.gz
+*.bundle
