@@ -10,20 +10,25 @@
   const mode = m[1], token = m[2];
   const bodyHtml = (t) => String(t || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : `<div>${l.trim() ? esc(l) : '&nbsp;'}</div>`).join('');
   const isVideo = im => im?.media_type === 'video' || /\.(mp4|webm)$/i.test(im?.key || '');
-  const img = (im) => `<figure class="my-3">${isVideo(im) ? `<video src="/a/${im.key}?t=${token}" controls playsinline preload="metadata" class="w-full rounded-xl" aria-label="${esc(im.caption || '설명 영상')}"></video>` : `<img src="/a/${im.key}?t=${token}" alt="${esc(im.caption || '설명 이미지')}" class="w-full rounded-xl bg-slate-100" loading="lazy">`}${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}</figure>`;
+  const annotationFor = (im, notes) => (notes || []).find(a => a.media_key === im.key && a.image_key);
+  const img = (im, notes) => {
+    const a = annotationFor(im, notes), video = isVideo(im);
+    const time = a?.video_time == null ? '' : `${Math.floor(a.video_time / 60)}:${String(Math.floor(a.video_time % 60)).padStart(2, '0')}`;
+    return `<figure class="my-3">${video ? `<video src="/a/${im.key}?t=${token}" controls playsinline preload="metadata" class="w-full rounded-xl" aria-label="${esc(im.caption || '설명 영상')}"></video>` : `<img src="/a/${a?.image_key || im.key}?t=${token}" alt="${a ? '의료진 필기가 포함된 설명 이미지' : esc(im.caption || '설명 이미지')}" class="w-full rounded-xl bg-slate-100 ${a ? 'patient-annotation' : ''}" loading="lazy">`}${a && video ? `<figcaption class="annotation-caption">${time} 장면에 필기한 설명</figcaption><img src="/a/${a.image_key}?t=${token}" alt="영상 장면에 필기한 설명" class="w-full rounded-xl patient-annotation" loading="lazy">` : a ? '<figcaption class="annotation-caption">의료진 필기 포함 · 원본은 변경되지 않았습니다</figcaption>' : ''}${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}${a && !video ? `<details class="media-supplement"><summary>원본 이미지 보기</summary><img src="/a/${im.key}?t=${token}" alt="필기 전 원본" class="w-full rounded-xl" loading="lazy"></details>` : ''}</figure>`;
+  };
 
   function materialHtml(x, i) {
     let inner = '';
     if (x.images.length && x.kind !== 'before_after') {
-      inner = x.images.map(img).join('') + (x.body ? `<details class="media-supplement"><summary>보충 설명 보기</summary><div class="pc-body">${bodyHtml(x.body)}</div></details>` : '');
+      inner = x.images.map(im => img(im, x.annotations)).join('') + (x.body ? `<details class="media-supplement"><summary>보충 설명 보기</summary><div class="pc-body">${bodyHtml(x.body)}</div></details>` : '');
     } else if (x.kind === 'before_after') {
       const [b, a] = x.images;
-      inner = `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure>${im ? `<img src="/a/${im.key}?t=${token}" class="w-full rounded-xl bg-slate-100">` : ''}<figcaption class="text-sm">${l}</figcaption></figure>`).join('')}</div>${x.body ? `<div class="pc-body mt-3">${bodyHtml(x.body)}</div>` : ''}`;
+      inner = `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure>${im ? `<img src="/a/${annotationFor(im, x.annotations)?.image_key || im.key}?t=${token}" class="w-full rounded-xl bg-slate-100 ${annotationFor(im, x.annotations) ? 'patient-annotation' : ''}" alt="${esc(l)}${annotationFor(im, x.annotations) ? ' · 필기 포함' : ''}">` : ''}<figcaption class="text-sm">${l}</figcaption></figure>`).join('')}</div>${x.body ? `<div class="pc-body mt-3">${bodyHtml(x.body)}</div>` : ''}`;
     } else if (x.kind === 'cost') {
       const total = x.cost.reduce((s, c) => s + (Number(c.price) || 0) * (Number(c.qty) || 1), 0);
       inner = `${x.body ? `<div class="pc-body mb-3">${bodyHtml(x.body)}</div>` : ''}<table class="w-full text-sm"><tbody>${x.cost.map((c) => `<tr class="border-b"><td class="py-2">${esc(c.name)}${c.note ? `<div class="text-xs text-slate-500">${esc(c.note)}</div>` : ''}</td><td class="py-2 text-right text-slate-500 text-xs">${(c.qty || 1) > 1 ? `${won(c.price)} × ${c.qty}` : ''}</td><td class="py-2 text-right font-semibold whitespace-nowrap">${won((Number(c.price) || 0) * (Number(c.qty) || 1))}</td></tr>`).join('')}<tr><td class="py-3 font-bold" colspan="2">합계</td><td class="py-3 text-right font-extrabold">${won(total)}</td></tr></tbody></table><p class="text-xs text-slate-500 mt-2">안내 시점 기준 금액이며 진단에 따라 달라질 수 있습니다.</p>`;
     } else {
-      inner = `${x.body ? `<div class="pc-body">${bodyHtml(x.body)}</div>` : ''}${x.images.map(img).join('')}`;
+      inner = `${x.body ? `<div class="pc-body">${bodyHtml(x.body)}</div>` : ''}${x.images.map(im => img(im, x.annotations)).join('')}`;
     }
     return `<section class="bg-white rounded-2xl border p-5 mb-4 fade-in" data-i="${i}">
       <div class="text-xs font-semibold text-sky-700">${KIND[x.kind] || ''}${x.category ? ' · ' + esc(x.category) : ''}</div>

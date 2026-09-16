@@ -15,7 +15,7 @@
     const r = await fetch('/api' + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opt || {}));
     const j = await r.json().catch(() => ({}));
     if (r.status === 401 && j.auth_required) { location.href = '/api/auth/hub'; throw new Error('auth'); }
-    if (!r.ok) throw new Error(j.error || ('오류 ' + r.status));
+    if (!r.ok) { const error = new Error(j.error || ('오류 ' + r.status)); error.status = r.status; throw error; }
     return j;
   }
   function bodyHtml(text) {
@@ -243,10 +243,10 @@
   function slideHtml(m, token) {
     if (m.kind === 'before_after') {
       const [b, a] = m.images;
-      return `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure>${im ? `<img src="${imgUrl(im.key, token)}" class="w-full">` : '<div class="h-48 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500">사진 없음</div>'}<figcaption>${l}</figcaption></figure>`).join('')}</div>${m.body ? `<div class="text mt-6">${bodyHtml(m.body)}</div>` : ''}`;
+      return `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure ${im ? `data-annotation-key="${esc(im.key)}"` : ''}>${im ? `<img src="${imgUrl(im.key, token)}" class="w-full">` : '<div class="h-48 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500">사진 없음</div>'}<figcaption>${l}</figcaption></figure>`).join('')}</div>${m.body ? `<div class="text mt-6">${bodyHtml(m.body)}</div>` : ''}`;
     }
     if (m.images.length) {
-      return `<div class="media-stage">${m.images.map(im => `<figure>${mediaHtml(im, token)}${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ''}</figure>`).join('')}</div>${m.body ? `<details class="media-supplement"><summary>보충 설명 보기</summary><div class="text">${bodyHtml(m.body)}</div></details>` : ''}`;
+      return `<div class="media-stage">${m.images.map(im => `<figure data-annotation-key="${esc(im.key)}">${mediaHtml(im, token)}${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ''}</figure>`).join('')}</div>${m.body ? `<details class="media-supplement"><summary>보충 설명 보기</summary><div class="text">${bodyHtml(m.body)}</div></details>` : ''}`;
     }
     if (m.kind === 'cost') {
       const total = m.cost.reduce((s, c) => s + (Number(c.price) || 0) * (Number(c.qty) || 1), 0);
@@ -256,7 +256,7 @@
     return `<div class="grid ${m.images.length ? 'lg:grid-cols-2' : ''} gap-8 items-start">${m.body ? `<div class="text">${bodyHtml(m.body)}</div>` : ''}${imgs ? `<div class="space-y-4">${imgs}</div>` : ''}</div>`;
   }
   function startPresent(list) {
-    let i = 0;
+    let i = 0, annotationView = null, navigating = false;
     const box = document.createElement('div'); box.className = 'present'; document.body.appendChild(box);
     const draw = () => {
       const m = list[i];
@@ -269,12 +269,25 @@
           <button id="ex" class="px-4 py-2 rounded-lg bg-sky-600 text-sm font-semibold">설명 끝 · 보내기</button>
           <button id="cl" class="px-3 py-2 rounded-lg bg-slate-800 text-sm">닫기</button>
         </div>`;
-      $('#pv', box).onclick = () => { i--; draw(); }; $('#nx', box).onclick = () => { i++; draw(); };
+      annotationView = window.PCAnnotations.mount(box, m, api);
+      $('#pv', box).onclick = () => move(-1); $('#nx', box).onclick = () => move(1);
       $('#fs', box).onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen?.(); };
-      $('#cl', box).onclick = close; $('#ex', box).onclick = () => { close(); state.tab = 'send'; render(); };
+      $('#cl', box).onclick = () => close(); $('#ex', box).onclick = () => close(true);
     };
-    const key = (e) => { if (e.key === 'ArrowRight' && i < list.length - 1) { i++; draw(); } else if (e.key === 'ArrowLeft' && i > 0) { i--; draw(); } else if (e.key === 'Escape') close(); };
-    const close = () => { document.removeEventListener('keydown', key); if (document.fullscreenElement) document.exitFullscreen(); box.remove(); };
+    const move = async delta => {
+      if (navigating || i + delta < 0 || i + delta >= list.length) return;
+      navigating = true;
+      try { await annotationView?.flush(); box.querySelectorAll('video').forEach(v => v.pause()); i += delta; draw(); }
+      catch (e) { toast(e.message, false); }
+      finally { navigating = false; }
+    };
+    const key = e => { if (e.target.closest('.annotation-toolbar') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); else if (e.key === 'Escape') close(); };
+    const close = async (send = false) => {
+      if (navigating) return; navigating = true;
+      try { await annotationView?.flush(); box.querySelectorAll('video').forEach(v => v.pause()); document.removeEventListener('keydown', key); if (document.fullscreenElement) await document.exitFullscreen(); box.remove(); if (send) { state.today = list.map(m => m.id); saveToday(); state.tab = 'send'; render(); } }
+      catch (e) { toast(e.message, false); }
+      finally { navigating = false; }
+    };
     document.addEventListener('keydown', key); draw();
   }
 
@@ -294,6 +307,7 @@
             <label class="block">환자 휴대전화<input id="s-phone" inputmode="numeric" placeholder="010-0000-0000" class="mt-1 w-full border rounded-lg px-3 py-2.5 text-lg tracking-wider" ${ready ? '' : 'disabled'}></label>
             <label class="block">내부 메모 <span class="text-slate-400">(환자에게 안 보임)</span><input id="s-label" maxlength="40" placeholder="예: 3시 임플란트 상담" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
             <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">카카오톡에 <b>[${esc(state.me.hospital.name)} 진료 안내]</b>로 도착하며, 마지막 줄에 "${esc(state.me.hospital.name)}의 요청으로 'Patient Connect'가 발송합니다"가 표시됩니다.<br>환자분께 번호 수집·발송 동의를 받으셨는지 확인하세요 (<a href="/legal-guide" target="_blank" class="underline">안내 문구</a>).</div>
+            <label class="annotation-send-option"><input id="s-annotations" type="checkbox" ${window.PCAnnotations.hasMarks(list.map(m => m.id)) ? 'checked' : ''}>이 자료에 저장된 필기 포함</label><p class="text-xs text-slate-500">이미지는 필기한 화면을, 영상은 원본과 필기한 장면 캡처를 함께 보냅니다. 다른 설명에서 저장한 필기가 있는지 확인해 주세요.</p>
             <button id="s-send" class="w-full py-3 rounded-lg bg-yellow-400 text-slate-900 font-bold disabled:opacity-40" ${list.length && ready ? '' : 'disabled'}><i class="fa-solid fa-comment mr-1"></i>카카오톡으로 보내기</button>
             <button id="s-link" class="w-full py-2.5 rounded-lg border font-semibold disabled:opacity-40" ${list.length ? '' : 'disabled'}><i class="fa-solid fa-link mr-1"></i>링크만 만들기 (직접 전달)</button>
             <div id="s-result"></div>
@@ -312,7 +326,9 @@
     const send = async (channel) => {
       const btn = channel === 'link' ? $('#s-link') : $('#s-send'); btn.disabled = true;
       try {
-        const r = await api('/dispatches', { method: 'POST', body: JSON.stringify({ material_ids: ids, phone: $('#s-phone').value, label: $('#s-label').value, channel }) });
+        const includeAnnotations = $('#s-annotations').checked;
+        if (includeAnnotations) await window.PCAnnotations.flush(ids);
+        const r = await api('/dispatches', { method: 'POST', body: JSON.stringify({ material_ids: ids, phone: $('#s-phone').value, label: $('#s-label').value, channel, include_annotations: includeAnnotations }) });
         showResult(r);
         if (r.status === 'sent') { $('#s-phone').value = ''; $('#s-label').value = ''; }
       } catch (e) { toast(e.message, false); }

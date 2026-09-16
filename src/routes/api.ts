@@ -6,6 +6,7 @@ import { verifyHubSsoToken } from '../lib/hub-sso'
 import { normalizePhone, phoneHash, encPhone, randomToken, maskPhone } from '../lib/util'
 import { sendAlimtalk, alimtalkReady } from '../lib/solapi'
 import { materialCategories, materialExamples, exampleNotice } from '../lib/material-library'
+import annotations from './annotations'
 
 export type Bindings = {
   DB: D1Database
@@ -145,6 +146,9 @@ api.put('/settings', async (c) => {
   return c.json({ ok: true })
 })
 
+// Annotation routes inherit the clinic session middleware above.
+api.route('/materials', annotations)
+
 // ─── 자료함 ───
 api.get('/material-library', async (c) => {
   const imported = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE ?')
@@ -270,7 +274,14 @@ api.post('/dispatches', async (c) => {
   const placeholders = ids.map(() => '?').join(',')
   const rows = await c.env.DB.prepare(`SELECT * FROM materials WHERE hospital_id = ? AND active = 1 AND id IN (${placeholders})`).bind(hid, ...ids).all<MaterialRow>()
   const byId = new Map((rows.results || []).map((m) => [m.id, m]))
-  const snapshot = ids.filter((id) => byId.has(id)).map((id) => { const m = materialOut(byId.get(id)!); return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body, images: m.images, cost: m.cost, is_example: m.is_example } })
+  const savedNotes = b.include_annotations === true
+    ? (await c.env.DB.prepare(`SELECT material_id, media_key, image_key, video_time FROM material_annotations WHERE hospital_id = ? AND material_id IN (${placeholders}) AND image_key IS NOT NULL`).bind(hid, ...ids).all<{material_id: number; media_key: string; image_key: string; video_time: number | null}>()).results
+    : []
+  const snapshot = ids.filter((id) => byId.has(id)).map((id) => {
+    const m = materialOut(byId.get(id)!)
+    const notes = savedNotes.filter(a => a.material_id === m.id && m.images.some(im => im.key === a.media_key)).map(a => ({ media_key: a.media_key, image_key: a.image_key, video_time: a.video_time }))
+    return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body, images: m.images, cost: m.cost, is_example: m.is_example, annotations: notes }
+  })
   if (!snapshot.length) return c.json({ error: '보낼 자료가 없습니다' }, 400)
 
   let phone: string | null = null, pHash: string | null = null, pEnc: string | null = null, last4: string | null = null

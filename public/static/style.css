@@ -64,3 +64,23 @@
 .supplemental-body { border-top: 1px solid #e2e8f0; padding-top: .4rem; }
 #editor video { background: #142033; }
 @media (prefers-reduced-motion: reduce) { .media-card-cover > img { transition: none; } }
+/* Drawing lives in its own normalized layer; it never alters the original media. */
+.annotation-toolbar { margin: 0 auto 12px; padding: 10px; background: #18263e; border: 1px solid #34435a; border-radius: 10px; color: #cbd7e8; font: 12px/1.5 sans-serif; }
+.annotation-tools, .annotation-savebar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.annotation-toolbar button { min-height: 36px; padding: 6px 10px; border-radius: 6px; border: 1px solid #3b4b66; background: #23334c; color: #d7e3f6; font: inherit; cursor: pointer; }
+.annotation-toolbar button[aria-pressed="true"] { color: white; background: #346bea; border-color: #6b94f4; }
+.annotation-toolbar button:disabled { opacity: .4; cursor: default; }
+.annotation-toolbar button[hidden] { display: none; }
+.annotation-toolbar label { display: flex; align-items: center; gap: 5px; padding: 0 4px; font-size: 11px; }
+.annotation-toolbar input[type=color] { width: 32px; height: 32px; padding: 1px; border: 0; background: transparent; }
+.annotation-toolbar select { color: #dbe6f8; border: 1px solid #3b4b66; padding: 7px; background: #23334c; border-radius: 6px; }
+.annotation-savebar { margin-top: 9px; padding-top: 9px; border-top: 1px solid #33435c; }
+.annotation-status { flex: 1; min-width: 150px; color: #a7b9d5; font-size: 11px; }
+.annotation-toolbar .annotation-save { background: #2d64df; color: white; }
+.annotation-surface { position: relative; margin: 0 auto; overflow: hidden; background: #fff; border-radius: 8px; }
+.annotation-surface > img, .annotation-surface > video { width: 100% !important; height: 100% !important; max-height: none !important; display: block; object-fit: contain; border-radius: 0; }
+.annotation-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; cursor: crosshair; pointer-events: none; }
+.annotation-send-option { display: flex; gap: 8px; align-items: center; padding: 12px; border: 1px solid #bfdbfe; border-radius: 8px; background: #eff6ff; }
+.annotation-caption { margin: 10px 0 6px; padding: 8px; border-radius: 6px; color: #27599f; background: #eff6ff; font-size: 12px; }
+.annotation-toolbar button:focus-visible { outline: 2px solid #bcd0ff; outline-offset: 2px; }
+@media (max-width: 640px) { .annotation-toolbar { padding: 8px; } .annotation-toolbar button { min-height: 42px; padding: 6px 8px; } .annotation-status { flex-basis: 100%; } .present > div:last-child { flex-wrap: wrap; padding: 10px; gap: 6px; } }
