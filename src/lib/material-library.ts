@@ -7,8 +7,8 @@ export const materialCategories: Record<string, string[]> = {
   before_after: ['임플란트', '치아교정', '보철치료', '충치치료', '잇몸치료', '심미치료'],
 }
 export const exampleNotice = '검토용 예시입니다. 환자에게 제공하기 전에 의료진이 병원의 진료 기준과 환자 상태에 맞게 내용을 확인·수정해 주세요.'
-type Example = { key: string; kind: 'explain' | 'disease'; category: string; title: string; body: string }
-const example = (key: string, kind: Example['kind'], category: string, title: string, body: string): Example => ({ key: `dental-v1:${key}`, kind, category, title: `[예시] ${title}`, body: `${exampleNotice}\n\n${body}\n\n개인의 상태에 따라 필요한 검사와 치료 방법이 달라질 수 있습니다. 정확한 진단과 치료 계획은 담당 의료진에게 확인해 주세요.` })
+type Example = { key: string; kind: 'explain' | 'disease'; category: string; title: string; body: string; image: string }
+const example = (key: string, kind: Example['kind'], category: string, title: string, body: string): Example => ({ key: `dental-v1:${key}`, image: `examples/${key}.png`, kind, category, title: `[예시] ${title}`, body: `${exampleNotice}\n\n${body}\n\n개인의 상태에 따라 필요한 검사와 치료 방법이 달라질 수 있습니다. 정확한 진단과 치료 계획은 담당 의료진에게 확인해 주세요.` })
 export const materialExamples: Example[] = [
   example('implant', 'explain', '임플란트', '임플란트 치료 과정 이해하기',
     '임플란트는 상실된 치아의 기능을 회복하는 치료 방법 중 하나입니다.\n- 구강 검사와 필요한 영상 검사를 통해 잇몸, 뼈, 주변 치아의 상태를 확인합니다.\n- 전신질환과 복용 약물을 확인하고 다른 치료 선택지와 함께 계획을 상담합니다.\n- 필요한 경우 잇몸치료나 뼈이식 등 추가 처치를 먼저 또는 함께 진행할 수 있습니다.\n- 임플란트 식립 후 회복 상태를 확인하고, 상태에 맞춰 보철물을 연결합니다.\n- 치료 후에도 칫솔질과 정기검진으로 임플란트 주변을 관리합니다.\n상담할 내용: 추가 처치 여부, 예상 기간, 치료비에 포함된 항목, 치료 후 관리 방법.'),

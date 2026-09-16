@@ -21,11 +21,33 @@
 - 자료가 0개인 분류도 표시하며, 병원이 저장한 사용자 분류는 삭제하지 않고 함께 표시합니다. 편집기에는 유형별 드롭다운과 직접 입력을 제공합니다.
 - `src/lib/material-library.ts`가 분류·예시의 단일 원본입니다. 인증된 `GET /api/material-library`가 분류·예시 목록·현재 병원의 추가 개수를 제공합니다.
 - **예시 8개**: 진료설명 4개(임플란트 과정, 치아교정 순서, 보철치료, 신경치료), 질환설명 4개(충치, 잇몸질환, 치수·치근단 질환, 치아균열).
-- 자료함의 **예시자료 8개 넣기** → 목록/주의문 확인 → 확인 체크 → 추가 순서입니다. 조회만으로 데이터를 쓰거나 모든 병원에 일괄 배포하지 않습니다.
+- 자료함의 **이미지 목업 8개 넣기** → 목록/주의문 확인 → 확인 체크 → 추가 순서입니다. 조회만으로 데이터를 쓰거나 모든 병원에 일괄 배포하지 않습니다.
 - 인증된 `POST /api/materials/examples`에 `{ "confirmed": true }`를 전달하면 현재 병원에만 예시를 삽입합니다. 요청에 임의의 hospital_id를 넣어도 반영하지 않습니다.
 - `0002_material_examples.sql`은 materials.example_key와 병원+키 고유 인덱스를 추가합니다. D1 원자적 batch 및 충돌 시 무시로 동시 클릭·응답 유실 재시도 중복을 막습니다. 수정한 내용, 숨긴 예시, 기존 자료는 덮어쓰지 않습니다.
 - 모든 예시는 **검토용 설명 초안**입니다. 실제 환자 사진, 임의 진료비, 의료진 검토 완료 주장을 넣지 않았습니다. 카드/편집기/발송 화면/환자 안내장에 예시 표시를 유지합니다. `is_example`은 서버가 provenance를 판단하고 발송 스냅샷에도 포함합니다.
 - 예시 추가는 환자 전송이 아닙니다. 의료진이 병원 진료 기준과 실제 환자 상태에 맞게 검토한 후 사용해야 합니다.
+
+## 이미지·영상 중심 자료함
+
+- 자료의 본체는 이미지/영상입니다. 카드에서 실제 미디어 썸네일을 표시하고 클릭하면 큰 설명 화면을 엽니다. 본문은 선택 입력이며, 미디어가 있으면 보충 설명으로 접어 둡니다. 기존 텍스트/비용표 자료는 호환성을 위해 유지합니다.
+- 1200×750 PNG 이미지 목업 8개를 `public/static/mockups/`에 포함했습니다. 모든 이미지 안에 **설명용 목업·실제 임상자료 아님·의료진 검토 전**을 표시합니다.
+- 로그인 없는 공개 목업 갤러리: `/static/mockups/index.html`. 운영 병원 데이터와 연결되지 않은 정적 미리보기입니다.
+- 샌드박스 목업 URL: https://3000-inm1c6uo4zqtact2e0j9v-8f57ffe2.sandbox.novita.ai/static/mockups/index.html
+- 자료함의 **이미지 목업 8개 넣기**로 예시를 추가합니다. 기존 텍스트 예시는 **기존 예시에 이미지 채우기**를 명시적으로 실행하면 이미지가 없는 활성 예시에만 파일을 연결합니다. 기존 본문·제목·업로드 미디어 및 삭제한 예시는 덮어쓰지 않습니다.
+- 공개 목업은 `/a/examples/<known-name>.png`의 정확한 허용 목록으로 정적 파일에 연결합니다. 병원 업로드 자료는 이 예외에 포함하지 않으며 기존 병원/안내장 토큰 권한을 확인합니다.
+- 업로드: JPG/PNG/WebP 이미지 5MB, MP4/WebM 영상 25MB. 기존 `/api/materials/:id/images` 엔드포인트 및 `images_json`을 유지하고 참조에 `media_type`을 기록합니다. 비포애프터는 이미지 2장 전용입니다.
+- 파일 크기·MIME·시그니처를 검사합니다. 영상 Range 요청에는 206/Content-Range를 반환하고 잘못된 범위는 416으로 거절합니다. 비공개 업로드 응답은 `private, no-store`입니다.
+- 설명 화면 및 환자 안내장에서 영상 재생을 지원합니다. 자동재생하지 않습니다. 실제 재생 회귀 검사는 ffmpeg로 생성한 무음 WebM 테스트 영상으로 수행했습니다.
+- 빌드 플러그인의 `emptyOutDir: true`로 이전 저장소의 정적 파일이 dist에 잔존하지 않도록 했습니다. Wrangler 미리보기 실행 중 재빌드하면 파일 감시기가 잠깐 비어 있는 `_routes.json`을 읽을 수 있으므로, 미리보기를 중지 → 빌드 → PM2 재시작 순서로 진행합니다.
+
+### 목업 출처·재생성
+
+도식과 한국어 레이아웃은 코드로 제작한 단순화된 목업입니다. 일부 참고 사진/구조 그림은 image_search의 CC/PD 필터 결과 중 다음 두 이미지에서만 가져왔습니다. 원본 이미지도 `reference-*.jpg`로 보관합니다.
+
+- 모델 사진: https://sspark.genspark.ai/i/EyMYBryePyDzkrRt?width=2560 · 원본 안내 https://www.rawpixel.com/search/dental%20implant
+- 치아 구조 그림: https://sspark.genspark.ai/i/e6J2600nB0KDEGhX?width=2560 · 원본 안내 https://www.rawpixel.com/search/dental%20design
+- 실제 환자 비포애프터, 임의의 치료 결과, 의료진 검토 완료 자료로 사용하지 않습니다. 보충 이미지의 출처를 해당 목업/갤러리에 표시했습니다.
+- `npm run mockups:render`는 Playwright와 로컬 Noto Sans CJK KR 폰트로 8개 PNG를 재생성합니다. 유료 AI 이미지 생성 도구를 사용하지 않았습니다. 이미 발송된 안내장과의 호환을 위해 배포 후 이미지 내용을 바꿀 때는 새 파일명/버전 키를 사용하세요.
 
 ## 운영 상태와 화면
 
@@ -38,7 +60,7 @@
 
 ## 데이터
 
-D1 `patient-connect-production`: hospitals, materials, dispatches, views, optouts, hub_profile_cache. R2 `patient-connect-assets` (`MEDIA`): 병원 이미지. 발송 시 선택 자료 스냅샷을 `dispatches.materials_json`에 저장하므로 이후 자료 수정이 이미 보낸 안내장을 변경하지 않습니다.
+D1 `patient-connect-production`: hospitals, materials, dispatches, views, optouts, hub_profile_cache. R2 `patient-connect-assets` (`MEDIA`): 병원 이미지/영상. 공개 목업만 배포 정적 파일로 제공하며 실제 업로드는 R2에 저장합니다. 발송 시 선택 자료 스냅샷을 `dispatches.materials_json`에 저장하므로 이후 자료 수정이 이미 보낸 안내장을 변경하지 않습니다.
 
 SESSION_SECRET, PS_SSO_SECRET, PHONE_ENC_KEY, HUB_API_KEY, SOLAPI_API_KEY/SECRET 등의 실제 비밀값은 코드에 기록하지 않습니다. 로컬 검증은 별도 `.wrangler/category-tests` 상태와 합성 병원만 사용합니다. 외부 미리보기/운영의 시크릿 가드는 변경하지 않았습니다.
 
@@ -58,11 +80,12 @@ PM2로 `npx wrangler pages dev dist --local --persist-to .wrangler/category-test
 npx playwright install chromium
 npm run test:categories
 npm run test:library
+npm run test:media # ffmpeg 필요, 무음 테스트 영상을 로컬 생성
 ```
 
-검사는 `http://localhost:3000`에만 연결하며 공개 개발용 세션 서명키를 사용하는 로컬 환경을 전제로 합니다. 합성 병원 ID 900001/900002 및 900011/900012를 생성·정리합니다. 운영 자격증명이나 실제 허브/메시지 API를 호출하지 않습니다.
+검사는 `http://localhost:3000`에만 연결하며 공개 개발용 세션 서명키를 사용하는 로컬 환경을 전제로 합니다. 합성 병원 ID 900001/900002, 900011/900012 및 900021를 생성·정리합니다. 운영 자격증명이나 실제 허브/메시지 API를 호출하지 않습니다.
 
-총 62개 API/브라우저 검사 통과: 기존 분류 검사 30개 및 세부 분류·예시 검사 32개. 신규 질환 유형 저장, 기존 주의사항 보존, 병원별 격리, 복합 필터, 등록·수정·재분류, 안내장 스냅샷 보존, 모바일 선택과 편집, 예시 확인·삽입·재시도·동시성·기존 내용 보존·예시 표시를 검증했습니다. 결과·스크린샷은 Git 제외 `.test-results/`에 보관합니다.
+총 94개 API/브라우저 검사 통과: 기존 분류 30개, 세부 분류·예시 32개, 이미지·영상 32개. 미디어 검사는 목업 파일 8개 로딩, 기존 예시 업그레이드, 업로드 보존, 영상 권한·Range·재생, 환자 안내장 및 공개 갤러리를 포함합니다. 신규 질환 유형 저장, 기존 주의사항 보존, 병원별 격리, 복합 필터, 등록·수정·재분류, 안내장 스냅샷 보존, 모바일 선택과 편집, 예시 확인·삽입·재시도·동시성·기존 내용 보존·예시 표시를 검증했습니다. 결과·스크린샷은 Git 제외 `.test-results/`에 보관합니다.
 
 ## 다음 단계
 

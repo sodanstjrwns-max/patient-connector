@@ -4,6 +4,7 @@ import api, { type Bindings } from './routes/api'
 import psApi from './routes/ps-api'
 import { legalShell, privacyBody, termsBody, legalGuideBody, landingPage } from './pages/legal'
 import { verifySession, getSessionToken } from './lib/auth'
+import { materialExamples } from './lib/material-library'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -21,7 +22,7 @@ app.route('/api/v1', psApi)
 app.route('/api', api)
 
 // ─── HTML 셸 ───
-const ASSET_VER = 'v20260916-dental-library'
+const ASSET_VER = 'v20260916-image-library'
 const shell = (title: string, script: string, opts: { bodyClass?: string; noindex?: boolean; desc?: string } = {}) => `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -54,7 +55,9 @@ app.get('/legal-guide', (c) => c.html(legalShell('병원용 안내 문구', lega
 // ─── 이미지(R2) ── 병원 세션(자기 병원 키) 또는 유효한 안내장 토큰(스냅샷에 포함된 키)만 열람
 app.get('/a/*', async (c) => {
   const key = decodeURIComponent(new URL(c.req.url).pathname.slice(3))
-  if (!/^h\d+\/m\d+\/[0-9a-f]+\.(jpg|png|webp)$/.test(key)) return c.text('not found', 404)
+  // Bundled example images are intentionally public; arbitrary keys never bypass ownership checks.
+  if (materialExamples.some(m => m.image === key)) return c.redirect('/static/mockups/' + key.slice('examples/'.length))
+  if (!/^h\d+\/m\d+\/[0-9a-f]+\.(jpg|png|webp|mp4|webm)$/.test(key)) return c.text('not found', 404)
   let allowed = false
   const sid = await verifySession(getSessionToken(c.req.header('Cookie')), c.env.SESSION_SECRET)
   if (sid && key.startsWith(`h${sid}/`)) allowed = true
@@ -66,9 +69,25 @@ app.get('/a/*', async (c) => {
     }
   }
   if (!allowed) return c.text('forbidden', 403)
+  const headers: Record<string, string> = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex', 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff' }
+  const requested = c.req.header('Range')
+  if (requested) {
+    const meta = await c.env.MEDIA.head(key)
+    if (!meta) return c.text('not found', 404)
+    const match = /^bytes=(\d*)-(\d*)$/.exec(requested)
+    let start = 0, end = meta.size - 1
+    if (match && (match[1] || match[2])) {
+      if (!match[1]) start = Math.max(0, meta.size - Number(match[2]))
+      else { start = Number(match[1]); if (match[2]) end = Math.min(end, Number(match[2])) }
+    } else start = meta.size
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= meta.size || end < start) return new Response(null, { status: 416, headers: { ...headers, 'Content-Range': `bytes */${meta.size}` } })
+    const obj = await c.env.MEDIA.get(key, { range: { offset: start, length: end - start + 1 } })
+    if (!obj) return c.text('not found', 404)
+    return new Response(obj.body, { status: 206, headers: { ...headers, 'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream', 'Content-Range': `bytes ${start}-${end}/${meta.size}`, 'Content-Length': String(end - start + 1) } })
+  }
   const obj = await c.env.MEDIA.get(key)
   if (!obj) return c.text('not found', 404)
-  return new Response(obj.body, { headers: { 'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg', 'Cache-Control': 'private, max-age=3600', 'X-Robots-Tag': 'noindex' } })
+  return new Response(obj.body, { headers: { ...headers, 'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream', 'Content-Length': String(obj.size) } })
 })
 
 export default app

@@ -9,11 +9,14 @@
   if (!m) { app.innerHTML = '<div class="p-10 text-center text-slate-500">잘못된 주소입니다.</div>'; return; }
   const mode = m[1], token = m[2];
   const bodyHtml = (t) => String(t || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : `<div>${l.trim() ? esc(l) : '&nbsp;'}</div>`).join('');
-  const img = (im) => `<figure class="my-3"><img src="/a/${im.key}?t=${token}" class="w-full rounded-xl bg-slate-100" loading="lazy">${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}</figure>`;
+  const isVideo = im => im?.media_type === 'video' || /\.(mp4|webm)$/i.test(im?.key || '');
+  const img = (im) => `<figure class="my-3">${isVideo(im) ? `<video src="/a/${im.key}?t=${token}" controls playsinline preload="metadata" class="w-full rounded-xl" aria-label="${esc(im.caption || '설명 영상')}"></video>` : `<img src="/a/${im.key}?t=${token}" alt="${esc(im.caption || '설명 이미지')}" class="w-full rounded-xl bg-slate-100" loading="lazy">`}${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}</figure>`;
 
   function materialHtml(x, i) {
     let inner = '';
-    if (x.kind === 'before_after') {
+    if (x.images.length && x.kind !== 'before_after') {
+      inner = x.images.map(img).join('') + (x.body ? `<details class="media-supplement"><summary>보충 설명 보기</summary><div class="pc-body">${bodyHtml(x.body)}</div></details>` : '');
+    } else if (x.kind === 'before_after') {
       const [b, a] = x.images;
       inner = `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure>${im ? `<img src="/a/${im.key}?t=${token}" class="w-full rounded-xl bg-slate-100">` : ''}<figcaption class="text-sm">${l}</figcaption></figure>`).join('')}</div>${x.body ? `<div class="pc-body mt-3">${bodyHtml(x.body)}</div>` : ''}`;
     } else if (x.kind === 'cost') {

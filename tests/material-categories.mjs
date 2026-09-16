@@ -48,7 +48,7 @@ try {
  check((await request('/materials')).data.materials.find(m=>m.id===saved[4].id).kind==='notice','Editing legacy title preserves notice kind');
  await page.locator('#q').fill('');await page.locator('[data-kind-filter="disease"]').click();await page.locator('[data-cat=""]').click();await page.locator('#new').click();
  check(await page.locator('[data-kind="disease"]').getAttribute('aria-pressed')==='true','Registering from disease tab preselects disease');
- await page.locator('#ed-title').fill('충치의 진행');await page.locator('#ed-body').fill('본문 첫 줄\n- 두 번째 항목');await page.locator('#ed-save').click();await page.waitForSelector('#ed-del');await page.locator('#ed-close').click();
+ await page.locator('#ed-title').fill('충치의 진행');await page.locator('.supplemental-body > summary').click();await page.locator('#ed-body').fill('본문 첫 줄\n- 두 번째 항목');await page.locator('#ed-save').click();await page.waitForSelector('#ed-del');await page.locator('#ed-close').click();
  await page.reload();await page.waitForSelector('[data-kind-filter]');await page.locator('[data-kind-filter="disease"]').click();
  check(await page.locator('[data-add]').count()===2,'New disease material persists across reload');
  await page.locator('[data-edit]').first().click();await page.locator('[data-kind="explain"]').click();await page.locator('#ed-save').click();await page.waitForSelector('#editor',{state:'detached'});

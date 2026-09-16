@@ -33,7 +33,7 @@ try {
  check(materials.length===9&&materials.find(m=>m.id===own.data.material.id).body==='변경하면 안 되는 원문','Examples preserve pre-existing hospital records');
  check((await api('/materials',undefined,ids[1])).data.materials.length===0,'Client-supplied hospital ID cannot insert into another clinic');
  const examples=materials.filter(m=>m.is_example), first=examples[0];
- check(examples.length===8&&examples.every(m=>m.body.includes('검토용 예시')&&m.images.length===0&&m.cost.length===0),'All examples are labeled drafts with no fabricated photos or fees');
+ check(examples.length===8&&examples.every(m=>m.body.includes('검토용 예시')&&m.images.length===1&&m.images[0].key.startsWith('examples/')&&m.cost.length===0),'All examples contain labeled mockup images without fabricated clinical photos or fees');
  check(examples.filter(m=>m.kind==='explain').length===4&&examples.filter(m=>m.kind==='disease').length===4,'Example pack covers four treatments and four diseases');
  await api('/materials/'+first.id,{...first,title:'병원에서 수정한 예시'},ids[0],'PUT');
  await api('/materials/'+examples[1].id,undefined,ids[0],'DELETE');

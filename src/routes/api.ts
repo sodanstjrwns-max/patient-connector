@@ -1,5 +1,6 @@
 // 앱 API — 허브 SSO 세션 기반. /api/* 에 마운트.
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { signSession, verifySession, sessionCookie, clearCookie, getSessionToken } from '../lib/auth'
 import { verifyHubSsoToken } from '../lib/hub-sso'
 import { normalizePhone, phoneHash, encPhone, randomToken, maskPhone } from '../lib/util'
@@ -26,7 +27,8 @@ const HUB_SSO_SERVICE = 'connector'
 // Keep notice for existing precautions; disease is a first-class material type.
 const KINDS = new Set(['explain', 'disease', 'cost', 'before_after', 'notice'])
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+const IMAGE_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm' }
+const MAX_VIDEO_BYTES = 25 * 1024 * 1024
 
 const api = new Hono<{ Bindings: Bindings; Variables: Vars }>()
 
@@ -36,7 +38,7 @@ function baseUrl(c: any): string {
 function parseJson<T>(s: string | null | undefined, fallback: T): T {
   try { return s ? (JSON.parse(s) as T) : fallback } catch { return fallback }
 }
-type ImageRef = { key: string; caption?: string }
+type ImageRef = { key: string; caption?: string; media_type?: 'image' | 'video' }
 type CostItem = { name: string; price: number; qty?: number; note?: string }
 type MaterialRow = { id: number; hospital_id: number; kind: string; category: string | null; title: string; body: string | null; images_json: string; cost_json: string; sort: number; active: number; updated_at: string; example_key?: string | null }
 function materialOut(m: MaterialRow) {
@@ -147,7 +149,8 @@ api.put('/settings', async (c) => {
 api.get('/material-library', async (c) => {
   const imported = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE ?')
     .bind(c.get('hid'), 'dental-v1:%').first<{ n: number }>()
-  return c.json({ categories: materialCategories, example_notice: exampleNotice, examples: materialExamples.map(({ key, kind, category, title }) => ({ key, kind, category, title })), imported_count: Number(imported?.n || 0) })
+  const missing = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE 'dental-v1:%' AND active = 1 AND images_json = '[]'").bind(c.get('hid')).first<{ n: number }>()
+  return c.json({ missing_images: Number(missing?.n || 0), categories: materialCategories, example_notice: exampleNotice, examples: materialExamples.map(({ key, kind, category, title }) => ({ key, kind, category, title })), imported_count: Number(imported?.n || 0) })
 })
 api.post('/materials/examples', async (c) => {
   const origin = c.req.header('Origin')
@@ -160,10 +163,12 @@ api.post('/materials/examples', async (c) => {
   // Atomic D1 batch + unique (hospital_id, example_key): retries cannot duplicate or overwrite edits.
   const results = await c.env.DB.batch(materialExamples.map(m => c.env.DB.prepare(`
     INSERT INTO materials (hospital_id, kind, category, title, body, images_json, cost_json, sort, example_key)
-    VALUES (?, ?, ?, ?, ?, '[]', '[]', (SELECT COALESCE(MAX(sort), 0) + 1 FROM materials WHERE hospital_id = ?), ?)
+    VALUES (?, ?, ?, ?, ?, ?, '[]', (SELECT COALESCE(MAX(sort), 0) + 1 FROM materials WHERE hospital_id = ?), ?)
     ON CONFLICT(hospital_id, example_key) DO NOTHING
-  `).bind(hid, m.kind, m.category, m.title, m.body, hid, m.key)))
-  return c.json({ added: results.reduce((n, r) => n + Number(r.meta.changes || 0), 0), total: materialExamples.length })
+  `).bind(hid, m.kind, m.category, m.title, m.body, JSON.stringify([{ key: m.image, caption: '설명용 이미지 목업 · 실제 임상자료 아님', media_type: 'image' }]), hid, m.key)))
+  // Only fill empty active examples after an explicit request; never replace uploaded media or edited text.
+  const updates = await c.env.DB.batch(materialExamples.map(m => c.env.DB.prepare("UPDATE materials SET images_json = ?, updated_at = datetime('now') WHERE hospital_id = ? AND example_key = ? AND active = 1 AND images_json = '[]'").bind(JSON.stringify([{ key: m.image, caption: '설명용 이미지 목업 · 실제 임상자료 아님', media_type: 'image' }]), hid, m.key)))
+  return c.json({ added: results.reduce((n, r) => n + Number(r.meta.changes || 0), 0), updated: updates.reduce((n, r) => n + Number(r.meta.changes || 0), 0), total: materialExamples.length })
 })
 api.get('/materials', async (c) => {
   const all = c.req.query('all') === '1'
@@ -212,7 +217,8 @@ api.post('/materials/reorder', async (c) => {
   await c.env.DB.batch(ids.map((id, i) => c.env.DB.prepare('UPDATE materials SET sort = ? WHERE id = ? AND hospital_id = ?').bind(i + 1, id, c.get('hid'))))
   return c.json({ ok: true })
 })
-// 이미지 업로드 (multipart: file, caption?) → R2. before_after 는 최대 2장(앞=before, 뒤=after), 그 외 6장.
+// Backward-compatible endpoint for image/video uploads. Before/after remains image-only.
+api.use('/materials/:id/images', bodyLimit({ maxSize: 26 * 1024 * 1024, onError: c => c.json({ error: '이미지는 5MB, 영상은 25MB 이하로 올려주세요' }, 413) }))
 api.post('/materials/:id/images', async (c) => {
   const hid = c.get('hid')
   const row = await c.env.DB.prepare('SELECT * FROM materials WHERE id = ? AND hospital_id = ?').bind(c.req.param('id'), hid).first<MaterialRow>()
@@ -221,15 +227,21 @@ api.post('/materials/:id/images', async (c) => {
   const file = form?.get('file')
   if (!(file instanceof File)) return c.json({ error: '파일이 없습니다' }, 400)
   const ext = IMAGE_TYPES[file.type]
-  if (!ext) return c.json({ error: 'JPG·PNG·WebP 만 올릴 수 있습니다' }, 400)
-  if (file.size > MAX_IMAGE_BYTES) return c.json({ error: '이미지는 5MB 이하로 올려주세요' }, 400)
+  if (!ext) return c.json({ error: 'JPG·PNG·WebP 이미지 또는 MP4·WebM 영상만 올릴 수 있습니다' }, 400)
+  const video = file.type.startsWith('video/')
+  if (video && row.kind === 'before_after') return c.json({ error: '비포애프터에는 치료 전·후 이미지를 올려주세요' }, 400)
+  if (!file.size || file.size > (video ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) return c.json({ error: '이미지는 5MB, 영상은 25MB 이하의 파일을 올려주세요' }, 400)
+  const head = new Uint8Array(await file.slice(0, 32).arrayBuffer())
+  const ascii = (a: number, b: number) => String.fromCharCode(...head.slice(a, b))
+  const valid = ext === 'png' ? head[0] === 137 && ascii(1, 4) === 'PNG' : ext === 'jpg' ? head[0] === 255 && head[1] === 216 && head[2] === 255 : ext === 'webp' ? ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP' : ext === 'mp4' ? ascii(4, 8) === 'ftyp' : head[0] === 26 && head[1] === 69 && head[2] === 223 && head[3] === 163
+  if (!valid) return c.json({ error: '파일 내용과 형식이 일치하지 않습니다' }, 400)
   const images = parseJson<ImageRef[]>(row.images_json, [])
   const limit = row.kind === 'before_after' ? 2 : 6
   if (images.length >= limit) return c.json({ error: `이 자료에는 이미지를 ${limit}장까지 넣을 수 있습니다` }, 400)
   const key = `h${hid}/m${row.id}/${randomToken(8)}.${ext}`
   await c.env.MEDIA.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } })
   const caption = String(form?.get('caption') || '').slice(0, 60)
-  images.push(caption ? { key, caption } : { key })
+  images.push({ key, ...(caption ? { caption } : {}), media_type: video ? 'video' : 'image' })
   await c.env.DB.prepare(`UPDATE materials SET images_json = ?, updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
   return c.json({ images })
 })

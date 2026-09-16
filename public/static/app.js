@@ -22,6 +22,8 @@
     return String(text || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : `<div>${l.trim() ? esc(l) : '&nbsp;'}</div>`).join('');
   }
   function imgUrl(key, token) { return '/a/' + key + (token ? '?t=' + token : ''); }
+  const isVideo = im => im?.media_type === 'video' || /\.(mp4|webm)$/i.test(im?.key || '');
+  const mediaHtml = (im, token, cls='w-full') => isVideo(im) ? `<video src="${imgUrl(im.key, token)}" controls playsinline preload="metadata" class="${cls}" aria-label="${esc(im.caption || '설명 영상')}"></video>` : `<img src="${imgUrl(im.key, token)}" alt="${esc(im.caption || '설명 이미지')}" class="${cls}" loading="lazy">`;
   function toast(msg, ok) {
     const t = document.createElement('div');
     t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm z-[70] fade-in ' + (ok === false ? 'bg-rose-600' : 'bg-slate-900');
@@ -60,7 +62,7 @@
     return [...new Set([...preset, ...existing])];
   }
   function materialCard(m, extra) {
-    const img = m.images[0] ? `<img src="${imgUrl(m.images[0].key)}" class="w-full h-32 object-cover rounded-t-xl bg-slate-100" loading="lazy">` : `<div class="w-full h-16 rounded-t-xl bg-slate-100 flex items-center justify-center text-slate-300 text-2xl"><i class="fa-regular fa-file-lines"></i></div>`;
+    const img = m.images[0] ? `<button class="media-card-cover" data-preview="${m.id}" aria-label="${esc(m.title)} 크게 보기">${isVideo(m.images[0]) ? '<span class="video-cover"><i class="fa-solid fa-circle-play"></i><span>영상 설명자료</span></span>' : mediaHtml(m.images[0])}<span class="media-cover-label">${isVideo(m.images[0]) ? '영상' : '이미지'} · ${m.images.length}개 <i class="fa-solid fa-expand"></i></span></button>` : `<button data-preview="${m.id}" class="empty-media-cover" aria-label="${esc(m.title)} 설명 보기"><i class="fa-regular fa-image"></i><span>이미지·영상 추가 전</span></button>`;
     return `<div class="bg-white rounded-xl border shadow-sm flex flex-col fade-in">
       ${img}
       <div class="p-3 flex-1">
@@ -76,13 +78,13 @@
     const list = state.materials.filter((m) => (!state.kindFilter || groupKind(m.kind) === state.kindFilter) && (!state.categoryFilter || m.category === state.categoryFilter) && (!q || (m.title + ' ' + (m.category || '') + ' ' + (m.body || '')).toLocaleLowerCase().includes(q)));
     const cats = categoriesFor(state.kindFilter);
     const categoryLabel = state.kindFilter === 'disease' ? '질환 분류' : state.kindFilter ? '진료 분류' : '세부 분류';
-    const allExamplesAdded = state.library.examples.length > 0 && state.library.imported_count >= state.library.examples.length;
+    const allExamplesAdded = state.library.examples.length > 0 && state.library.imported_count >= state.library.examples.length && !state.library.missing_images;
     const countKind = (kind) => state.materials.filter((m) => !kind || groupKind(m.kind) === kind).length;
     main.innerHTML = `
       <div class="flex flex-wrap items-center gap-3 mb-4">
         <h2 class="text-lg font-bold">자료함 <span class="text-sm font-normal text-slate-500">${state.materials.length}개</span></h2>
         <input id="q" value="${esc(state.filter)}" aria-label="자료 검색" placeholder="제목·진료 항목·내용 검색" class="border rounded-lg px-3 py-2 text-sm w-56">
-        <button id="add-examples" class="ml-auto px-3 py-2 rounded-lg border bg-white text-sm font-semibold" ${allExamplesAdded ? 'disabled' : ''}>${allExamplesAdded ? '예시자료 추가됨' : '예시자료 ' + state.library.examples.length + '개 넣기'}</button>
+        <button id="add-examples" class="ml-auto px-3 py-2 rounded-lg border bg-white text-sm font-semibold" ${allExamplesAdded ? 'disabled' : ''}>${allExamplesAdded ? '이미지 목업 추가됨' : state.library.missing_images ? '기존 예시에 이미지 채우기' : '이미지 목업 ' + state.library.examples.length + '개 넣기'}</button>
         <button id="new" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-1"></i>자료 등록</button>
       </div>
       <nav class="material-kind-tabs" aria-label="자료 유형">${[['', '전체'], ...LIBRARY_KINDS.map(k => [k, KIND[k]])].map(([k, label]) => `<button data-kind-filter="${k}" aria-pressed="${state.kindFilter === k}">${label}<span>${countKind(k)}</span></button>`).join('')}</nav>
@@ -106,6 +108,7 @@
     const nb = $('#new') || $('#new2'); if (nb) nb.onclick = () => openEditor(null);
     const nb2 = $('#new2'); if (nb2) nb2.onclick = () => openEditor(null);
     main.querySelectorAll('[data-add]').forEach((b) => b.onclick = () => { const id = Number(b.dataset.add); state.today = state.today.includes(id) ? state.today.filter((x) => x !== id) : [...state.today, id]; saveToday(); render(); });
+    main.querySelectorAll('[data-preview]').forEach(b => b.onclick = () => startPresent([state.materials.find(m => m.id === Number(b.dataset.preview))]));
     main.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => openEditor(state.materials.find((m) => m.id === Number(b.dataset.edit))));
   }
 
@@ -113,7 +116,7 @@
     if ($('#example-dialog')) return;
     const box = document.createElement('div'); box.id = 'example-dialog'; box.className = 'example-dialog-backdrop';
     const returnFocus = document.activeElement;
-    box.innerHTML = `<section class="example-dialog" role="dialog" aria-modal="true" aria-labelledby="example-title"><h2 id="example-title">치과 예시자료 ${state.library.examples.length}개 넣기</h2><p>${esc(state.library.example_notice)}</p><ul>${state.library.examples.map(m => `<li><span>${KIND[m.kind]} · ${esc(m.category)}</span><b>${esc(m.title)}</b></li>`).join('')}</ul><p>실제 환자 사진이나 임의의 진료비가 없는 설명 초안입니다. 현재 병원 자료함에만 추가하며 기존 자료는 수정하지 않습니다. 반복 실행해도 중복 추가하지 않습니다.</p><label class="example-confirm"><input id="sample-confirm" type="checkbox">검토용 예시임을 확인했습니다.</label><p id="sample-status" role="status"></p><footer><button id="sample-cancel" class="px-4 py-2 border rounded-lg">취소</button><button id="sample-import" class="px-4 py-2 rounded-lg bg-slate-900 text-white">자료함에 추가</button></footer></section>`;
+    box.innerHTML = `<section class="example-dialog" role="dialog" aria-modal="true" aria-labelledby="example-title"><h2 id="example-title">치과 이미지 목업 ${state.library.examples.length}개 넣기</h2><p>${esc(state.library.example_notice)}</p><ul>${state.library.examples.map(m => `<li><span>${KIND[m.kind]} · ${esc(m.category)}</span><b>${esc(m.title)}</b></li>`).join('')}</ul><p>설명용 도식과 참고 이미지를 배치한 이미지 목업입니다. 실제 환자 사례나 확정된 치료 안내가 아닙니다. 현재 병원 자료함에만 추가하며 기존 자료는 수정하지 않습니다. 반복 실행해도 중복 추가하지 않습니다.</p><label class="example-confirm"><input id="sample-confirm" type="checkbox">검토용 예시임을 확인했습니다.</label><p id="sample-status" role="status"></p><footer><button id="sample-cancel" class="px-4 py-2 border rounded-lg">취소</button><button id="sample-import" class="px-4 py-2 rounded-lg bg-slate-900 text-white">자료함에 추가</button></footer></section>`;
     document.body.append(box); const oldOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
     let busy = false;
     const close = () => { if (busy) return; box.remove(); document.body.style.overflow = oldOverflow; returnFocus?.focus(); };
@@ -133,7 +136,7 @@
         const result = await api('/materials/examples', { method: 'POST', body: JSON.stringify({ confirmed: true }) });
         await Promise.all([loadMaterials(), loadLibrary()]);
         busy = false; close(); state.kindFilter = ''; state.categoryFilter = ''; state.filter = ''; render();
-        toast(result.added ? `예시자료 ${result.added}개를 추가했습니다. 의료진 검토 후 사용해 주세요.` : '이미 추가한 예시는 그대로 유지했습니다.');
+        toast(result.added ? `이미지 목업 ${result.added}개를 추가했습니다.` : result.updated ? `기존 예시 ${result.updated}개에 이미지를 채웠습니다.` : '이미 추가한 목업은 그대로 유지했습니다.');
       } catch (e) { $('#sample-status').textContent = e.message; }
       finally { busy = false; if (box.isConnected) { $('#sample-import').disabled = false; $('#sample-cancel').disabled = false; } }
     };
@@ -164,15 +167,15 @@
             <label class="sm:col-span-2 min-w-0">제목<input id="ed-title" value="${esc(m.title)}" maxlength="80" placeholder="예: 임플란트 치료 과정" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
             <label>${m.kind === 'disease' ? '질환 분류' : '진료 분류'}<select id="ed-category-select" class="mt-1 w-full border rounded-lg px-3 py-2"><option value="">분류 선택</option>${categoryOptions.map(c => `<option value="${esc(c)}" ${m.category === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="__custom" ${customCategory ? 'selected' : ''}>직접 입력</option></select><input id="ed-cat" value="${esc(m.category || '')}" maxlength="30" placeholder="사용자 분류 입력" aria-label="직접 입력 분류" class="mt-1 w-full border rounded-lg px-3 py-2 ${customCategory ? '' : 'hidden'}"></label>
           </div>
-          <label class="block">${m.kind === 'cost' ? '설명(선택)' : '설명 본문'}<span class="text-slate-400 ml-2">줄 앞에 "- "를 붙이면 항목으로 표시됩니다</span>
-            <textarea id="ed-body" rows="7" class="mt-1 w-full border rounded-lg px-3 py-2 leading-relaxed" placeholder="${m.kind === 'notice' ? '- 2시간 동안 거즈를 물고 계세요\n- 오늘은 뜨거운 음식·음주·흡연을 피하세요' : '환자분께 말로 설명하던 내용을 그대로 적어 주세요'}">${esc(m.body || '')}</textarea></label>
+          <details class="supplemental-body"><summary>보충 설명 (선택)</summary><label class="block">${m.kind === 'cost' ? '설명(선택)' : '설명 메모'}<span class="text-slate-400 ml-2">줄 앞에 "- "를 붙이면 항목으로 표시됩니다</span>
+            <textarea id="ed-body" rows="7" class="mt-1 w-full border rounded-lg px-3 py-2 leading-relaxed" placeholder="${m.kind === 'notice' ? '- 2시간 동안 거즈를 물고 계세요\n- 오늘은 뜨거운 음식·음주·흡연을 피하세요' : '환자분께 말로 설명하던 내용을 그대로 적어 주세요'}">${esc(m.body || '')}</textarea></label></details>
           ${m.kind === 'cost' ? `<div><div class="font-semibold mb-1">비용표</div><table class="w-full text-sm"><thead class="text-slate-500 text-xs"><tr><th class="text-left">항목</th><th class="text-right">단가</th><th class="text-right">수량</th><th class="text-left">비고</th><th></th></tr></thead><tbody>${costRows}</tbody></table>
             <div class="flex items-center mt-2"><button id="ed-cadd" class="text-sky-700 text-sm"><i class="fa-solid fa-plus mr-1"></i>항목 추가</button><div class="ml-auto font-bold">합계 ${won(total)}</div></div>
             <p class="text-xs text-slate-400 mt-1">환자용 안내장에는 "안내 시점 기준 금액이며 진단에 따라 달라질 수 있습니다"가 자동으로 붙습니다.</p></div>` : ''}
           <div>
-            <div class="font-semibold mb-1">${m.kind === 'before_after' ? '비포 · 애프터 사진 (첫 장 = 치료 전, 둘째 장 = 치료 후)' : '이미지'} <span class="text-slate-400 font-normal">${m.images.length}/${imgLimit} · JPG·PNG·WebP 5MB 이하</span></div>
-            ${m.id ? `<div class="flex flex-wrap gap-2">${m.images.map((im, i) => `<div class="relative"><img src="${imgUrl(im.key)}" class="h-24 w-32 object-cover rounded-lg border">${m.kind === 'before_after' ? `<span class="absolute top-1 left-1 text-[10px] bg-black/60 text-white px-1 rounded">${i === 0 ? '치료 전' : '치료 후'}</span>` : ''}<button data-imgdel="${im.key}" class="absolute -top-2 -right-2 bg-white border rounded-full w-6 h-6 text-xs text-rose-600">&times;</button></div>`).join('')}
-              ${m.images.length < imgLimit ? `<label class="h-24 w-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-sky-400"><i class="fa-solid fa-image"></i><span class="text-xs mt-1">올리기</span><input type="file" id="ed-file" accept="image/jpeg,image/png,image/webp" class="hidden"></label>` : ''}</div>`
+            <div class="font-semibold mb-1">${m.kind === 'before_after' ? '비포 · 애프터 사진 (첫 장 = 치료 전, 둘째 장 = 치료 후)' : '이미지 · 영상'} <span class="text-slate-400 font-normal">${m.images.length}/${imgLimit} · 이미지 5MB / MP4·WebM 영상 25MB 이하</span></div>
+            ${m.id ? `<div class="flex flex-wrap gap-2">${m.images.map((im, i) => `<div class="relative">${mediaHtml(im, null, 'h-24 w-32 object-contain rounded-lg border')}${m.kind === 'before_after' ? `<span class="absolute top-1 left-1 text-[10px] bg-black/60 text-white px-1 rounded">${i === 0 ? '치료 전' : '치료 후'}</span>` : ''}<button data-imgdel="${im.key}" class="absolute -top-2 -right-2 bg-white border rounded-full w-6 h-6 text-xs text-rose-600">&times;</button></div>`).join('')}
+              ${m.images.length < imgLimit ? `<label class="h-24 w-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-sky-400"><i class="fa-solid fa-image"></i><span class="text-xs mt-1">올리기</span><input type="file" id="ed-file" accept="${m.kind === 'before_after' ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,video/mp4,video/webm'}" class="hidden"></label>` : ''}</div>`
               : `<p class="text-xs text-slate-400">제목을 먼저 저장하면 이미지를 올릴 수 있습니다.</p>`}
           </div>
         </div>
@@ -242,11 +245,14 @@
       const [b, a] = m.images;
       return `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure>${im ? `<img src="${imgUrl(im.key, token)}" class="w-full">` : '<div class="h-48 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500">사진 없음</div>'}<figcaption>${l}</figcaption></figure>`).join('')}</div>${m.body ? `<div class="text mt-6">${bodyHtml(m.body)}</div>` : ''}`;
     }
+    if (m.images.length) {
+      return `<div class="media-stage">${m.images.map(im => `<figure>${mediaHtml(im, token)}${im.caption ? `<figcaption>${esc(im.caption)}</figcaption>` : ''}</figure>`).join('')}</div>${m.body ? `<details class="media-supplement"><summary>보충 설명 보기</summary><div class="text">${bodyHtml(m.body)}</div></details>` : ''}`;
+    }
     if (m.kind === 'cost') {
       const total = m.cost.reduce((s, c) => s + (Number(c.price) || 0) * (Number(c.qty) || 1), 0);
       return `${m.body ? `<div class="text mb-6">${bodyHtml(m.body)}</div>` : ''}<table class="w-full max-w-2xl"><tbody>${m.cost.map((c) => `<tr class="border-b border-slate-700"><td class="py-3">${esc(c.name)}${c.note ? `<div class="text-sm text-slate-400">${esc(c.note)}</div>` : ''}</td><td class="py-3 text-right text-slate-400">${(c.qty || 1) > 1 ? `${won(c.price)} × ${c.qty}` : ''}</td><td class="py-3 text-right font-bold">${won((Number(c.price) || 0) * (Number(c.qty) || 1))}</td></tr>`).join('')}<tr><td class="py-4 font-extrabold" colspan="2">합계</td><td class="py-4 text-right font-extrabold text-sky-300">${won(total)}</td></tr></tbody></table><p class="text-sm text-slate-400 mt-4">안내 시점 기준 금액이며 진단에 따라 달라질 수 있습니다.</p>`;
     }
-    const imgs = m.images.map((im) => `<figure><img src="${imgUrl(im.key, token)}" class="w-full">${im.caption ? `<figcaption class="text-center text-slate-400 mt-2">${esc(im.caption)}</figcaption>` : ''}</figure>`).join('');
+    const imgs = m.images.map((im) => `<figure>${mediaHtml(im, token)}${im.caption ? `<figcaption class="text-center text-slate-400 mt-2">${esc(im.caption)}</figcaption>` : ''}</figure>`).join('');
     return `<div class="grid ${m.images.length ? 'lg:grid-cols-2' : ''} gap-8 items-start">${m.body ? `<div class="text">${bodyHtml(m.body)}</div>` : ''}${imgs ? `<div class="space-y-4">${imgs}</div>` : ''}</div>`;
   }
   function startPresent(list) {
