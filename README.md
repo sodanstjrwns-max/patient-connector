@@ -71,7 +71,9 @@
 - `/g/:token`: 환자 안내장. `/optout/:token`: 병원별 수신거부.
 - `/privacy`, `/terms`, `/legal-guide`: 정책·병원 안내 문구.
 - API: `/api/materials` GET/POST, `/api/materials/:id` PUT/DELETE, `/api/dispatches` GET/POST, `/api/g/:token` GET. 발송은 `channel=link|alimtalk`, 자료 유형은 `kind`, 진료 항목은 `category`입니다.
-- **유형·세부 분류·예시 추가는 로컬 구현·검증 상태이며 운영 미배포, GitHub 미푸시입니다.** 운영에서는 코드 반영 전에 `0002_material_examples.sql`, `0003_material_annotations.sql`을 포함한 마이그레이션을 적용해야 합니다. 필기 기능도 현재 미리보기 검증 상태이며 운영 미배포입니다. 실제 알림톡을 발송하지 않았습니다. 알림톡 사용에는 유효한 키·채널·승인 템플릿 설정이 필요합니다.
+- **2026-09-16 운영 반영 완료**: 유형·세부 분류·이미지/영상·필기 기능을 기존 사용자 소유 Cloudflare Pages `patient-connect`에 배포했습니다. 배포 소스 `4329ba6`, 배포 URL https://6fea281b.patient-connect.pages.dev, 정적 자산 버전 `v20260916-annotations`. 운영 D1 마이그레이션 `0001`~`0003` 적용 완료. GitHub에는 아직 푸시하지 않았습니다.
+- **서울비디치과 자료함 등록 완료**: 기존 2개를 보존하고 진료설명 4개·질환설명 4개 이미지 목업을 추가해 총 10개입니다. 다른 병원 자료함과 기존 발송 2건은 그대로 유지했습니다. 등록 전 운영 SQL 백업을 복원해 무결성을 확인했으며, 기존 hospitals/materials/dispatches/optouts 행의 보존을 검증했습니다.
+- 운영 검증 범위: `/app` 버전, 비로그인 API 401, PNG 8개 응답, Hub 인증 시작 리디렉션, D1 등록 내용, 기존 D1/R2 바인딩과 환경변수 이름 보존. 실제 사용자 Hub 로그인 완료 후 전체 클릭 흐름과 실제 SOLAPI 발송은 검증하지 않았습니다. **이번 작업의 실제 환자 메시지 발송은 0건**입니다. 알림톡 사용에는 유효한 키·채널·승인 템플릿 설정이 필요합니다.
 
 ## 데이터
 
@@ -105,4 +107,4 @@ npm run test:annotations
 
 ## 다음 단계
 
-운영 반영 전 GitHub 변경을 다시 확인하고 합의된 기준에 변경을 반영해야 합니다. 실제 허브 SSO 및 SOLAPI 운영 발송 검증은 이번 로컬 검사에 포함하지 않았습니다. 기존 자료의 질환설명 재분류는 내용 확인 후 병원에서 선택적으로 수행합니다.
+이번 운영 반영 전 실제 GitHub origin을 다시 확인했으며 추가 원격 변경은 없었습니다. 향후 GitHub 푸시는 별도 승인 후 진행합니다. 실제 사용자 Hub 로그인 완료 흐름, SOLAPI 설정 및 운영 발송, 실물 iPad/Apple Pencil 검증은 별도 작업입니다. 기존 자료의 질환설명 재분류는 내용 확인 후 병원에서 선택적으로 수행합니다.
