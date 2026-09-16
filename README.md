@@ -9,7 +9,7 @@
 - GitHub: https://github.com/sodanstjrwns-max/patient-connector
 - 실제 GitHub 기준: `5abc7ad`. 변경 전 `origin/main`을 다시 fetch하여 원격 추가 변경이 없음을 확인했습니다. 로컬 개선은 GitHub에 아직 푸시하지 않았습니다.
 - 기존 운영 배포: https://6fea281b.patient-connect.pages.dev (`4329ba6`, 2026-09-16).
-- 상담 안전 업그레이드: 로컬 구현·검증 완료, 운영 반영 대기. 자산 버전 `v20260916-safe-consult`.
+- **상담 안전 업그레이드 운영 반영 완료 (2026-09-16)**: https://8e45c0c2.patient-connect.pages.dev, 소스 커밋 `e806091`, 자산 버전 `v20260916-safe-consult`. 마이그레이션 `0001`~`0004` 적용 완료.
 - 배포 경로: 사용자 소유 Cloudflare Pages `patient-connect`, 브랜치 `main`. 기존 시크릿을 교체하지 않습니다.
 - D1: `patient-connect-production`, binding `DB`, ID `a38fa276-fe4f-4397-b184-6c0180168064`.
 - R2: `patient-connect-assets`, binding `MEDIA`.
@@ -109,7 +109,9 @@ D1 테이블: hospitals, materials, dispatches, views, optouts, hub_profile_cach
 
 - `materials.images_json`: `{key, caption?, media_type?}[]`, `cost_json`: 비용 항목 배열, `guidance_json`: 비용/사례 안내 및 내부 전송 확인.
 - `dispatches.materials_json`: 발행 시점 불변 자료·필기·공개 안내 스냅샷. 현재 병원 연락처는 안내장 열람 시 조회합니다.
-- `0002_material_examples.sql`, `0003_material_annotations.sql`은 기존 운영 적용됨. `0004_consultation_safety.sql`은 컬럼/테이블/고유 인덱스 추가만 하며 기존 자료·발송 스냅샷은 바꾸지 않습니다.
+- `0002_material_examples.sql`, `0003_material_annotations.sql`, `0004_consultation_safety.sql` 운영 적용 완료. `0004`는 컬럼/테이블/고유 인덱스 추가만 하며 기존 자료·발송 스냅샷은 바꾸지 않습니다.
+- 이번 배포 직전 운영에 있던 자료 18개·발송 이력 2건을 포함하여 hospitals/materials/dispatches/optouts/material_annotations의 기존 행·컬럼값 보존을 확인했습니다. 운영 테스트용 자료나 실제 메시지는 생성하지 않았습니다. D1/R2 바인딩과 기존 환경변수 이름도 보존했습니다.
+- 운영 검증은 두 배포 URL의 HTML 버전·정적 파일 해시, 비로그인 API 401, Hub 인증 시작 302 및 D1 보존 확인입니다. 실제 사용자 SSO 로그인 완료 후 전체 클릭 테스트는 아닙니다. urllib 사이트 요청 403은 curl로 재확인해 정상 200/자산 해시 일치를 확인했습니다.
 - SESSION_SECRET, PS_SSO_SECRET, PHONE_ENC_KEY, HUB_API_KEY, SOLAPI_API_KEY/SECRET 등은 서버 시크릿. 코드/프런트/Git에 비밀값을 넣지 않습니다.
 
 ## 개발·검증
