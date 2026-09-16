@@ -1,13 +1,13 @@
 /* Patient Connect 공통 스타일 */
 .fade-in { animation: fadeIn .25s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none;} }
-.pc-body { white-space: pre-line; line-height: 1.75; }
+.pc-body { line-height: 1.75; }
 .pc-body .li { display: flex; gap: .5rem; }
 .pc-body .li:before { content: '•'; color: #0ea5e9; }
 .present { position: fixed; inset: 0; background: #0f172a; color: #f8fafc; z-index: 50; display: flex; flex-direction: column; }
 .present .stage { flex: 1; overflow: auto; padding: 2.5rem clamp(1rem, 4vw, 4rem); }
 .present h1 { font-size: clamp(1.6rem, 3.2vw, 2.6rem); font-weight: 800; line-height: 1.3; }
-.present .text { font-size: clamp(1.15rem, 2vw, 1.6rem); line-height: 1.8; white-space: pre-line; max-width: 60ch; }
+.present .text { font-size: clamp(1.15rem, 2vw, 1.6rem); line-height: 1.8; max-width: 60ch; }
 .present .text .li:before { content: '•'; color: #38bdf8; margin-right: .5rem; }
 .present img { max-height: 62vh; object-fit: contain; border-radius: .75rem; background: #1e293b; }
 .present table { font-size: clamp(1rem, 1.8vw, 1.4rem); }

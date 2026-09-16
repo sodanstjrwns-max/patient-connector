@@ -16,7 +16,7 @@
     return j;
   }
   function bodyHtml(text) {
-    return String(text || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : esc(l)).join('\n');
+    return String(text || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : `<div>${l.trim() ? esc(l) : '&nbsp;'}</div>`).join('');
   }
   function imgUrl(key, token) { return '/a/' + key + (token ? '?t=' + token : ''); }
   function toast(msg, ok) {

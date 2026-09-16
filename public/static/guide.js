@@ -8,7 +8,7 @@
   const m = location.pathname.match(/^\/(g|optout)\/([0-9a-f]{32})$/);
   if (!m) { app.innerHTML = '<div class="p-10 text-center text-slate-500">잘못된 주소입니다.</div>'; return; }
   const mode = m[1], token = m[2];
-  const bodyHtml = (t) => String(t || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : esc(l)).join('\n');
+  const bodyHtml = (t) => String(t || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : `<div>${l.trim() ? esc(l) : '&nbsp;'}</div>`).join('');
   const img = (im) => `<figure class="my-3"><img src="/a/${im.key}?t=${token}" class="w-full rounded-xl bg-slate-100" loading="lazy">${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}</figure>`;
 
   function materialHtml(x, i) {
