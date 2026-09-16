@@ -174,7 +174,7 @@ PC.openPreparation = () =>
   (location.href =
     "/prepare" + (PC.currentDraft() ? "?session=" + PC.currentDraft() : ""));
 PC.patientPreviewHTML = (d) =>
-  `<div class="review-intro"><span class="eyebrow">PATIENT VIEW</span><h3>${PC.esc(d.patient_label || "환자 표시명 없음")}</h3><p>아래 내용만 전달됩니다. 내부 메모는 포함되지 않습니다.</p></div>${d.slides
+  `<div class="review-intro"><span class="eyebrow">PATIENT VIEW</span><h3>${PC.esc(d.patient_label || "선택한 설명자료")}</h3><p>아래 내용만 전달됩니다. 내부 메모는 포함되지 않습니다.</p></div>${d.slides
     .filter((s) => s.include_in_share !== false && s.asset?.type !== "compare")
     .map(
       (s, i) =>

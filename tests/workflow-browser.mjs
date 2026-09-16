@@ -34,7 +34,8 @@ try {
   );
   await p.goto(base + "/");
   await p.waitForSelector(".add-to-consult");
-  await p.locator(".add-to-consult").first().click();
+  // Keep coverage for legacy saved-workflow recovery, independent of the new library basket.
+  await p.evaluate(() => PC.addToConsult(1));
   await p.waitForFunction(() => !!PC.currentDraft());
   const draftId = await p.evaluate(() => PC.currentDraft());
   await p.goto(base + "/prepare?session=" + draftId);
@@ -42,7 +43,7 @@ try {
   const length = await p.locator(".selected-row").count();
   check(
     length > 1,
-    "Library add button creates server-backed multi-step basket",
+    "Legacy consultation helper preserves server-backed multi-step drafts",
   );
   await p.locator("#prep-patient-label").fill("Workflow browser patient");
   await p.locator("#prep-internal-note").fill("PRIVATE_GLOBAL_NEVER_SEND");

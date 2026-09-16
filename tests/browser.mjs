@@ -37,8 +37,9 @@ try {
   await page.waitForURL(base + "/");
   await page.waitForSelector(".asset-card");
   check(
-    (await page.locator("#workspace-metrics .metric").count()) === 4,
-    "Authenticated library loads four live metrics",
+    (await page.locator("#workspace-metrics, #recent-drafts").count()) === 0 &&
+      (await page.locator(".asset-card").count()) > 0,
+    "Library prioritizes materials without patient dashboard or recent consultations",
   );
   await page.locator("#search-input").fill("없는검색어-QAX");
   await page.waitForFunction(() =>
@@ -120,6 +121,7 @@ try {
   await page.goto(base + "/consult/1");
   await page.waitForSelector("#draw-canvas");
   await page.waitForFunction(() => !S.busy);
+  await page.locator("#studio-note-options > summary").click();
   await page.locator("#patient-label").fill("브라우저 검증 환자");
   await page.locator("#add-current-slide").click();
   await page.locator("#slide-note").fill("첫 단계 상담 메모");

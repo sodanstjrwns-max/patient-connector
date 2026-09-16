@@ -1,8 +1,22 @@
-# 페이션트 커넥트 · Care Workspace
+# 페이션트 커넥트 · Clarity Library
 
 병원의 설명자료, 상담 준비·판서, 환자 안내장, 열람 확인과 후속 응대를 연결하는 상담 도구입니다. 치과·피부미용·성형·정형재활·안과·한방 등 여러 진료 분야를 지원합니다.
 
-## 현재 상태 — 2026-09-08
+## 최신 작업 — 2026-09-16 · 미리보기, 운영 미반영
+
+- 작업 전 원격 `genspark/main`을 fetch하여 기준 커밋 `01d3b5e`와 로컬이 동일하고 미커밋 변경이 없음을 확인했습니다.
+- **미리보기**: https://3000-inm1c6uo4zqtact2e0j9v-8f57ffe2.sandbox.novita.ai
+- 미리보기 자산 버전: `clarity-20260916-1`. 아래 기존 운영 배포는 그대로 유지합니다. 이번 작업에서 원격 DB 마이그레이션·운영 배포·실제 메시지 발송은 하지 않았습니다.
+- 디자인 방향: **설명이 쉬워지는 프리미엄 상담 도구**. 홈은 환자별 대시보드가 아닌 자료 라이브러리입니다. 현황/최근 상담 섹션을 제거하고 검색·분류·자료 카드·설명 화면을 전면 개편했습니다.
+- 화이트/블루 라이브러리, 다크 네이비 설명 모드, 재정리한 관리·모바일 안내장 스타일. `clarity.css`는 기존 공통/워크플로 스타일 뒤에 적용합니다.
+- 자료 열람은 초안을 만들지 않습니다. `전송 담기`로 선택한 자료 ID만 사용자별 sessionStorage에 보관하며, 내용·환자 정보는 저장하지 않습니다. 선택 자료는 설명 화면을 다녀와도 유지됩니다.
+- 빠른 전송은 선택 자료의 전체 단계를 새 빈 상담 레코드에 저장해 기존 보안·미리보기·발행 API를 재사용합니다. 기존 초안 포인터·환자명·내부/외부 메모·일정·판서를 가져오지 않습니다. 40단계 상한 및 재시도 중복 방지를 유지합니다.
+- 스튜디오는 기본적으로 개인정보 입력 없이 자료 설명에 집중합니다. 기존 판서/메모 저장 옵션은 접힌 영역에 유지하며 저장된 기존 상담을 다시 열면 펼칩니다.
+- **카카오톡 전송**: 안내문+링크 복사 후 직원이 카카오톡에 붙여넣어 전송하거나, 지원 기기의 공유 메뉴에서 앱을 직접 선택합니다. 링크 발급을 발송 완료로 표시하지 않습니다.
+- **SOLAPI 자동 알림톡·카카오 공유 SDK는 미연동**입니다. 키/채널/승인 템플릿이 제공되지 않아 전화번호 자동 발송을 구현한 것으로 표시하지 않았습니다.
+- 검증: 기존 130개 회귀 검사 + 신규 자료 중심 공유 28개 = **158개 검사 통과**. 신규 검사는 이전 상담 정보 격리, 전체 단계 미리보기, 응답 유실 재시도, 확인 강제, 카카오용 문구 복사, 비로그인 발급 차단, 만료/회수 및 모바일 넘침을 포함합니다.
+
+## 기존 운영 배포 상태 — 2026-09-08
 
 - 운영: https://patient-connect.pages.dev
 - 상담 준비: https://patient-connect.pages.dev/prepare
@@ -16,7 +30,7 @@
 
 ## 디자인 및 주요 기능
 
-포레스트 그린(`#285847`)과 따뜻한 종이색을 사용하는 반응형 Care Workspace 디자인입니다. 라이브러리, 상담 준비, 스튜디오, 관리, 환자 안내장을 연결했습니다. 모바일 사이드바/메모 드로어, 키보드 모달 포커스, 본문 건너뛰기, reduced-motion을 지원합니다.
+최신 미리보기는 화이트·블루(`#245bea`)·잉크 네이비의 Clarity Library 디자인입니다. 자료 찾기 → 크게 보여주기 → 필요한 자료만 공유하기를 중심으로 구성합니다. 기존 병원 관리·초안·세트·후속 응대 기능은 보존하되 홈에 환자별 현황을 표시하지 않습니다. 모바일 사이드바/메모 드로어, 키보드 모달 포커스, 본문 건너뛰기, reduced-motion을 지원합니다.
 
 ### 설명자료와 병원 관리
 
@@ -65,48 +79,48 @@
 
 ## 간단 사용법
 
-1. `/login`에서 로그인하거나 병원 계정을 만듭니다.
-2. 라이브러리에서 **상담에 담기**로 자료를 선택합니다.
-3. `/prepare`에서 순서를 정리하거나 상담 세트를 적용하고 환자 표시명·일정·내부 메모를 입력합니다.
-4. 스튜디오에서 선택 단계에 설명·판서·환자용/내부 메모를 작성하고 자동저장 상태를 확인합니다.
-5. **환자에게 전송**으로 준비 화면에 돌아가 전송 대상과 안내장 미리보기를 확인·승인하고 링크를 발급합니다.
-6. 후속 응대함에서 질문을 처리합니다. 최근 상담에서 이어가거나 **새 환자**로 이전 환자 문맥을 비웁니다.
+1. `/`에서 검색·진료·자료 종류로 필요한 설명을 찾습니다. `/` 키로 검색창에 바로 이동할 수 있습니다.
+2. 자료를 눌러 설명 화면에서 함께 봅니다. 환자 등록은 필요 없습니다.
+3. 전달할 자료는 라이브러리의 **전송 담기**로 선택합니다. 하단 **선택 자료 보내기**에서 전체 단계·주의사항을 미리보고 확인합니다. 전송용 링크 발급은 병원 로그인 후 가능합니다.
+4. 유효기간을 정해 링크를 만들고 **카카오톡용 안내문 복사** → 카카오톡 대화방에 붙여넣기 → 직접 전송합니다. 지원 기기에서는 **공유 앱 선택**도 가능합니다. 자동 알림톡 발송은 아닙니다.
+5. 설명 화면의 **이 자료만 바로 보내기**는 원본 전체 단계만 공유합니다. 메모/판서를 별도로 담은 경우 기존 **환자에게 전송** 경로에서 확인 후 발행합니다.
+6. `/manage?tab=sessions`에서 기존 상담/안내장 이력과 링크 회수를 관리합니다. 기존 `/prepare`의 세트·초안·후속 응대 기능은 그대로 사용할 수 있습니다.
 
 ## 화면 및 API
 
-| 화면 | 용도 |
-| --- | --- |
-| `/`, `/?view=favorites` | 라이브러리·즐겨찾기 |
-| `/prepare?session=:id` | 상담 준비·복원 |
-| `/prepare?new=1` | 새 환자 준비 |
-| `/prepare?tab=sets` | 병원 상담 세트 |
-| `/prepare?tab=followup` | 후속 응대함 |
-| `/prepare?session=:id&review=1` | 전송 전 확인 |
-| `/consult/:assetId?session=:id` | 상담 스튜디오 |
-| `/manage?tab=library` | 공개 자료 복제 |
-| `/manage?tab=sessions` | 상담 이력·공유 관리 |
-| `/manage?tab=settings` | 병원·계정 설정 |
-| `/manage`, `/manage?new=1` | 자료 관리·새 자료 |
-| `/cases`, `/admin` | 케이스·운영자 콘솔 |
-| `/login?mode=signup`, `/p/:token` | 가입·환자 안내장 |
-| `/journey`, `/consent`, `/market` | 준비 중 화면 |
+| 화면                              | 용도                |
+| --------------------------------- | ------------------- |
+| `/`, `/?view=favorites`           | 라이브러리·즐겨찾기 |
+| `/prepare?session=:id`            | 상담 준비·복원      |
+| `/prepare?new=1`                  | 새 환자 준비        |
+| `/prepare?tab=sets`               | 병원 상담 세트      |
+| `/prepare?tab=followup`           | 후속 응대함         |
+| `/prepare?session=:id&review=1`   | 전송 전 확인        |
+| `/consult/:assetId?session=:id`   | 상담 스튜디오       |
+| `/manage?tab=library`             | 공개 자료 복제      |
+| `/manage?tab=sessions`            | 상담 이력·공유 관리 |
+| `/manage?tab=settings`            | 병원·계정 설정      |
+| `/manage`, `/manage?new=1`        | 자료 관리·새 자료   |
+| `/cases`, `/admin`                | 케이스·운영자 콘솔  |
+| `/login?mode=signup`, `/p/:token` | 가입·환자 안내장    |
+| `/journey`, `/consent`, `/market` | 준비 중 화면        |
 
-| API | 메서드·역할 |
-| --- | --- |
-| `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/password` | POST 인증·계정 보안 |
-| `/api/auth/me`, `/api/clinic` | GET 사용자, GET/PUT 병원 |
-| `/api/treatments?specialty=` | GET 진료 항목 |
-| `/api/assets`, `/api/assets/:id` | GET/POST 목록·생성, GET/PUT/DELETE 상세·수정·삭제 |
-| `/api/assets/:id/duplicate`, `/api/assets/:id/favorite`, `/api/assets/:id/use` | POST 복제·즐겨찾기·사용 |
-| `/api/upload`, `/files/*?share=` | POST multipart, GET 권한 확인 R2 |
-| `/api/cases`, `/api/cases/:id` | GET/POST 목록·등록, DELETE 삭제 |
-| `/api/sessions`, `/api/sessions/:id` | GET/POST 목록·저장, GET/DELETE 개별 상담 |
-| `/api/sessions/:id/preview`, `/api/sessions/:id/share` | GET 미리보기, POST 발행·재발급, DELETE 회수 |
-| `/api/sets`, `/api/sets/:id` | GET/POST 목록·생성, PUT/DELETE 수정·삭제 |
-| `/api/share/:token`, `/api/share/:token/view` | GET 안내장, POST 열람 |
-| `/api/share/:token/feedback` | POST 환자 피드백 |
-| `/api/feedback`, `/api/feedback/:id` | GET 병원별 피드백, PUT 처리 상태 |
-| `/api/dashboard`, `/api/admin/stats`, `/ph?t=&s=&v=` | GET 통계·설명용 SVG |
+| API                                                                             | 메서드·역할                                       |
+| ------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `/api/auth/signup`, `/api/auth/login`, `/api/auth/logout`, `/api/auth/password` | POST 인증·계정 보안                               |
+| `/api/auth/me`, `/api/clinic`                                                   | GET 사용자, GET/PUT 병원                          |
+| `/api/treatments?specialty=`                                                    | GET 진료 항목                                     |
+| `/api/assets`, `/api/assets/:id`                                                | GET/POST 목록·생성, GET/PUT/DELETE 상세·수정·삭제 |
+| `/api/assets/:id/duplicate`, `/api/assets/:id/favorite`, `/api/assets/:id/use`  | POST 복제·즐겨찾기·사용                           |
+| `/api/upload`, `/files/*?share=`                                                | POST multipart, GET 권한 확인 R2                  |
+| `/api/cases`, `/api/cases/:id`                                                  | GET/POST 목록·등록, DELETE 삭제                   |
+| `/api/sessions`, `/api/sessions/:id`                                            | GET/POST 목록·저장, GET/DELETE 개별 상담          |
+| `/api/sessions/:id/preview`, `/api/sessions/:id/share`                          | GET 미리보기, POST 발행·재발급, DELETE 회수       |
+| `/api/sets`, `/api/sets/:id`                                                    | GET/POST 목록·생성, PUT/DELETE 수정·삭제          |
+| `/api/share/:token`, `/api/share/:token/view`                                   | GET 안내장, POST 열람                             |
+| `/api/share/:token/feedback`                                                    | POST 환자 피드백                                  |
+| `/api/feedback`, `/api/feedback/:id`                                            | GET 병원별 피드백, PUT 처리 상태                  |
+| `/api/dashboard`, `/api/admin/stats`, `/ph?t=&s=&v=`                            | GET 통계·설명용 SVG                               |
 
 자료 목록 쿼리: `specialty`, `treatment`, `category`, `type`, `q`, `sort=recommended|new|popular`, `favorite=1`, `manage=1`. `manage=1`은 권한 있는 관리 화면에서 숨긴 자료까지 표시합니다.
 
@@ -123,7 +137,7 @@
 - 자료 검토: staff_note, source_url, source_note, usage_rights, review_status, reviewed_at, reviewed_by, updated_at.
 - 파일당 10MB, 자료 미디어/단계 각 12개, 수가 항목 30개, 상담 40장, 판서 base64 입력 700KB 이하, 상담 JSON 900KB 이하.
 - 자료 조회 최대 500개, 상담 이력 최대 200개. 대규모 페이지네이션은 후속 과제입니다.
-- 환자 내용을 localStorage에 저장하지 않습니다. sessionStorage에는 사용자별 초안 ID와 익명 열람/피드백 식별자만 보관합니다.
+- 환자 내용을 localStorage에 저장하지 않습니다. sessionStorage에는 사용자별 초안 ID, 선택한 자료 ID 목록, 익명 열람/피드백 식별자만 보관합니다.
 - 기존 판서 PNG는 보존합니다. 과거 좌표 메타데이터가 없으면 정밀 정렬 보정에는 한계가 있습니다.
 
 ## 보안 및 계정
@@ -159,7 +173,7 @@ npm run test:all
 node scripts/cleanup-test-data.mjs
 ```
 
-`test:all`은 타입 검사, 기존 API·브라우저, 워크플로 API·브라우저를 실행합니다. 테스트는 localhost/127.0.0.1 전용입니다. cleanup은 합성 QA 계정/관련 레코드 및 로컬 요청 제한 카운터를 정리하며 운영용이 아닙니다.
+`test:all`은 타입 검사, 기존 API·브라우저, 워크플로 API·브라우저, Clarity Library 브라우저 검사를 실행합니다. 새 경로만 확인하려면 `npm run test:clarity`를 사용합니다. 테스트는 localhost/127.0.0.1 전용입니다. cleanup은 합성 QA 계정/관련 레코드 및 로컬 요청 제한 카운터를 정리하며 운영용이 아닙니다.
 
 기존 DB에 시드를 반복 적용하지 마세요. 신규 설치 시에만 seed.sql, seed_assets.sql, seed_specialties.sql을 검토합니다. 공개 데모 비밀번호는 차단됩니다. `.test-results/`, `.env*`, `.dev.vars*`, `.wrangler`, 백업·로그는 Git에서 제외합니다. 검사 결과에는 임시 인증정보가 포함될 수 있으므로 공개하지 않습니다.
 

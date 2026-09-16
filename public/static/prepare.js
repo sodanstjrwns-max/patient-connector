@@ -296,15 +296,7 @@ window.publishPrepared = () =>
         version: P.previewVersion ?? P.session.version,
       });
       PC.rememberDraft(null);
-      const url = location.origin + data.url;
-      PC.modal(
-        "환자 안내장이 준비되었습니다.",
-        `<div class="stack"><p class="notice green">선택한 자료와 환자용 메모만 전달됩니다.</p><input class="input" readonly value="${PC.esc(url)}" onclick="this.select()"><a class="btn-ghost" href="${PC.url(data.url)}" target="_blank" rel="noopener">환자 안내장 열기</a><button class="btn-primary" id="copy-prepared-link">링크 복사</button><p class="help-note">이후 초안을 수정해도 이 안내장은 자동으로 바뀌지 않습니다. 다시 확인한 뒤 새 링크를 만들어 주세요.</p></div>`,
-        "",
-        true,
-      );
-      document.getElementById("copy-prepared-link").onclick = () =>
-        PC.copy(url);
+      PC.deliveryResult(data.url);
     } finally {
       if (btn.isConnected) btn.disabled = false;
     }

@@ -1,5 +1,5 @@
-// Care Workspace v6: purge legacy caches, never cache patient content or private files.
-const CACHE = "pc-care-v6";
+// Clarity Library: static assets only; never cache patient content or private files.
+const CACHE = "pc-clarity-v1";
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) =>
   event.waitUntil(
