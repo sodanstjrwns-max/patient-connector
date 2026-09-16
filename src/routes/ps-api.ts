@@ -3,6 +3,7 @@
 import { Hono } from 'hono'
 import { checkSolapiCredentials, alimtalkReady } from '../lib/solapi'
 import { timingSafeEqualStr } from '../lib/util'
+import { purgeOldPhones } from './api'
 
 type Bindings = { DB: D1Database; PS_SERVICE_KEY?: string; PS_SSO_SECRET?: string } & Record<string, any>
 type Vars = { hid: number }
@@ -20,6 +21,16 @@ psApi.post('/hub-events', async (c) => {
   if (!psId) return err(c, 400, 'invalid_body', 'ps_hospital_id가 필요합니다')
   await c.env.DB.prepare('DELETE FROM hub_profile_cache WHERE ps_hospital_id = ?').bind(psId).run().catch(() => undefined)
   return c.json({ ok: true })
+})
+
+// 운영: 번호 원문 파기(7일 경과분). 인증: Bearer PS_SERVICE_KEY, 병원 헤더 불필요. ps-monitor 가 매일 호출.
+psApi.post('/ops/purge', async (c) => {
+  const key = c.env.PS_SERVICE_KEY
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+  if (!key || !token || !timingSafeEqualStr(token, key)) return err(c, 401, 'unauthorized', '유효하지 않은 서비스 키')
+  const purged = await purgeOldPhones(c.env.DB)
+  return c.json({ ok: true, purged })
 })
 
 psApi.use('/*', async (c, next) => {

@@ -50,6 +50,12 @@ function sanitizeCost(input: unknown): CostItem[] {
   })).filter((x) => x.name)
 }
 
+/** 개인정보처리방침 약속: 수신번호 원문은 발송 후 7일 내 파기. 앱 사용 시마다 지연 실행 + ps-monitor 일일 호출(ps-api /ops/purge). */
+export async function purgeOldPhones(db: D1Database): Promise<number> {
+  const r = await db.prepare(`UPDATE dispatches SET phone_enc = NULL WHERE phone_enc IS NOT NULL AND created_at < datetime('now', '-7 days')`).run().catch(() => null)
+  return Number(r?.meta?.changes || 0)
+}
+
 // ─── 허브 SSO ───
 api.get('/auth/hub', (c) => {
   const cb = `${baseUrl(c)}/api/auth/hub/callback`
@@ -128,6 +134,7 @@ api.use('/*', async (c, next) => {
 })
 
 api.get('/me', async (c) => {
+  await purgeOldPhones(c.env.DB)
   const h = await c.env.DB.prepare('SELECT id, ps_hospital_id, name, phone, address, link_days FROM hospitals WHERE id = ?').bind(c.get('hid')).first<any>()
   if (!h) { c.header('Set-Cookie', clearCookie()); return c.json({ error: 'no_hospital', auth_required: true }, 401) }
   return c.json({ hospital: h, alimtalk_ready: alimtalkReady(c.env), base_url: baseUrl(c) })
@@ -271,6 +278,27 @@ api.post('/dispatches', async (c) => {
   }
   await c.env.DB.prepare(`UPDATE dispatches SET status = 'failed', error = ? WHERE id = ?`).bind(String(res.error || '발송 실패').slice(0, 200), id).run()
   return c.json({ id, token, url, status: 'failed', error: res.error })
+})
+// 실패 건 재발송 (번호 원문이 아직 남아 있는 7일 이내만 가능)
+api.post('/dispatches/:id/resend', async (c) => {
+  const hid = c.get('hid')
+  const d = await c.env.DB.prepare('SELECT * FROM dispatches WHERE id = ? AND hospital_id = ?').bind(c.req.param('id'), hid).first<any>()
+  if (!d) return c.json({ error: 'not_found' }, 404)
+  if (d.channel !== 'alimtalk') return c.json({ error: '링크 전달 건은 재발송 대상이 아닙니다' }, 400)
+  if (!d.phone_enc) return c.json({ error: '번호가 이미 파기되어 재발송할 수 없습니다. 새로 보내 주세요' }, 400)
+  if (!alimtalkReady(c.env)) return c.json({ error: '알림톡 채널이 아직 준비 중입니다' }, 503)
+  if (!c.env.PHONE_ENC_KEY) return c.json({ error: '서버 설정 오류' }, 500)
+  const h = await c.env.DB.prepare('SELECT name FROM hospitals WHERE id = ?').bind(hid).first<{ name: string }>()
+  const { decPhone } = await import('../lib/util')
+  const phone = await decPhone(d.phone_enc, c.env.PHONE_ENC_KEY)
+  const url = `${baseUrl(c)}/g/${d.token}`
+  const res = await sendAlimtalk(c.env, phone, { '#{병원명}': h?.name || '', '#{안내장링크}': url.replace(/^https?:\/\//, '') })
+  if (res.ok) {
+    await c.env.DB.prepare(`UPDATE dispatches SET status = 'sent', error = NULL, solapi_group_id = ?, sent_at = datetime('now') WHERE id = ?`).bind(res.groupId || null, d.id).run()
+    return c.json({ ok: true, status: 'sent' })
+  }
+  await c.env.DB.prepare(`UPDATE dispatches SET status = 'failed', error = ? WHERE id = ?`).bind(String(res.error || '발송 실패').slice(0, 200), d.id).run()
+  return c.json({ ok: false, status: 'failed', error: res.error })
 })
 api.get('/dispatches', async (c) => {
   const limit = Math.max(1, Math.min(200, Number(c.req.query('limit')) || 50))
