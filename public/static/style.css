@@ -28,3 +28,20 @@
 .material-category-filters button[aria-pressed="true"] { color: #0369a1; border-color: #7dd3fc; background: #f0f9ff; }
 .material-kind-tabs button:focus-visible, .material-category-filters button:focus-visible { outline: 2px solid #0284c7; outline-offset: 2px; }
 @media (max-width: 640px) { .material-kind-tabs button { padding: .6rem .75rem; gap: .4rem; } }
+.material-category-filters button small { margin-left: .35rem; color: #94a3b8; }
+.example-badge { display: inline-block; white-space: nowrap; padding: .1rem .35rem; border-radius: .25rem; background: #fff7ed; color: #9a3412; font-size: .65rem; }
+.example-editor-notice { border: 1px solid #fed7aa; background: #fff7ed; color: #9a3412; padding: .75rem; border-radius: .5rem; font-size: .8rem; line-height: 1.7; }
+#add-examples:disabled { opacity: .5; cursor: default; }
+.example-dialog-backdrop { position: fixed; inset: 0; background: #0f172a80; z-index: 60; display: grid; place-items: center; padding: 1rem; }
+.example-dialog { background: white; border-radius: 1rem; padding: 1.5rem; width: min(100%, 600px); max-height: 90dvh; overflow: auto; }
+.example-dialog h2 { font-size: 1.2rem; font-weight: 750; }
+.example-dialog p { color: #64748b; font-size: .8rem; line-height: 1.7; margin: .8rem 0; }
+.example-dialog ul { display: grid; gap: .5rem; margin: 1rem 0; }
+.example-dialog li { padding: .6rem .8rem; border: 1px solid #e2e8f0; border-radius: .5rem; }
+.example-dialog li span { display: block; color: #0284c7; font-size: .65rem; }
+.example-dialog li b { font-size: .85rem; }
+.example-confirm { display: flex; align-items: center; gap: .5rem; font-size: .8rem; }
+.example-dialog footer { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; font-size: .85rem; }
+.example-dialog button:disabled { opacity: .5; }
+#sample-status { color: #be123c; }
+@media (max-width: 640px) { .example-dialog { padding: 1.1rem; } }

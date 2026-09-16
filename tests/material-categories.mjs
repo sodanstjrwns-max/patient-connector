@@ -35,8 +35,8 @@ try {
  check(await page.locator('[data-add]').count()===2,'Treatment filter includes explanations and precautions');
  await page.locator('[data-kind-filter="disease"]').click();
  check(await page.locator('[data-add]').count()===1&&(await page.locator('#material-grid').innerText()).includes('잇몸질환 이해'),'Disease filter is independent');
- await page.locator('[data-cat="임플란트"]').click();
- check((await page.locator('#main').innerText()).includes('선택한 조건에 맞는 자료가 없습니다'),'Type and treatment-topic filters combine precisely');
+ await page.locator('[data-cat="충치"]').click();
+ check((await page.locator('#main').innerText()).includes('선택한 조건에 맞는 자료가 없습니다'),'Type and disease-topic filters combine precisely');
  await page.locator('#reset-filters').click();
  check(await page.locator('[data-add]').count()===5,'Reset restores complete library');
  await page.locator('[data-kind-filter="explain"]').click();await page.locator('[data-cat="임플란트"]').click();await page.locator('#q').fill('발치');

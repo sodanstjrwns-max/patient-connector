@@ -24,7 +24,7 @@
     }
     return `<section class="bg-white rounded-2xl border p-5 mb-4 fade-in" data-i="${i}">
       <div class="text-xs font-semibold text-sky-700">${KIND[x.kind] || ''}${x.category ? ' · ' + esc(x.category) : ''}</div>
-      <h2 class="text-lg font-bold mt-1 mb-3">${esc(x.title)}</h2>${inner}</section>`;
+      <h2 class="text-lg font-bold mt-1 mb-3">${esc(x.title)}</h2>${x.is_example ? '<p class="example-editor-notice mb-3">검토용 예시자료입니다. 실제 진료 안내는 담당 의료진에게 확인해 주세요.</p>' : ''}${inner}</section>`;
   }
 
   async function loadGuide() {

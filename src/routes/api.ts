@@ -4,6 +4,7 @@ import { signSession, verifySession, sessionCookie, clearCookie, getSessionToken
 import { verifyHubSsoToken } from '../lib/hub-sso'
 import { normalizePhone, phoneHash, encPhone, randomToken, maskPhone } from '../lib/util'
 import { sendAlimtalk, alimtalkReady } from '../lib/solapi'
+import { materialCategories, materialExamples, exampleNotice } from '../lib/material-library'
 
 export type Bindings = {
   DB: D1Database
@@ -37,9 +38,9 @@ function parseJson<T>(s: string | null | undefined, fallback: T): T {
 }
 type ImageRef = { key: string; caption?: string }
 type CostItem = { name: string; price: number; qty?: number; note?: string }
-type MaterialRow = { id: number; hospital_id: number; kind: string; category: string | null; title: string; body: string | null; images_json: string; cost_json: string; sort: number; active: number; updated_at: string }
+type MaterialRow = { id: number; hospital_id: number; kind: string; category: string | null; title: string; body: string | null; images_json: string; cost_json: string; sort: number; active: number; updated_at: string; example_key?: string | null }
 function materialOut(m: MaterialRow) {
-  return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body || '', images: parseJson<ImageRef[]>(m.images_json, []), cost: parseJson<CostItem[]>(m.cost_json, []), sort: m.sort, active: !!m.active, updated_at: m.updated_at }
+  return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body || '', images: parseJson<ImageRef[]>(m.images_json, []), cost: parseJson<CostItem[]>(m.cost_json, []), sort: m.sort, active: !!m.active, updated_at: m.updated_at, is_example: !!m.example_key }
 }
 function sanitizeCost(input: unknown): CostItem[] {
   if (!Array.isArray(input)) return []
@@ -143,6 +144,27 @@ api.put('/settings', async (c) => {
 })
 
 // ─── 자료함 ───
+api.get('/material-library', async (c) => {
+  const imported = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE ?')
+    .bind(c.get('hid'), 'dental-v1:%').first<{ n: number }>()
+  return c.json({ categories: materialCategories, example_notice: exampleNotice, examples: materialExamples.map(({ key, kind, category, title }) => ({ key, kind, category, title })), imported_count: Number(imported?.n || 0) })
+})
+api.post('/materials/examples', async (c) => {
+  const origin = c.req.header('Origin')
+  if ((origin && origin !== new URL(c.req.url).origin) || c.req.header('Sec-Fetch-Site') === 'cross-site') return c.json({ error: '다른 사이트의 요청은 허용하지 않습니다' }, 403)
+  const b = await c.req.json().catch(() => null)
+  if (b?.confirmed !== true) return c.json({ error: '검토용 예시자료 추가를 확인해 주세요' }, 400)
+  const hid = c.get('hid')
+  const hospital = await c.env.DB.prepare('SELECT id FROM hospitals WHERE id = ?').bind(hid).first()
+  if (!hospital) return c.json({ error: 'no_hospital' }, 401)
+  // Atomic D1 batch + unique (hospital_id, example_key): retries cannot duplicate or overwrite edits.
+  const results = await c.env.DB.batch(materialExamples.map(m => c.env.DB.prepare(`
+    INSERT INTO materials (hospital_id, kind, category, title, body, images_json, cost_json, sort, example_key)
+    VALUES (?, ?, ?, ?, ?, '[]', '[]', (SELECT COALESCE(MAX(sort), 0) + 1 FROM materials WHERE hospital_id = ?), ?)
+    ON CONFLICT(hospital_id, example_key) DO NOTHING
+  `).bind(hid, m.kind, m.category, m.title, m.body, hid, m.key)))
+  return c.json({ added: results.reduce((n, r) => n + Number(r.meta.changes || 0), 0), total: materialExamples.length })
+})
 api.get('/materials', async (c) => {
   const all = c.req.query('all') === '1'
   const rows = await c.env.DB.prepare(`SELECT * FROM materials WHERE hospital_id = ? ${all ? '' : 'AND active = 1'} ORDER BY sort ASC, id ASC`).bind(c.get('hid')).all<MaterialRow>()
@@ -236,7 +258,7 @@ api.post('/dispatches', async (c) => {
   const placeholders = ids.map(() => '?').join(',')
   const rows = await c.env.DB.prepare(`SELECT * FROM materials WHERE hospital_id = ? AND active = 1 AND id IN (${placeholders})`).bind(hid, ...ids).all<MaterialRow>()
   const byId = new Map((rows.results || []).map((m) => [m.id, m]))
-  const snapshot = ids.filter((id) => byId.has(id)).map((id) => { const m = materialOut(byId.get(id)!); return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body, images: m.images, cost: m.cost } })
+  const snapshot = ids.filter((id) => byId.has(id)).map((id) => { const m = materialOut(byId.get(id)!); return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body, images: m.images, cost: m.cost, is_example: m.is_example } })
   if (!snapshot.length) return c.json({ error: '보낼 자료가 없습니다' }, 400)
 
   let phone: string | null = null, pHash: string | null = null, pEnc: string | null = null, last4: string | null = null

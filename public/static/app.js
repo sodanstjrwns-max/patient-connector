@@ -8,7 +8,7 @@
   const groupKind = (kind) => kind === 'notice' ? 'explain' : kind;
   const KIND_COLOR = { explain: 'bg-sky-100 text-sky-800', disease: 'bg-emerald-100 text-emerald-800', before_after: 'bg-violet-100 text-violet-800', cost: 'bg-amber-100 text-amber-800', notice: 'bg-rose-100 text-rose-800' };
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
-  const state = { me: null, materials: [], today: [], tab: 'library', dispatches: [], stats: null, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null };
+  const state = { me: null, materials: [], today: [], tab: 'library', dispatches: [], stats: null, library: { categories: {}, examples: [], imported_count: 0 }, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null };
   const app = $('#app');
 
   async function api(path, opt) {
@@ -54,12 +54,17 @@
   }
 
   // ─── 자료함 ───
+  function categoriesFor(kind) {
+    const preset = kind ? (state.library.categories[groupKind(kind)] || []) : Object.values(state.library.categories).flat();
+    const existing = state.materials.filter(m => !kind || groupKind(m.kind) === groupKind(kind)).map(m => m.category).filter(Boolean);
+    return [...new Set([...preset, ...existing])];
+  }
   function materialCard(m, extra) {
     const img = m.images[0] ? `<img src="${imgUrl(m.images[0].key)}" class="w-full h-32 object-cover rounded-t-xl bg-slate-100" loading="lazy">` : `<div class="w-full h-16 rounded-t-xl bg-slate-100 flex items-center justify-center text-slate-300 text-2xl"><i class="fa-regular fa-file-lines"></i></div>`;
     return `<div class="bg-white rounded-xl border shadow-sm flex flex-col fade-in">
       ${img}
       <div class="p-3 flex-1">
-        <div class="flex items-center gap-2 text-xs"><span class="px-1.5 py-0.5 rounded ${KIND_COLOR[m.kind]}">${KIND[m.kind]}</span>${m.category ? `<span class="text-slate-500">${esc(m.category)}</span>` : ''}</div>
+        <div class="flex flex-wrap items-center gap-2 text-xs"><span class="px-1.5 py-0.5 rounded ${KIND_COLOR[m.kind]}">${KIND[m.kind]}</span>${m.is_example ? '<span class="example-badge">검토용 예시</span>' : ''}${m.category ? `<span class="text-slate-500">${esc(m.category)}</span>` : ''}</div>
         <div class="font-bold mt-1.5 leading-snug">${esc(m.title)}</div>
         <div class="text-xs text-slate-500 mt-1 line-clamp-2">${esc((m.body || '').replace(/\n/g, ' '))}${m.kind === 'cost' && m.cost.length ? ' · 항목 ' + m.cost.length + '개' : ''}</div>
       </div>
@@ -69,16 +74,19 @@
   function renderLibrary(main) {
     const q = state.filter.trim().toLocaleLowerCase();
     const list = state.materials.filter((m) => (!state.kindFilter || groupKind(m.kind) === state.kindFilter) && (!state.categoryFilter || m.category === state.categoryFilter) && (!q || (m.title + ' ' + (m.category || '') + ' ' + (m.body || '')).toLocaleLowerCase().includes(q)));
-    const cats = [...new Set(state.materials.map((m) => m.category).filter(Boolean))];
+    const cats = categoriesFor(state.kindFilter);
+    const categoryLabel = state.kindFilter === 'disease' ? '질환 분류' : state.kindFilter ? '진료 분류' : '세부 분류';
+    const allExamplesAdded = state.library.examples.length > 0 && state.library.imported_count >= state.library.examples.length;
     const countKind = (kind) => state.materials.filter((m) => !kind || groupKind(m.kind) === kind).length;
     main.innerHTML = `
       <div class="flex flex-wrap items-center gap-3 mb-4">
         <h2 class="text-lg font-bold">자료함 <span class="text-sm font-normal text-slate-500">${state.materials.length}개</span></h2>
         <input id="q" value="${esc(state.filter)}" aria-label="자료 검색" placeholder="제목·진료 항목·내용 검색" class="border rounded-lg px-3 py-2 text-sm w-56">
-        <button id="new" class="ml-auto px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-1"></i>자료 등록</button>
+        <button id="add-examples" class="ml-auto px-3 py-2 rounded-lg border bg-white text-sm font-semibold" ${allExamplesAdded ? 'disabled' : ''}>${allExamplesAdded ? '예시자료 추가됨' : '예시자료 ' + state.library.examples.length + '개 넣기'}</button>
+        <button id="new" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-1"></i>자료 등록</button>
       </div>
       <nav class="material-kind-tabs" aria-label="자료 유형">${[['', '전체'], ...LIBRARY_KINDS.map(k => [k, KIND[k]])].map(([k, label]) => `<button data-kind-filter="${k}" aria-pressed="${state.kindFilter === k}">${label}<span>${countKind(k)}</span></button>`).join('')}</nav>
-      <div class="material-category-filters" aria-label="진료 항목"><span>진료 항목</span><button data-cat="" aria-pressed="${!state.categoryFilter}">전체</button>${cats.map(c => `<button data-cat="${esc(c)}" aria-pressed="${state.categoryFilter === c}">${esc(c)}</button>`).join('')}</div>
+      <div class="material-category-filters" aria-label="${categoryLabel}"><span>${categoryLabel}</span><button data-cat="" aria-pressed="${!state.categoryFilter}">전체</button>${cats.map(c => `<button data-cat="${esc(c)}" aria-pressed="${state.categoryFilter === c}">${esc(c)}<small>${state.materials.filter(m => (!state.kindFilter || groupKind(m.kind) === state.kindFilter) && m.category === c).length}</small></button>`).join('')}</div>
       <p id="material-result-count" class="text-xs text-slate-500 mb-4" aria-live="polite">${state.kindFilter ? KIND[state.kindFilter] : '전체 자료'} · ${list.length}개${state.kindFilter === 'explain' ? ' · 기존 주의사항 포함' : ''}</p>
       ${list.length ? `<div id="material-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map((m) => materialCard(m, `
           <button data-add="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg ${state.today.includes(m.id) ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 hover:bg-slate-200'}">${state.today.includes(m.id) ? '<i class="fa-solid fa-check mr-1"></i>오늘 설명에 담김' : '<i class="fa-solid fa-plus mr-1"></i>오늘 설명에 담기'}</button>
@@ -91,13 +99,44 @@
             <button id="new2" class="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold">${state.kindFilter ? KIND[state.kindFilter] + ' 등록' : '첫 자료 등록'}</button>
           </div>`}`;
     $('#q').oninput = (e) => { state.filter = e.target.value; renderLibrary(main); $('#q').focus(); $('#q').setSelectionRange(state.filter.length, state.filter.length); };
-    main.querySelectorAll('[data-kind-filter]').forEach((b) => b.onclick = () => { state.kindFilter = b.dataset.kindFilter; renderLibrary(main); });
+    main.querySelectorAll('[data-kind-filter]').forEach((b) => b.onclick = () => { state.kindFilter = b.dataset.kindFilter; state.categoryFilter = ''; renderLibrary(main); });
     main.querySelectorAll('[data-cat]').forEach((b) => b.onclick = () => { state.categoryFilter = b.dataset.cat; renderLibrary(main); });
     const reset = $('#reset-filters'); if (reset) reset.onclick = () => { state.filter = ''; state.kindFilter = ''; state.categoryFilter = ''; renderLibrary(main); };
+    $('#add-examples').onclick = openExamples;
     const nb = $('#new') || $('#new2'); if (nb) nb.onclick = () => openEditor(null);
     const nb2 = $('#new2'); if (nb2) nb2.onclick = () => openEditor(null);
     main.querySelectorAll('[data-add]').forEach((b) => b.onclick = () => { const id = Number(b.dataset.add); state.today = state.today.includes(id) ? state.today.filter((x) => x !== id) : [...state.today, id]; saveToday(); render(); });
     main.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => openEditor(state.materials.find((m) => m.id === Number(b.dataset.edit))));
+  }
+
+  function openExamples() {
+    if ($('#example-dialog')) return;
+    const box = document.createElement('div'); box.id = 'example-dialog'; box.className = 'example-dialog-backdrop';
+    const returnFocus = document.activeElement;
+    box.innerHTML = `<section class="example-dialog" role="dialog" aria-modal="true" aria-labelledby="example-title"><h2 id="example-title">치과 예시자료 ${state.library.examples.length}개 넣기</h2><p>${esc(state.library.example_notice)}</p><ul>${state.library.examples.map(m => `<li><span>${KIND[m.kind]} · ${esc(m.category)}</span><b>${esc(m.title)}</b></li>`).join('')}</ul><p>실제 환자 사진이나 임의의 진료비가 없는 설명 초안입니다. 현재 병원 자료함에만 추가하며 기존 자료는 수정하지 않습니다. 반복 실행해도 중복 추가하지 않습니다.</p><label class="example-confirm"><input id="sample-confirm" type="checkbox">검토용 예시임을 확인했습니다.</label><p id="sample-status" role="status"></p><footer><button id="sample-cancel" class="px-4 py-2 border rounded-lg">취소</button><button id="sample-import" class="px-4 py-2 rounded-lg bg-slate-900 text-white">자료함에 추가</button></footer></section>`;
+    document.body.append(box); const oldOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
+    let busy = false;
+    const close = () => { if (busy) return; box.remove(); document.body.style.overflow = oldOverflow; returnFocus?.focus(); };
+    $('#sample-cancel').onclick = close; $('#sample-confirm').focus();
+    box.onkeydown = e => {
+      if (e.key === 'Escape') close();
+      if (e.key === 'Tab') {
+        const nodes = [...box.querySelectorAll('button:not(:disabled),input:not(:disabled)')], first = nodes[0], last = nodes.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    $('#sample-import').onclick = async () => {
+      if (!$('#sample-confirm').checked) { $('#sample-status').textContent = '검토용 예시임을 먼저 확인해 주세요.'; return; }
+      busy = true; $('#sample-import').disabled = true; $('#sample-cancel').disabled = true;
+      try {
+        const result = await api('/materials/examples', { method: 'POST', body: JSON.stringify({ confirmed: true }) });
+        await Promise.all([loadMaterials(), loadLibrary()]);
+        busy = false; close(); state.kindFilter = ''; state.categoryFilter = ''; state.filter = ''; render();
+        toast(result.added ? `예시자료 ${result.added}개를 추가했습니다. 의료진 검토 후 사용해 주세요.` : '이미 추가한 예시는 그대로 유지했습니다.');
+      } catch (e) { $('#sample-status').textContent = e.message; }
+      finally { busy = false; if (box.isConnected) { $('#sample-import').disabled = false; $('#sample-cancel').disabled = false; } }
+    };
   }
 
   // ─── 자료 편집 모달 ───
@@ -112,15 +151,18 @@
     const costRows = (m.cost.length ? m.cost : []).map((c, i) => `<tr><td><input data-c="name" data-i="${i}" value="${esc(c.name)}" placeholder="항목" class="w-full border rounded px-2 py-1"></td><td><input data-c="price" data-i="${i}" type="number" value="${c.price}" class="w-28 border rounded px-2 py-1 text-right"></td><td><input data-c="qty" data-i="${i}" type="number" value="${c.qty || 1}" class="w-16 border rounded px-2 py-1 text-right"></td><td><input data-c="note" data-i="${i}" value="${esc(c.note || '')}" placeholder="비고" class="w-full border rounded px-2 py-1"></td><td><button data-cdel="${i}" class="text-slate-400 hover:text-rose-600"><i class="fa-solid fa-xmark"></i></button></td></tr>`).join('');
     const total = m.cost.reduce((s, c) => s + (Number(c.price) || 0) * (Number(c.qty) || 1), 0);
     const imgLimit = m.kind === 'before_after' ? 2 : 6;
+    const categoryOptions = state.library.categories[groupKind(m.kind)] || [];
+    const customCategory = !!m.category && !categoryOptions.includes(m.category);
     box.innerHTML = `<div class="fixed inset-0 bg-black/40 z-40 flex items-start justify-center overflow-auto p-4">
       <div class="bg-white rounded-2xl w-full max-w-2xl my-6 fade-in">
         <div class="px-5 py-4 border-b flex items-center"><h3 class="font-bold">${m.id ? '자료 수정' : '자료 등록'}</h3><button id="ed-close" class="ml-auto text-slate-400 hover:text-slate-800 text-xl">&times;</button></div>
         <div class="p-5 space-y-4 text-sm">
           <div class="flex flex-wrap gap-2" aria-label="자료 유형 선택">${LIBRARY_KINDS.map(k => `<button data-kind="${k}" aria-pressed="${groupKind(m.kind) === k}" class="px-3 py-1.5 rounded-full border ${groupKind(m.kind) === k ? 'bg-slate-900 text-white' : ''}">${KIND[k]}</button>`).join('')}</div>
+          ${m.is_example ? `<p class="example-editor-notice">${esc(state.library.example_notice)}</p>` : ''}
           ${m.kind === 'notice' ? '<p class="text-xs text-slate-500">기존 주의사항 자료입니다. 진료설명에 함께 표시하며, 유형을 직접 변경하지 않으면 기존 주의사항 분류를 유지합니다.</p>' : ''}
-          <div class="grid grid-cols-3 gap-3">
-            <label class="col-span-2">제목<input id="ed-title" value="${esc(m.title)}" maxlength="80" placeholder="예: 임플란트 치료 과정" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
-            <label>진료 항목<input id="ed-cat" value="${esc(m.category || '')}" maxlength="30" placeholder="예: 임플란트" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label class="sm:col-span-2 min-w-0">제목<input id="ed-title" value="${esc(m.title)}" maxlength="80" placeholder="예: 임플란트 치료 과정" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
+            <label>${m.kind === 'disease' ? '질환 분류' : '진료 분류'}<select id="ed-category-select" class="mt-1 w-full border rounded-lg px-3 py-2"><option value="">분류 선택</option>${categoryOptions.map(c => `<option value="${esc(c)}" ${m.category === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="__custom" ${customCategory ? 'selected' : ''}>직접 입력</option></select><input id="ed-cat" value="${esc(m.category || '')}" maxlength="30" placeholder="사용자 분류 입력" aria-label="직접 입력 분류" class="mt-1 w-full border rounded-lg px-3 py-2 ${customCategory ? '' : 'hidden'}"></label>
           </div>
           <label class="block">${m.kind === 'cost' ? '설명(선택)' : '설명 본문'}<span class="text-slate-400 ml-2">줄 앞에 "- "를 붙이면 항목으로 표시됩니다</span>
             <textarea id="ed-body" rows="7" class="mt-1 w-full border rounded-lg px-3 py-2 leading-relaxed" placeholder="${m.kind === 'notice' ? '- 2시간 동안 거즈를 물고 계세요\n- 오늘은 뜨거운 음식·음주·흡연을 피하세요' : '환자분께 말로 설명하던 내용을 그대로 적어 주세요'}">${esc(m.body || '')}</textarea></label>
@@ -139,8 +181,9 @@
           <button id="ed-save" class="ml-auto px-5 py-2 rounded-lg bg-slate-900 text-white font-semibold text-sm">${m.id ? '저장' : '등록'}</button>
         </div>
       </div></div>`;
-    const sync = () => { m.title = $('#ed-title').value; m.category = $('#ed-cat').value; m.body = $('#ed-body').value; };
+    const sync = () => { m.title = $('#ed-title').value; m.category = $('#ed-category-select').value === '__custom' ? $('#ed-cat').value : $('#ed-category-select').value; m.body = $('#ed-body').value; };
     $('#ed-close').onclick = () => { box.remove(); state.editing = null; };
+    $('#ed-category-select').onchange = () => { $('#ed-cat').classList.toggle('hidden', $('#ed-category-select').value !== '__custom'); };
     box.querySelectorAll('[data-kind]').forEach((b) => b.onclick = () => { sync(); m.kind = b.dataset.kind; renderEditor(); });
     box.querySelectorAll('[data-c]').forEach((inp) => inp.onchange = () => { const c = m.cost[Number(inp.dataset.i)]; c[inp.dataset.c] = inp.dataset.c === 'price' || inp.dataset.c === 'qty' ? Number(inp.value) : inp.value; sync(); renderEditor(); });
     box.querySelectorAll('[data-cdel]').forEach((b) => b.onclick = () => { sync(); m.cost.splice(Number(b.dataset.cdel), 1); renderEditor(); });
@@ -237,6 +280,7 @@
       <div class="grid lg:grid-cols-5 gap-6">
         <section class="lg:col-span-3">
           <h2 class="text-lg font-bold mb-3">보낼 자료 <span class="text-sm font-normal text-slate-500">오늘의 설명 목록</span></h2>
+          ${list.some(m => m.is_example) ? '<p class="example-editor-notice mb-3">검토용 예시가 포함되어 있습니다. 환자에게 보내기 전에 의료진이 내용을 확인·수정해 주세요. 안내장에도 예시 표시가 유지됩니다.</p>' : ''}
           ${list.length ? `<ol class="space-y-2">${list.map((m, i) => `<li class="bg-white border rounded-xl px-4 py-3 flex items-center gap-3"><span class="text-slate-400 w-5">${i + 1}</span><span class="px-1.5 py-0.5 rounded text-xs ${KIND_COLOR[m.kind]}">${KIND[m.kind]}</span><span class="font-semibold truncate">${esc(m.title)}</span></li>`).join('')}</ol>` : `<div class="bg-white border rounded-xl p-8 text-center text-slate-500 text-sm">보낼 자료가 없습니다. 자료함에서 담아 주세요.</div>`}
         </section>
         <section class="lg:col-span-2">
@@ -308,9 +352,10 @@
   }
 
   async function loadMe() { state.me = await api('/me'); }
+  async function loadLibrary() { state.library = await api('/material-library'); }
   async function loadMaterials() { state.materials = (await api('/materials')).materials; state.today = state.today.filter((id) => state.materials.some((m) => m.id === id)); }
   (async () => {
-    try { await loadMe(); await loadMaterials(); await loadHistory(); render(); }
+    try { await loadMe(); await Promise.all([loadMaterials(), loadLibrary()]); await loadHistory(); render(); }
     catch (e) { if (e.message !== 'auth') app.innerHTML = `<div class="p-10 text-center text-rose-600">${esc(e.message)}</div>`; }
   })();
 })();
