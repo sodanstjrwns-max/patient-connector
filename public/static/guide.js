@@ -6,8 +6,7 @@
   const KIND = { explain: '진료설명', disease: '질환설명', cost: '비용설명', before_after: '비포애프터', notice: '주의사항' };
   const app = $('#app');
   const m = location.pathname.match(/^\/(g|optout)\/([0-9a-f]{32})$/);
-  if (!m) { app.innerHTML = '<div class="p-10 text-center text-slate-500">잘못된 주소입니다.</div>'; return; }
-  const mode = m[1], token = m[2];
+  const mode = m?.[1], token = m?.[2] || '';
   const bodyHtml = (t) => String(t || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : `<div>${l.trim() ? esc(l) : '&nbsp;'}</div>`).join('');
   const isVideo = im => im?.media_type === 'video' || /\.(mp4|webm)$/i.test(im?.key || '');
   const annotationFor = (im, notes) => (notes || []).find(a => a.media_key === im.key && a.image_key);
@@ -30,10 +29,34 @@
     } else {
       inner = `${x.body ? `<div class="pc-body">${bodyHtml(x.body)}</div>` : ''}${x.images.map(im => img(im, x.annotations)).join('')}`;
     }
+    inner += guidanceHtml(x);
     return `<section class="bg-white rounded-2xl border p-5 mb-4 fade-in" data-i="${i}">
       <div class="text-xs font-semibold text-sky-700">${KIND[x.kind] || ''}${x.category ? ' · ' + esc(x.category) : ''}</div>
       <h2 class="text-lg font-bold mt-1 mb-3">${esc(x.title)}</h2>${x.is_example ? '<p class="example-editor-notice mb-3">검토용 예시자료입니다. 실제 진료 안내는 담당 의료진에게 확인해 주세요.</p>' : ''}${inner}</section>`;
   }
+
+  function guidanceHtml(x) {
+    const g=x.guidance || {};
+    const fields=x.kind==='cost' ? [['포함 범위',g.included],['추가 비용 조건',g.extra],['대안별 차이',g.alternatives],['안내 기준일',g.basis_date],['비용 안내 유효기간',g.valid_until],['검사 후 달라질 수 있는 부분',g.variability]] : x.kind==='before_after' ? [['치료 내용',g.treatment],['치료 기간',g.period],['개인차 안내',g.individual_notice]] : [];
+    return fields.some(([,v])=>v) ? `<aside class="guidance-panel"><h3>${x.kind==='cost'?'공용 비용 안내 · 확정 견적이 아닙니다':'참고 사례 안내'}</h3><dl>${fields.filter(([,v])=>v).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></aside>` : '';
+  }
+  const safeContact=(v,chat=false)=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password&&(!chat||u.hostname==='pf.kakao.com')?u.href:''}catch{return ''}};
+  function guideHtml(j) {
+    const h=j.hospital;
+    return `<div class="max-w-md mx-auto px-4 py-6">
+      <header class="mb-5"><div class="text-xs text-slate-500">진료 안내장</div><h1 class="text-xl font-extrabold mt-0.5">${esc(h.name)}</h1><p class="text-sm text-slate-500 mt-1">${esc(j.sent_at.slice(0, 10))} 안내드린 자료입니다. 언제든 다시 읽어 보세요.</p></header>
+      ${j.materials.map(materialHtml).join('')}
+      <footer class="mt-6 text-sm text-slate-600 bg-slate-50 rounded-2xl p-4">
+        <div class="font-semibold">${esc(h.name)}</div>
+        ${h.phone ? `<a href="tel:${esc(h.phone.replace(/[^+0-9]/g,''))}" class="inline-flex items-center mt-2 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold"><i class="fa-solid fa-phone mr-2"></i>${esc(h.phone)}</a>` : ''}
+        ${safeContact(h.chat_url,true) ? `<a href="${esc(safeContact(h.chat_url,true))}" target="_blank" rel="noopener noreferrer" class="contact-button">병원 카카오 상담</a>` : ''}
+        ${safeContact(h.booking_url) ? `<a href="${esc(safeContact(h.booking_url))}" target="_blank" rel="noopener noreferrer" class="contact-button">예약 페이지 열기</a>` : ''}
+        ${h.address ? `<div class="text-xs text-slate-500 mt-2">${esc(h.address)}</div>` : ''}
+        <div class="text-xs text-slate-400 mt-4 leading-relaxed">이 안내장은 ${esc(h.name)}의 요청으로 'Patient Connect'(페이션트퍼널)가 전달합니다. 링크는 ${esc(j.expires_at.slice(0, 10))}까지 열립니다.<br>${token ? `<a href="/optout/${token}" class="underline">이 병원의 카카오톡 안내 수신거부</a>` : '미리보기 · 아직 발행되지 않았습니다'} · <a href="/privacy" class="underline">개인정보처리방침</a></div>
+      </footer></div>`;
+  }
+  window.PCGuide={render:guideHtml,materialHtml,guidanceHtml};
+  if (!m) return;
 
   async function loadGuide() {
     app.innerHTML = '<div class="p-10 text-center text-slate-400">불러오는 중…</div>';
@@ -41,15 +64,7 @@
     if (r.status === 410) { app.innerHTML = `<div class="max-w-md mx-auto p-8 text-center"><div class="text-3xl">⏳</div><p class="mt-3 font-semibold">안내장 열람 기간이 지났습니다</p><p class="text-sm text-slate-500 mt-1">궁금한 점은 ${esc(j.hospital?.name || '병원')}${j.hospital?.phone ? ` (${esc(j.hospital.phone)})` : ''}으로 문의해 주세요.</p></div>`; return; }
     if (!r.ok) { app.innerHTML = '<div class="p-10 text-center text-slate-500">안내장을 찾을 수 없습니다.</div>'; return; }
     const h = j.hospital;
-    app.innerHTML = `<div class="max-w-md mx-auto px-4 py-6">
-      <header class="mb-5"><div class="text-xs text-slate-500">진료 안내장</div><h1 class="text-xl font-extrabold mt-0.5">${esc(h.name)}</h1><p class="text-sm text-slate-500 mt-1">${esc(j.sent_at.slice(0, 10))} 안내드린 자료입니다. 언제든 다시 읽어 보세요.</p></header>
-      ${j.materials.map(materialHtml).join('')}
-      <footer class="mt-6 text-sm text-slate-600 bg-slate-50 rounded-2xl p-4">
-        <div class="font-semibold">${esc(h.name)}</div>
-        ${h.phone ? `<a href="tel:${esc(h.phone)}" class="inline-flex items-center mt-2 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold"><i class="fa-solid fa-phone mr-2"></i>${esc(h.phone)}</a>` : ''}
-        ${h.address ? `<div class="text-xs text-slate-500 mt-2">${esc(h.address)}</div>` : ''}
-        <div class="text-xs text-slate-400 mt-4 leading-relaxed">이 안내장은 ${esc(h.name)}의 요청으로 'Patient Connect'(페이션트퍼널)가 전달합니다. 링크는 ${esc(j.expires_at.slice(0, 10))}까지 열립니다.<br><a href="/optout/${token}" class="underline">이 병원의 카카오톡 안내 수신거부</a> · <a href="/privacy" class="underline">개인정보처리방침</a></div>
-      </footer></div>`;
+    app.innerHTML = guideHtml(j);
     // 자료 단위 열람 기록 (화면에 들어올 때 1회)
     const seen = new Set();
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const i = Number(e.target.dataset.i); if (!seen.has(i)) { seen.add(i); fetch('/api/g/' + token + '/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: i }) }).catch(() => {}); } } }), { threshold: 0.4 });

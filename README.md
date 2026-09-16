@@ -1,87 +1,118 @@
 # Patient Connect
 
-환자 등록 없이 병원의 자료를 함께 보고, 선택한 자료를 안내장 링크 또는 SOLAPI 알림톡으로 전달하는 Hono + Cloudflare Pages 앱입니다. 기준 GitHub: https://github.com/sodanstjrwns-max/patient-connector (가져온 기준 `5abc7ad`).
+환자 등록·환자별 대시보드 없이, 병원 자료함에서 이미지·영상을 함께 보고 필기한 뒤 선택 자료를 한 안내장으로 전달하는 Hono + Cloudflare Pages 앱입니다.
 
-## 자료 유형 개편 — 2026-09-16
+## 주소와 배포
 
-- 자료함: **전체 / 진료설명 / 질환설명 / 비용설명 / 비포애프터**, 유형별 개수 표시.
-- `kind`: `explain`, `disease`, `cost`, `before_after`. 기존 `notice`도 서버에서 계속 지원합니다.
-- 기존 설명은 진료설명으로 표시하고, 기존 주의사항은 진료설명 필터에 포함합니다. 원본 `notice` 값과 발송 스냅샷은 일괄 변경하지 않습니다.
-- 제목으로 질환 여부를 추측해 자동 재분류하지 않습니다. 필요한 기존 자료만 편집 화면에서 질환설명으로 지정합니다.
-- 임플란트·교정 등의 `category`는 별도 진료 항목 필터로 유지합니다. 유형 + 진료 항목 + 검색어를 함께 적용할 수 있습니다.
-- 등록 시 현재 선택 유형/진료 항목이 기본값입니다. 편집·설명하기·보내기·환자 안내장에서도 새 이름을 표시합니다.
-- 질환설명 저장을 API에서 허용하며 DB 스키마 변경은 필요하지 않습니다.
-- 유형 추가 외 허브 SSO, SOLAPI, 수신거부, 병원별 데이터 권한 및 비용표·비포애프터 처리 흐름은 유지합니다.
+- 운영: https://patient-connect.pages.dev
+- 병원 콘솔: https://patient-connect.pages.dev/app (Patient Hub SSO)
+- GitHub: https://github.com/sodanstjrwns-max/patient-connector
+- 실제 GitHub 기준: `5abc7ad`. 변경 전 `origin/main`을 다시 fetch하여 원격 추가 변경이 없음을 확인했습니다. 로컬 개선은 GitHub에 아직 푸시하지 않았습니다.
+- 기존 운영 배포: https://6fea281b.patient-connect.pages.dev (`4329ba6`, 2026-09-16).
+- 상담 안전 업그레이드: 로컬 구현·검증 완료, 운영 반영 대기. 자산 버전 `v20260916-safe-consult`.
+- 배포 경로: 사용자 소유 Cloudflare Pages `patient-connect`, 브랜치 `main`. 기존 시크릿을 교체하지 않습니다.
+- D1: `patient-connect-production`, binding `DB`, ID `a38fa276-fe4f-4397-b184-6c0180168064`.
+- R2: `patient-connect-assets`, binding `MEDIA`.
 
-## 치과 세부 분류와 예시자료
+## 사용 흐름
 
-- 진료설명: 임플란트, 치아교정, 보철치료, 충치치료, 신경치료, 잇몸치료, 사랑니·발치, 소아치과, 예방·검진, 턱관절치료.
-- 질환설명: 충치, 잇몸질환, 치수·치근단 질환, 치아균열·파절, 부정교합, 사랑니·매복치, 치아상실, 턱관절질환, 치아마모·시린이, 구강점막질환.
-- 비용설명에는 일반 진료 분류, 비포애프터에는 해당 치료 분류를 제공합니다. 유형을 바꾸면 다른 유형의 필터를 초기화합니다.
-- 자료가 0개인 분류도 표시하며, 병원이 저장한 사용자 분류는 삭제하지 않고 함께 표시합니다. 편집기에는 유형별 드롭다운과 직접 입력을 제공합니다.
-- `src/lib/material-library.ts`가 분류·예시의 단일 원본입니다. 인증된 `GET /api/material-library`가 분류·예시 목록·현재 병원의 추가 개수를 제공합니다.
-- **예시 8개**: 진료설명 4개(임플란트 과정, 치아교정 순서, 보철치료, 신경치료), 질환설명 4개(충치, 잇몸질환, 치수·치근단 질환, 치아균열).
-- 자료함의 **이미지 목업 8개 넣기** → 목록/주의문 확인 → 확인 체크 → 추가 순서입니다. 조회만으로 데이터를 쓰거나 모든 병원에 일괄 배포하지 않습니다.
-- 인증된 `POST /api/materials/examples`에 `{ "confirmed": true }`를 전달하면 현재 병원에만 예시를 삽입합니다. 요청에 임의의 hospital_id를 넣어도 반영하지 않습니다.
-- `0002_material_examples.sql`은 materials.example_key와 병원+키 고유 인덱스를 추가합니다. D1 원자적 batch 및 충돌 시 무시로 동시 클릭·응답 유실 재시도 중복을 막습니다. 수정한 내용, 숨긴 예시, 기존 자료는 덮어쓰지 않습니다.
-- 모든 예시는 **검토용 설명 초안**입니다. 실제 환자 사진, 임의 진료비, 의료진 검토 완료 주장을 넣지 않았습니다. 카드/편집기/발송 화면/환자 안내장에 예시 표시를 유지합니다. `is_example`은 서버가 provenance를 판단하고 발송 스냅샷에도 포함합니다.
-- 예시 추가는 환자 전송이 아닙니다. 의료진이 병원 진료 기준과 실제 환자 상태에 맞게 검토한 후 사용해야 합니다.
+1. 자료함에서 진료설명·질환설명·비용설명·비포애프터를 찾거나 자주 쓰는 묶음을 선택합니다.
+2. 썸네일 또는 설명하기 → 큰 화면을 엽니다.
+3. **깨끗한 원본으로 새 설명 / 현재 설명 이어가기 / 기존 공용 필기를 복사해 새 설명** 중 하나를 선택합니다.
+4. 이미지 또는 일시정지한 영상 장면에 펜·형광펜·지우개로 표시하고 저장합니다.
+5. 설명 끝·보내기에서 순서를 확인합니다. 질환 → 치료 → 사례 → 비용 자동 정렬도 가능합니다.
+6. 필요한 경우에만 **현재 설명의 필기 포함**을 체크합니다. 기본값은 원본만입니다.
+7. 환자 화면과 같은 렌더러로 만든 최종 미리보기에서 자료·비용·필기·수신 대상·전송 권한을 확인합니다.
+8. 확인란을 체크한 다음 안내장 링크를 만들거나, 설정이 완료된 경우 카카오 발송을 요청합니다.
 
-## 이미지·영상 중심 자료함
+## 구현된 기능
 
-- 자료의 본체는 이미지/영상입니다. 카드에서 실제 미디어 썸네일을 표시하고 클릭하면 큰 설명 화면을 엽니다. 본문은 선택 입력이며, 미디어가 있으면 보충 설명으로 접어 둡니다. 기존 텍스트/비용표 자료는 호환성을 위해 유지합니다.
-- 1200×750 PNG 이미지 목업 8개를 `public/static/mockups/`에 포함했습니다. 모든 이미지 안에 **설명용 목업·실제 임상자료 아님·의료진 검토 전**을 표시합니다.
-- 로그인 없는 공개 목업 갤러리: `/static/mockups/index.html`. 운영 병원 데이터와 연결되지 않은 정적 미리보기입니다.
-- 샌드박스 목업 URL: https://3000-inm1c6uo4zqtact2e0j9v-8f57ffe2.sandbox.novita.ai/static/mockups/index.html
-- 자료함의 **이미지 목업 8개 넣기**로 예시를 추가합니다. 기존 텍스트 예시는 **기존 예시에 이미지 채우기**를 명시적으로 실행하면 이미지가 없는 활성 예시에만 파일을 연결합니다. 기존 본문·제목·업로드 미디어 및 삭제한 예시는 덮어쓰지 않습니다.
-- 공개 목업은 `/a/examples/<known-name>.png`의 정확한 허용 목록으로 정적 파일에 연결합니다. 병원 업로드 자료는 이 예외에 포함하지 않으며 기존 병원/안내장 토큰 권한을 확인합니다.
-- 업로드: JPG/PNG/WebP 이미지 5MB, MP4/WebM 영상 25MB. 기존 `/api/materials/:id/images` 엔드포인트 및 `images_json`을 유지하고 참조에 `media_type`을 기록합니다. 비포애프터는 이미지 2장 전용입니다.
-- 파일 크기·MIME·시그니처를 검사합니다. 영상 Range 요청에는 206/Content-Range를 반환하고 잘못된 범위는 416으로 거절합니다. 비공개 업로드 응답은 `private, no-store`입니다.
-- 설명 화면 및 환자 안내장에서 영상 재생을 지원합니다. 자동재생하지 않습니다. 실제 재생 회귀 검사는 ffmpeg로 생성한 무음 WebM 테스트 영상으로 수행했습니다.
-- 빌드 플러그인의 `emptyOutDir: true`로 이전 저장소의 정적 파일이 dist에 잔존하지 않도록 했습니다. Wrangler 미리보기 실행 중 재빌드하면 파일 감시기가 잠깐 비어 있는 `_routes.json`을 읽을 수 있으므로, 미리보기를 중지 → 빌드 → PM2 재시작 순서로 진행합니다.
+### 자료함·분류·묶음
 
-### 목업 출처·재생성
+- 전체 / 진료설명 / 질환설명 / 비용설명 / 비포애프터 4대 유형, 유형별 개수, 검색 및 치과 세부 분류 조합 필터.
+- 기존 `notice`는 진료설명 필터에 포함하되 저장값과 기존 발송 스냅샷은 일괄 변경하지 않습니다.
+- 진료 분류: 임플란트, 치아교정, 보철치료, 충치치료, 신경치료, 잇몸치료, 사랑니·발치, 소아치과, 예방·검진, 턱관절치료.
+- 질환 분류: 충치, 잇몸질환, 치수·치근단 질환, 치아균열·파절, 부정교합, 사랑니·매복치, 치아상실, 턱관절질환, 치아마모·시린이, 구강점막질환.
+- 사용자 분류 보존. 등록/수정기에서 유형별 드롭다운 및 직접 입력.
+- 병원별 **자주 쓰는 설명 묶음**: 현재 선택과 순서 저장, 같은 이름 갱신, 적용, 삭제. 원본 자료 복제나 환자 개인화는 하지 않습니다. 삭제된 자료는 적용 시 제외하고 알립니다.
+- 예시 8개: 진료설명 4개(임플란트·교정·보철·신경치료), 질환설명 4개(충치·잇몸질환·치수/치근단 질환·치아균열).
+- 예시 추가는 병원별 명시적 확인 후 수행. `(hospital_id, example_key)` 고유 제약으로 중복·동시 추가를 방지합니다. 편집한 내용과 숨긴 예시는 덮어쓰지 않으며, 활성 예시의 빈 이미지에만 명시적으로 목업을 채웁니다.
+- 2026-09-16 이전 작업에서 서울비디치과에 기존 2개를 보존하고 이미지 예시 8개를 등록했습니다. 이번 안전 업그레이드는 운영 자료를 추가·수정하지 않습니다.
 
-도식과 한국어 레이아웃은 코드로 제작한 단순화된 목업입니다. 일부 참고 사진/구조 그림은 image_search의 CC/PD 필터 결과 중 다음 두 이미지에서만 가져왔습니다. 원본 이미지도 `reference-*.jpg`로 보관합니다.
+### 이미지·영상·필기
 
-- 모델 사진: https://sspark.genspark.ai/i/EyMYBryePyDzkrRt?width=2560 · 원본 안내 https://www.rawpixel.com/search/dental%20implant
-- 치아 구조 그림: https://sspark.genspark.ai/i/e6J2600nB0KDEGhX?width=2560 · 원본 안내 https://www.rawpixel.com/search/dental%20design
-- 실제 환자 비포애프터, 임의의 치료 결과, 의료진 검토 완료 자료로 사용하지 않습니다. 보충 이미지의 출처를 해당 목업/갤러리에 표시했습니다.
-- `npm run mockups:render`는 Playwright와 로컬 Noto Sans CJK KR 폰트로 8개 PNG를 재생성합니다. 유료 AI 이미지 생성 도구를 사용하지 않았습니다. 이미 발송된 안내장과의 호환을 위해 배포 후 이미지 내용을 바꿀 때는 새 파일명/버전 키를 사용하세요.
+- 이미지 중심 카드와 큰 설명 화면. 본문은 선택 입력·접힌 보충 설명. 기존 텍스트/비용표 호환.
+- 이미지 JPG/PNG/WebP 5MB, 영상 MP4/WebM 25MB. 파일 시그니처·크기 검사. 비포애프터는 이미지 2장 전용.
+- R2 실제 미디어는 소유 병원 세션 또는 유효한 안내장 스냅샷 토큰으로만 접근. `private, no-store`, 영상 Range 206/416 지원.
+- 펜·형광펜·지우개·색상·굵기·되돌리기/다시하기·전체 지우기·PNG 다운로드·저장.
+- 정규화 좌표로 원본 비율 유지, Pointer Events 마우스/터치/펜 지원. 원본 파일은 변경하지 않습니다.
+- **필기는 설명 scope별로 분리**합니다. 새 설명은 별도 scope를 발급하며, 기존 공용 필기는 명시적으로 복사할 때만 들어갑니다. 복사 후 수정·삭제해도 원본 공용 필기와 다른 scope는 변하지 않습니다. 현재 scope와 선택 목록은 병원 ID별 sessionStorage에 참조만 저장하며 벡터·이미지는 D1/R2에 저장합니다. 환자 식별정보를 수집하는 CRM은 아닙니다.
+- 기존 공용 `material_annotations` API는 호환용으로 유지. 새 콘솔은 `?scope=`를 사용해 `scoped_annotations`를 읽고 씁니다. scope를 알아도 다른 병원 권한을 우회할 수 없습니다.
+- 영상당 현재 장면 하나의 필기를 저장. 다른 시점으로 바꾸면 교체 확인, 재생 중에는 어긋난 오버레이를 숨깁니다. 안내장에는 원본 영상과 시각이 표시된 필기 PNG를 함께 제공합니다.
+- 저장 재시도는 동일 write_key로 처리하고 version 충돌 시 입력 보존. 자료 이동·닫기 전에 저장하며 실패하면 이동을 막습니다. 새로고침은 미저장 경고만 제공하며 완전한 오프라인 저장은 아닙니다.
+- 필기 PNG는 불변 R2 키. 이미 발행한 안내장의 필기는 이후 수정·지우기로 바뀌지 않습니다.
 
-## 자료별 필기 및 영상 장면 캡처
+### 비용·사례 전송 안전
 
-- 큰 설명 화면의 이미지/영상마다 보기·스크롤(영상은 재생·이동), 펜, 형광펜, 지우개, 색상, 굵기, 실행취소/다시하기, 전체 지우기, PNG 내려받기, 필기 저장 도구를 제공합니다.
-- 마우스·터치·펜의 Pointer Events 입력을 받으며 복수 손가락의 동시 획은 무시합니다. 필기 모드에서만 터치 스크롤을 막습니다. 압력 감응/실물 Apple Pencil·Safari 검증은 별도입니다.
-- 원본 비율을 유지한 별도 캔버스에 정규화 좌표(0~1)로 그립니다. 원본 파일은 수정하지 않습니다. 여러 첨부 파일과 다른 자료의 필기는 분리합니다.
-- 병원별·자료별·원본 미디어 키별로 현재 필기를 저장합니다. 개인 환자 기록이 아닌 병원 공용 자료 필기입니다. 다음 설명에 불필요한 필기가 남지 않았는지 확인하고 필요하면 지워주세요.
-- 영상은 일시정지한 장면에 필기합니다. 재생 중 또는 다른 시점에서는 기존 필기 레이어를 숨깁니다. 현재 영상당 하나의 장면 필기를 저장하며, 다른 장면에 쓰려면 기존 필기 교체를 확인합니다. 이미 발송한 장면 캡처는 바뀌지 않습니다.
-- 명시적 저장 및 설명 화면의 이전/다음 자료 이동·닫기 시 저장합니다. 실패/충돌하면 화면 이동을 멈추고 입력을 보존합니다. 탭 종료/새로고침은 미저장 경고만 제공하며 완전한 오프라인 영속 저장은 아닙니다.
-- `GET/PUT /api/materials/:id/annotations`: 현재 병원 소유의 활성 자료와 연결된 미디어만 허용. PUT은 media_key, version, write_key, strokes, image_png, 영상일 때 video_time을 받습니다.
-- `0003_material_annotations.sql`: material_annotations 테이블. 벡터 획과 버전은 D1, 원본/영상 프레임+필기를 합친 PNG는 R2에 별도 저장합니다. PNG 최대 2MB/1600px, 300획/12,000점, 벡터 JSON 250KB 상한을 검사합니다.
-- write_key로 응답 유실 재시도를 처리하고 version으로 다른 탭의 덮어쓰기를 막습니다. 지우기도 버전을 올려 삭제된 필기의 잘못된 복원을 방지합니다.
-- 설명 끝·보내기는 현재 설명한 자료 목록을 전송 화면으로 가져옵니다. 보내기의 **이 자료에 저장된 필기 포함**을 선택하면 `/api/dispatches`에 include_annotations=true를 보냅니다. 서버는 실제 저장된 필기만 스냅샷에 포함하고 클라이언트의 임의 파일 참조를 신뢰하지 않습니다. 미선택 시 원본만 발행합니다.
-- 환자는 필기한 이미지와 원본 보기, 또는 원본 영상과 시각이 표시된 필기 캡처를 봅니다. 이미 보낸 PNG는 불변 키를 참조하므로 나중에 수정/지우기를 해도 유지됩니다. 미사용 R2 필기 파일의 보존·정리는 후속 과제입니다.
-- **공개 필기 체험**: `/static/mockups/annotate.html?file=implant` (orthodontics/prosthetics/endodontics/caries/periodontal/pulp/cracked-tooth 선택 가능). 실제 필기 도구를 사용하지만 병원 서버 저장/환자 전송 없이 PNG 다운로드만 제공합니다.
+- 비용 자료: 포함 범위, 별도 비용 조건, 대안별 차이(선택), 안내 기준일, 유효기간, 검사 후 변동 가능성. 환자에게 공용 안내이며 확정 견적이 아님을 표시합니다.
+- 서버가 필수 비용 항목·실제 달력 날짜·기준일 및 유효기간을 확인합니다. 미입력/만료 자료는 병원 내 열람은 가능하지만 새 외부 발송은 막습니다.
+- 비포애프터는 기본 **병원 내 설명용**. 외부 전송에는 동의 범위 기록, 비식별 확인, 전송 허용 체크, 치료 내용·기간·개인차 안내 및 이미지 2장이 필요합니다.
+- 내부 동의 기록/확인 플래그는 환자 스냅샷에서 제외합니다. 실제 동의서 원문·환자 이름 대신 내부 문서 참조와 허용 범위를 기록하세요.
+- 사진 추가/삭제 시 외부 전송 승인·비식별 확인을 해제합니다. 서버와 편집 화면 모두 재확인을 요구합니다.
+- 시스템은 병원의 확인을 기록할 뿐 실제 동의서 진위, 자동 비식별화, 의료광고 법적 적합성을 보증하지 않습니다. 기존 환자 안내장까지 소급 차단하지 않습니다.
 
-## 운영 상태와 화면
+### 최종 미리보기·발송 상태
 
-- 운영 주소: https://patient-connect.pages.dev
-- `/app`: 병원 콘솔(허브 SSO 로그인 필요), 자료함·설명하기·보내기·발송내역·설정.
-- `/g/:token`: 환자 안내장. `/optout/:token`: 병원별 수신거부.
-- `/privacy`, `/terms`, `/legal-guide`: 정책·병원 안내 문구.
-- API: `/api/materials` GET/POST, `/api/materials/:id` PUT/DELETE, `/api/dispatches` GET/POST, `/api/g/:token` GET. 발송은 `channel=link|alimtalk`, 자료 유형은 `kind`, 진료 항목은 `category`입니다.
-- **2026-09-16 운영 반영 완료**: 유형·세부 분류·이미지/영상·필기 기능을 기존 사용자 소유 Cloudflare Pages `patient-connect`에 배포했습니다. 배포 소스 `4329ba6`, 배포 URL https://6fea281b.patient-connect.pages.dev, 정적 자산 버전 `v20260916-annotations`. 운영 D1 마이그레이션 `0001`~`0003` 적용 완료. GitHub에는 아직 푸시하지 않았습니다.
-- **서울비디치과 자료함 등록 완료**: 기존 2개를 보존하고 진료설명 4개·질환설명 4개 이미지 목업을 추가해 총 10개입니다. 다른 병원 자료함과 기존 발송 2건은 그대로 유지했습니다. 등록 전 운영 SQL 백업을 복원해 무결성을 확인했으며, 기존 hospitals/materials/dispatches/optouts 행의 보존을 검증했습니다.
-- 운영 검증 범위: `/app` 버전, 비로그인 API 401, PNG 8개 응답, Hub 인증 시작 리디렉션, D1 등록 내용, 기존 D1/R2 바인딩과 환경변수 이름 보존. 실제 사용자 Hub 로그인 완료 후 전체 클릭 흐름과 실제 SOLAPI 발송은 검증하지 않았습니다. **이번 작업의 실제 환자 메시지 발송은 0건**입니다. 알림톡 사용에는 유효한 키·채널·승인 템플릿 설정이 필요합니다.
+- `POST /api/dispatches/preview`는 현재 자료·해당 scope 필기·병원 연락정보·수신 대상/채널을 검증하고 미리보기와 SHA-256 digest를 반환합니다. 안내장/열람 기록을 만들거나 외부 발송하지 않습니다.
+- 발행은 `confirmed=true`, `preview_hash`, `request_key` 필요. 미리보기 후 자료·필기·병원 정보가 달라지면 재확인하도록 409를 반환합니다. 삭제/타 병원 자료를 조용히 누락하여 보내지 않습니다. 최대 40개 자료.
+- 병원+request_key 고유 제약과 요청 hash로 동시 클릭·응답 유실 재시도의 중복 발행을 막습니다. 동일 키로 다른 내용을 보내면 거절합니다. 미확정 네트워크 오류 시 UI는 같은 요청의 결과 확인만 허용합니다.
+- SOLAPI 접수는 `accepted`, 명시적 전달 성공은 `delivered`, 확정 실패는 `failed`, 접수 여부를 알 수 없는 통신 장애는 `unknown`으로 구분합니다. 기존 `sent`도 전달 미확인으로 표시합니다.
+- 발송내역의 **결과 확인**은 SOLAPI 그룹 조회만 수행하며 메시지를 다시 보내지 않습니다. SOLAPI 공식 Node SDK 6.0.1의 group endpoint 및 count.sentSuccess/sentFailed 필드를 참조했습니다.
+- 자동 재발송은 하지 않습니다. 특히 unknown/created를 재발송하면 중복될 수 있으므로 SOLAPI 콘솔에서 확인해야 합니다. 실패 시 기존 안내장 링크 복사로 직접 전달할 수 있습니다. 동일 요청의 결과 재조회와 실제 새 발송은 구분됩니다.
+- 통계는 링크 발행·카카오 접수 기준이며 실제 전달 완료율로 해석하면 안 됩니다.
+- 설정에서 병원 전화, `https://pf.kakao.com/...` 상담 주소, HTTPS 예약 주소를 저장하면 안내장 하단에 표시합니다. 주소 미입력 시 해당 버튼은 숨깁니다. 카카오 발신 채널과 병원 상담 채널 링크는 별개입니다.
 
-## 데이터
+## 목업·출처
 
-D1 `patient-connect-production`: hospitals, materials, material_annotations, dispatches, views, optouts, hub_profile_cache. R2 `patient-connect-assets` (`MEDIA`): 병원 이미지/영상. 공개 목업만 배포 정적 파일로 제공하며 실제 업로드는 R2에 저장합니다. 발송 시 선택 자료 스냅샷을 `dispatches.materials_json`에 저장하므로 이후 자료 수정이 이미 보낸 안내장을 변경하지 않습니다.
+1200×750 PNG 8개를 `public/static/mockups/`에 포함. 모두 설명용 목업·실제 임상자료 아님·의료진 검토 전 표시입니다. 실제 환자 전후 사례나 임의 진료비를 만들지 않았습니다.
 
-SESSION_SECRET, PS_SSO_SECRET, PHONE_ENC_KEY, HUB_API_KEY, SOLAPI_API_KEY/SECRET 등의 실제 비밀값은 코드에 기록하지 않습니다. 로컬 검증은 별도 `.wrangler/category-tests` 상태와 합성 병원만 사용합니다. 외부 미리보기/운영의 시크릿 가드는 변경하지 않았습니다.
+- 공개 갤러리: `/static/mockups/index.html`.
+- 공개 필기 체험: `/static/mockups/annotate.html?file=implant` (서버 저장/환자 발송 없이 다운로드만).
+- `/a/examples/<known-name>.png`는 정확한 목업 허용 목록만 공개 정적 파일로 연결합니다.
+- 도식/한국어 레이아웃은 코드로 제작. 일부 참고 이미지는 image_search CC/PD 필터 결과를 사용했고 원본 `reference-*.jpg`를 보관합니다.
+  - 모델 사진: https://sspark.genspark.ai/i/EyMYBryePyDzkrRt?width=2560 · 원본 안내 https://www.rawpixel.com/search/dental%20implant
+  - 치아 구조: https://sspark.genspark.ai/i/e6J2600nB0KDEGhX?width=2560 · 원본 안내 https://www.rawpixel.com/search/dental%20design
+- `npm run mockups:render`: Playwright + 로컬 Noto Sans CJK KR로 재생성. 유료 이미지 생성은 사용하지 않았습니다. 이미 발송된 목업 참조 보존을 위해 변경 시 새 파일명/버전 키 사용을 권장합니다.
 
-## 개발 및 검증
+## 주요 URI와 데이터
+
+| URI | 용도 |
+| --- | --- |
+| `/app` | 병원 자료함·설명하기·보내기·발송내역·설정 |
+| `/api/auth/hub`, `/api/auth/hub/callback` | Hub SSO 시작/콜백 |
+| `/api/me`, `/api/settings` | 병원 정보 GET / 설정 PUT |
+| `/api/materials`, `/api/materials/:id` | 자료 GET/POST, PUT/DELETE |
+| `/api/materials/:id/images` | 미디어 POST / DELETE `?key=` |
+| `/api/material-library`, `/api/materials/examples` | 분류 GET / 확인 후 예시 POST |
+| `/api/material-sets`, `/api/material-sets/:id` | 묶음 GET/POST `{name, material_ids}` / DELETE |
+| `/api/annotation-sessions` | POST `{copy_shared?, material_ids?}` → 새 scope |
+| `/api/materials/:id/annotations?scope=` | 필기 GET/PUT, scope 없으면 기존 공용 자료 |
+| `/api/dispatches/preview` | POST `{material_ids, channel, phone?, label?, include_annotations?, annotation_scope?}` |
+| `/api/dispatches` | 미리보기 확인 후 POST / 발송내역 GET `?limit=` |
+| `/api/dispatches/:id/status` | POST 전달 결과 조회, 재발송 없음 |
+| `/g/:token`, `/api/g/:token` | 환자 안내장 / JSON |
+| `/optout/:token` | 병원별 수신거부 |
+| `/a/*` | 권한 검사된 미디어 |
+| `/privacy`, `/terms`, `/legal-guide` | 정책과 병원 안내 문구 |
+
+D1 테이블: hospitals, materials, dispatches, views, optouts, hub_profile_cache, material_annotations, scoped_annotations, material_sets.
+
+- `materials.images_json`: `{key, caption?, media_type?}[]`, `cost_json`: 비용 항목 배열, `guidance_json`: 비용/사례 안내 및 내부 전송 확인.
+- `dispatches.materials_json`: 발행 시점 불변 자료·필기·공개 안내 스냅샷. 현재 병원 연락처는 안내장 열람 시 조회합니다.
+- `0002_material_examples.sql`, `0003_material_annotations.sql`은 기존 운영 적용됨. `0004_consultation_safety.sql`은 컬럼/테이블/고유 인덱스 추가만 하며 기존 자료·발송 스냅샷은 바꾸지 않습니다.
+- SESSION_SECRET, PS_SSO_SECRET, PHONE_ENC_KEY, HUB_API_KEY, SOLAPI_API_KEY/SECRET 등은 서버 시크릿. 코드/프런트/Git에 비밀값을 넣지 않습니다.
+
+## 개발·검증
 
 ```bash
 cd /home/user/webapp
@@ -89,22 +120,25 @@ npm ci
 npm run typecheck
 npm run build
 npx wrangler d1 migrations apply patient-connect-production --local --persist-to .wrangler/category-tests
-```
-
-PM2로 `npx wrangler pages dev dist --local --persist-to .wrangler/category-tests --ip 0.0.0.0 --port 3000`을 실행한 뒤:
-
-```bash
-npx playwright install chromium
+# PM2로 wrangler pages dev dist --local --persist-to .wrangler/category-tests --ip 0.0.0.0 --port 3000 실행
 npm run test:categories
 npm run test:library
-npm run test:media # ffmpeg 필요, 무음 테스트 영상을 로컬 생성
+npm run test:media
 npm run test:annotations
+npm run test:safety
 ```
 
-검사는 `http://localhost:3000`에만 연결하며 공개 개발용 세션 서명키를 사용하는 로컬 환경을 전제로 합니다. 합성 병원 ID 900001/900002, 900011/900012 및 900021/900041을 생성·정리합니다. 운영 자격증명이나 실제 허브/메시지 API를 호출하지 않습니다.
+- 테스트는 localhost + 별도 `.wrangler/category-tests` D1/R2 + 합성 병원만 사용. Playwright Chromium, ffmpeg 필요.
+- 기존 회귀 134개(분류30/카탈로그32/미디어32/필기40), 신규 안전 58개 통과. 안전 테스트는 scope 분리·사례/비용 정책·미리보기 변경 감지·동시 발행·UI 응답 유실·모바일·연락처·SOLAPI 모의 응답을 포함합니다.
+- SOLAPI 검사는 stub Fetch만 사용합니다. 실제 Hub 사용자 로그인 완료나 실제 환자 메시지 전송 성공을 검증했다고 해석하지 마세요.
+- 빌드 시 `emptyOutDir: true`. 실행 중 Wrangler watcher 경합을 피하려면 PM2 중지 → 포트 정리 → 빌드 → PM2 시작 → curl readiness 순서를 사용합니다.
+- 테스트/운영 SQL 백업은 Git 제외 `.test-results/`. 운영 백업은 복원 무결성 검사를 수행하며 R2 전체 백업은 아닙니다.
 
-총 134개 API/브라우저 검사 통과: 기존 분류 30개, 세부 분류·예시 32개, 이미지·영상 32개, 필기 40개. 필기 검사에는 형광펜 투명도·지우개·전체 지우기 복구·자료/첨부별 분리·새로고침 복원·응답 유실·충돌·영상 시점 캡처·전송 분리·터치 입력이 포함됩니다. 미디어 검사는 목업 파일 8개 로딩, 기존 예시 업그레이드, 업로드 보존, 영상 권한·Range·재생, 환자 안내장 및 공개 갤러리를 포함합니다. 신규 질환 유형 저장, 기존 주의사항 보존, 병원별 격리, 복합 필터, 등록·수정·재분류, 안내장 스냅샷 보존, 모바일 선택과 편집, 예시 확인·삽입·재시도·동시성·기존 내용 보존·예시 표시를 검증했습니다. 결과·스크린샷은 Git 제외 `.test-results/`에 보관합니다.
+## 아직 필요한 운영 준비·후속 과제
 
-## 다음 단계
-
-이번 운영 반영 전 실제 GitHub origin을 다시 확인했으며 추가 원격 변경은 없었습니다. 향후 GitHub 푸시는 별도 승인 후 진행합니다. 실제 사용자 Hub 로그인 완료 흐름, SOLAPI 설정 및 운영 발송, 실물 iPad/Apple Pencil 검증은 별도 작업입니다. 기존 자료의 질환설명 재분류는 내용 확인 후 병원에서 선택적으로 수행합니다.
+- SOLAPI 실제 키·발신 채널·승인 템플릿 설정 및 승인된 테스트 수신번호로 실발송/수신 검증. 이번 작업의 실제 메시지 발송은 0건.
+- 병원의 실제 상담/예약 URL 입력, 의료진의 실제 비용·사례·동의 범위 검토. 시스템이 임의 금액이나 법적 승인을 대신 입력하지 않습니다.
+- 실물 iPad/Apple Pencil/Safari, 압력 감응, 완전한 오프라인 저장은 별도 검증/개발 필요.
+- 영상 하나에 여러 장면 동시 보관, scope 보관기간·미사용 R2 파일 정리 및 상담 간 저장 필기 탐색은 후속 과제입니다.
+- 자동 발송 재시도/웹훅은 제공하지 않습니다. 결과 조회 후 명시적 운영 판단이 필요합니다.
+- GitHub 푸시는 별도 승인 후 진행합니다. 새 운영 변경 전 반드시 실제 `origin`을 fetch하세요.

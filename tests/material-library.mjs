@@ -9,11 +9,13 @@ const ids = [900011, 900012];
 const sql = command => execFileSync('npx', ['wrangler','d1','execute','patient-connect-production','--local','--persist-to','.wrangler/category-tests','--command',command], {stdio:'pipe'});
 const token = id => { const p=`${id}.${Date.now()+3600000}`; return p+'.'+createHmac('sha256','pc-dev-session-secret').update(p).digest('base64url'); };
 async function api(path, body, id=ids[0], method=body===undefined?'GET':'POST', headers={}) {
+ if(path==='/dispatches'&&method==='POST'){const pre=await api('/dispatches/preview',body,id,'POST',headers);if(pre.status!==200)return pre;body={...body,confirmed:true,preview_hash:pre.data.preview_hash,request_key:crypto.randomUUID()}}
+
  const r=await fetch(base+'/api'+path,{method,headers:{...(id?{Cookie:'pc_session='+token(id)}:{}),'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});
  return {status:r.status,data:await r.json()};
 }
 let count=0; const check=(ok,label)=>{assert(ok,label);count++;console.log('PASS',label);};
-const clean = () => sql('DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id IN (900011,900012)); DELETE FROM dispatches WHERE hospital_id IN (900011,900012); DELETE FROM materials WHERE hospital_id IN (900011,900012); DELETE FROM hospitals WHERE id IN (900011,900012);');
+const clean = () => sql('DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id IN (900011,900012)); DELETE FROM dispatches WHERE hospital_id IN (900011,900012); DELETE FROM scoped_annotations WHERE hospital_id IN (900011,900012); DELETE FROM material_sets WHERE hospital_id IN (900011,900012); DELETE FROM materials WHERE hospital_id IN (900011,900012); DELETE FROM hospitals WHERE id IN (900011,900012);');
 clean();
 sql("INSERT INTO hospitals (id,ps_hospital_id,name) VALUES (900011,'library-qa','예시 검증 치과'),(900012,'library-qa-ui','예시 화면 치과');");
 const browser=await chromium.launch();

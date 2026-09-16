@@ -70,7 +70,7 @@
       canvas.style.opacity=sameFrame?'1':'0';canvas.style.pointerEvents=!locked&&tool!=='view'&&sameFrame?'auto':'none';canvas.style.touchAction=tool==='view'?'auto':'none';
       if(video)media.controls=tool==='view'||locked;
       toolbar.querySelectorAll('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool)));
-      status.textContent=message||(m.conflict?'다른 화면의 변경과 충돌 · 현재 필기 유지':m.busy?'필기 저장 중…':m.pending?'저장 결과 확인 필요 · 저장을 다시 눌러주세요':m.dirty?'미저장 필기 · 저장 후 전송하세요':m.version?'병원에 저장된 필기':'원본 위에 필기하세요');
+      status.textContent=message||(m.conflict?'다른 화면의 변경과 충돌 · 현재 필기 유지':m.busy?'필기 저장 중…':m.pending?'저장 결과 확인 필요 · 저장을 다시 눌러주세요':m.dirty?'미저장 필기 · 저장 후 전송하세요':m.version?'현재 설명에 저장된 필기':'원본 위에 필기하세요');
       if(video&&m.strokes.length)status.textContent+=` · ${timeText(m.video_time)} 장면`;
     }
     function change(next){m.undo.push(m.strokes);if(m.undo.length>40)m.undo.shift();m.redo=[];m.strokes=next;m.dirty=true;paint(canvas,m.strokes);ui()}
@@ -143,6 +143,7 @@
     m.save=save;return {flush:save,model:m};
   }
   window.PCAnnotations={
+    reset(){if(this.dirty())throw new Error('미저장 필기를 먼저 저장하세요.');bank.clear();loaded.clear()},
     mount(root,material,request,options={}) {
       const ready=Promise.all([...root.querySelectorAll('[data-annotation-key]')].map(el=>board(el,material,request,!!options.demo)));
       return {ready,async flush(){for(const b of await ready)if(b?.model.dirty)await b.flush()}};

@@ -7,8 +7,10 @@ import assert from 'node:assert/strict';
 const base='http://localhost:3000', hid=900021;
 const token=id=>{const p=`${id}.${Date.now()+3600000}`;return p+'.'+createHmac('sha256','pc-dev-session-secret').update(p).digest('base64url')};
 const sql=q=>execFileSync('npx',['wrangler','d1','execute','patient-connect-production','--local','--persist-to','.wrangler/category-tests','--command',q],{stdio:'pipe'});
-const clean=()=>sql('DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id=900021); DELETE FROM dispatches WHERE hospital_id=900021; DELETE FROM materials WHERE hospital_id=900021; DELETE FROM hospitals WHERE id=900021;');
-async function api(path,body,method=body===undefined?'GET':'POST'){const r=await fetch(base+'/api'+path,{method,headers:{Cookie:'pc_session='+token(hid),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()}}
+const clean=()=>sql('DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id=900021); DELETE FROM dispatches WHERE hospital_id=900021; DELETE FROM scoped_annotations WHERE hospital_id=900021; DELETE FROM material_sets WHERE hospital_id=900021; DELETE FROM materials WHERE hospital_id=900021; DELETE FROM hospitals WHERE id=900021;');
+async function api(path,body,method=body===undefined?'GET':'POST'){
+ if(path==='/dispatches'&&method==='POST'){const pre=await api('/dispatches/preview',body,'POST');if(pre.status!==200)return pre;body={...body,confirmed:true,preview_hash:pre.data.preview_hash,request_key:crypto.randomUUID()}}
+const r=await fetch(base+'/api'+path,{method,headers:{Cookie:'pc_session='+token(hid),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()}}
 async function upload(id,bytes,type,name){const form=new FormData();form.set('file',new Blob([bytes],{type}),name);const r=await fetch(base+`/api/materials/${id}/images`,{method:'POST',headers:{Cookie:'pc_session='+token(hid)},body:form});return{status:r.status,data:await r.json()}}
 let checks=0;const check=(ok,msg)=>{assert(ok,msg);checks++;console.log('PASS',msg)};
 fs.mkdirSync('.test-results',{recursive:true});
@@ -52,10 +54,10 @@ try {
  await p.goto(base+'/app');await p.waitForSelector('.media-card-cover');await p.waitForFunction(()=>[...document.querySelectorAll('.media-card-cover>img')].every(i=>i.complete&&i.naturalWidth>0));
  check(await p.locator('.media-card-cover>img').count()===8,'Library displays loaded image thumbnails instead of text-only placeholders');
  await p.waitForTimeout(400);await p.screenshot({path:'.test-results/image-library-desktop.png',fullPage:true});
- await p.locator(`[data-preview="${first.id}"]`).click();await p.waitForSelector('.media-stage img');
+ await p.locator(`[data-preview="${first.id}"]`).click();await p.locator('#session-clean').click();await p.waitForSelector('.media-stage img');
  check(await p.locator('.media-stage img').count()===2,'Thumbnail click opens full-size image-first presentation');
  check(await p.locator('.media-supplement').getAttribute('open')===null,'Long text stays optional rather than competing with the image');await p.screenshot({path:'.test-results/image-presentation.png'});await p.locator('#cl').click();
- await p.locator(`[data-preview="${video.id}"]`).click();await p.waitForSelector('.present video');
+ await p.locator(`[data-preview="${video.id}"]`).click();await p.locator('#session-clean').click();await p.waitForSelector('.present video');
  await p.locator('.present video').evaluate(async v=>{v.muted=true;await v.play()});
  check(await p.locator('.present video').evaluate(v=>v.readyState>=2),'Uploaded video plays in the explanation screen');await p.locator('#cl').click();
  const guest=await browser.newPage({viewport:{width:390,height:844}});await guest.goto(base+'/g/'+published.token);await guest.waitForSelector('video');await guest.locator('video').evaluate(async v=>{v.muted=true;await v.play()});

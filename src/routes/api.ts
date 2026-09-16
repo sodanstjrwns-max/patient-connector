@@ -7,6 +7,8 @@ import { normalizePhone, phoneHash, encPhone, randomToken, maskPhone } from '../
 import { sendAlimtalk, alimtalkReady } from '../lib/solapi'
 import { materialCategories, materialExamples, exampleNotice } from '../lib/material-library'
 import annotations from './annotations'
+import { guidanceOf, publicGuidance, shareIssue, safeLink, digest } from '../lib/guidance'
+import { deliveryStatus } from '../lib/solapi'
 
 export type Bindings = {
   DB: D1Database
@@ -41,9 +43,9 @@ function parseJson<T>(s: string | null | undefined, fallback: T): T {
 }
 type ImageRef = { key: string; caption?: string; media_type?: 'image' | 'video' }
 type CostItem = { name: string; price: number; qty?: number; note?: string }
-type MaterialRow = { id: number; hospital_id: number; kind: string; category: string | null; title: string; body: string | null; images_json: string; cost_json: string; sort: number; active: number; updated_at: string; example_key?: string | null }
+type MaterialRow = { id: number; hospital_id: number; kind: string; category: string | null; title: string; body: string | null; images_json: string; cost_json: string; sort: number; active: number; updated_at: string; example_key?: string | null; guidance_json?: string }
 function materialOut(m: MaterialRow) {
-  return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body || '', images: parseJson<ImageRef[]>(m.images_json, []), cost: parseJson<CostItem[]>(m.cost_json, []), sort: m.sort, active: !!m.active, updated_at: m.updated_at, is_example: !!m.example_key }
+  return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body || '', images: parseJson<ImageRef[]>(m.images_json, []), cost: parseJson<CostItem[]>(m.cost_json, []), sort: m.sort, active: !!m.active, updated_at: m.updated_at, is_example: !!m.example_key, guidance: guidanceOf(parseJson(m.guidance_json, {})) }
 }
 function sanitizeCost(input: unknown): CostItem[] {
   if (!Array.isArray(input)) return []
@@ -88,7 +90,7 @@ api.post('/auth/logout', (c) => { c.header('Set-Cookie', clearCookie()); return 
 // ─── 공개: 안내장·수신거부 (세션 불필요) ───
 async function loadDispatchByToken(c: any, token: string) {
   if (!/^[0-9a-f]{32}$/.test(token)) return null
-  const d = (await c.env.DB.prepare(`SELECT d.*, h.name AS h_name, h.phone AS h_phone, h.address AS h_address FROM dispatches d JOIN hospitals h ON h.id = d.hospital_id WHERE d.token = ?`).bind(token).first()) as any
+  const d = (await c.env.DB.prepare(`SELECT d.*, h.name AS h_name, h.phone AS h_phone, h.address AS h_address, h.chat_url, h.booking_url FROM dispatches d JOIN hospitals h ON h.id = d.hospital_id WHERE d.token = ?`).bind(token).first()) as any
   return d || null
 }
 api.get('/g/:token', async (c) => {
@@ -101,7 +103,7 @@ api.get('/g/:token', async (c) => {
     c.env.DB.prepare(`INSERT INTO views (dispatch_id, material_index) VALUES (?, NULL)`).bind(d.id),
   ]).catch(() => undefined)
   return c.json({
-    hospital: { name: d.h_name, phone: d.h_phone, address: d.h_address },
+    hospital: { name: d.h_name, phone: d.h_phone, address: d.h_address, chat_url: d.chat_url, booking_url: d.booking_url },
     materials: parseJson<any[]>(d.materials_json, []),
     sent_at: d.sent_at || d.created_at, expires_at: d.expires_at, token: d.token,
   })
@@ -129,11 +131,14 @@ api.use('/*', async (c, next) => {
   const sid = await verifySession(getSessionToken(c.req.header('Cookie')), c.env.SESSION_SECRET)
   if (!sid) return c.json({ error: '로그인이 필요합니다', auth_required: true }, 401)
   c.set('hid', sid)
+  c.header('Cache-Control', 'private, no-store')
+  const origin = c.req.header('Origin')
+  if (!['GET','HEAD'].includes(c.req.method) && ((origin && origin !== new URL(c.req.url).origin) || c.req.header('Sec-Fetch-Site') === 'cross-site')) return c.json({ error: '다른 사이트의 요청은 허용하지 않습니다' }, 403)
   await next()
 })
 
 api.get('/me', async (c) => {
-  const h = await c.env.DB.prepare('SELECT id, ps_hospital_id, name, phone, address, link_days FROM hospitals WHERE id = ?').bind(c.get('hid')).first<any>()
+  const h = await c.env.DB.prepare('SELECT id, ps_hospital_id, name, phone, address, link_days, chat_url, booking_url FROM hospitals WHERE id = ?').bind(c.get('hid')).first<any>()
   if (!h) { c.header('Set-Cookie', clearCookie()); return c.json({ error: 'no_hospital', auth_required: true }, 401) }
   return c.json({ hospital: h, alimtalk_ready: alimtalkReady(c.env), base_url: baseUrl(c) })
 })
@@ -142,12 +147,44 @@ api.put('/settings', async (c) => {
   const phone = b.phone ? String(b.phone).slice(0, 30) : null
   const address = b.address ? String(b.address).slice(0, 120) : null
   const linkDays = Math.max(7, Math.min(180, Math.round(Number(b.link_days) || 30)))
-  await c.env.DB.prepare('UPDATE hospitals SET phone = ?, address = ?, link_days = ? WHERE id = ?').bind(phone, address, linkDays, c.get('hid')).run()
+  let chat, booking
+  try { chat = safeLink(b.chat_url, true); booking = safeLink(b.booking_url) } catch (e: any) { return c.json({ error: e.message }, 400) }
+  await c.env.DB.prepare('UPDATE hospitals SET phone = ?, address = ?, link_days = ?, chat_url = ?, booking_url = ? WHERE id = ?').bind(phone, address, linkDays, chat, booking, c.get('hid')).run()
   return c.json({ ok: true })
 })
 
 // Annotation routes inherit the clinic session middleware above.
 api.route('/materials', annotations)
+
+api.post('/annotation-sessions', async c => {
+  const b = await c.req.json().catch(() => ({} as any)), scope = randomToken(16), hid = c.get('hid')
+  const ids: number[] = Array.isArray(b.material_ids) ? [...new Set<number>(b.material_ids.map(Number).filter(Number.isInteger))].slice(0,40) : []
+  if (b.copy_shared === true && ids.length) {
+    await c.env.DB.prepare(`INSERT INTO scoped_annotations (hospital_id,scope,material_id,media_key,strokes_json,image_key,video_time,version,write_key)
+      SELECT a.hospital_id,?,a.material_id,a.media_key,a.strokes_json,a.image_key,a.video_time,1,?
+      FROM material_annotations a JOIN materials m ON m.id=a.material_id AND m.hospital_id=a.hospital_id
+      WHERE a.hospital_id=? AND m.active=1 AND m.id IN (${ids.map(()=>'?').join(',')})`)
+      .bind(scope, randomToken(16), hid, ...ids).run()
+  }
+  return c.json({ scope })
+})
+api.get('/material-sets', async c => {
+  const rows = await c.env.DB.prepare('SELECT id,name,ids_json FROM material_sets WHERE hospital_id=? ORDER BY id').bind(c.get('hid')).all<any>()
+  return c.json({ sets: rows.results.map(r => ({ id:r.id, name:r.name, material_ids:parseJson(r.ids_json,[]) })) })
+})
+api.post('/material-sets', async c => {
+  const b = await c.req.json().catch(() => ({} as any)), name = String(b.name || '').trim().slice(0,60)
+  const ids = Array.isArray(b.material_ids) ? [...new Set<number>(b.material_ids.map(Number).filter(Number.isInteger))] : []
+  if (!name || !ids.length || ids.length > 40) return c.json({error:'묶음 이름과 자료 1~40개를 확인하세요.'},400)
+  const own = await c.env.DB.prepare(`SELECT id FROM materials WHERE hospital_id=? AND active=1 AND id IN (${ids.map(()=>'?').join(',')})`).bind(c.get('hid'),...ids).all()
+  if (own.results.length !== ids.length) return c.json({error:'삭제되었거나 접근할 수 없는 자료가 있습니다.'},400)
+  await c.env.DB.prepare('INSERT INTO material_sets (hospital_id,name,ids_json) VALUES (?,?,?) ON CONFLICT(hospital_id,name) DO UPDATE SET ids_json=excluded.ids_json').bind(c.get('hid'),name,JSON.stringify(ids)).run()
+  return c.json({ok:true})
+})
+api.delete('/material-sets/:id', async c => {
+  await c.env.DB.prepare('DELETE FROM material_sets WHERE hospital_id=? AND id=?').bind(c.get('hid'),c.req.param('id')).run()
+  return c.json({ok:true})
+})
 
 // ─── 자료함 ───
 api.get('/material-library', async (c) => {
@@ -189,6 +226,7 @@ async function readMaterialBody(c: any) {
     category: b.category ? String(b.category).trim().slice(0, 30) : null,
     body: b.body ? String(b.body).slice(0, 4000) : '',
     cost: JSON.stringify(sanitizeCost(b.cost)),
+    guidance: b.guidance === undefined ? null : JSON.stringify(guidanceOf(b.guidance)),
   }
 }
 api.post('/materials', async (c) => {
@@ -196,16 +234,16 @@ api.post('/materials', async (c) => {
   if (!m) return c.json({ error: '제목을 입력하세요' }, 400)
   const hid = c.get('hid')
   const mx = await c.env.DB.prepare('SELECT COALESCE(MAX(sort), 0) AS s FROM materials WHERE hospital_id = ?').bind(hid).first<{ s: number }>()
-  const r = await c.env.DB.prepare(`INSERT INTO materials (hospital_id, kind, category, title, body, cost_json, sort) VALUES (?,?,?,?,?,?,?)`)
-    .bind(hid, m.kind, m.category, m.title, m.body, m.cost, Number(mx?.s || 0) + 1).run()
+  const r = await c.env.DB.prepare(`INSERT INTO materials (hospital_id, kind, category, title, body, cost_json, sort, guidance_json) VALUES (?,?,?,?,?,?,?,?)`)
+    .bind(hid, m.kind, m.category, m.title, m.body, m.cost, Number(mx?.s || 0) + 1, m.guidance || '{}').run()
   const row = await c.env.DB.prepare('SELECT * FROM materials WHERE id = ?').bind(r.meta.last_row_id).first<MaterialRow>()
   return c.json({ material: materialOut(row!) })
 })
 api.put('/materials/:id', async (c) => {
   const m = await readMaterialBody(c)
   if (!m) return c.json({ error: '제목을 입력하세요' }, 400)
-  const r = await c.env.DB.prepare(`UPDATE materials SET kind=?, category=?, title=?, body=?, cost_json=?, updated_at=datetime('now') WHERE id = ? AND hospital_id = ?`)
-    .bind(m.kind, m.category, m.title, m.body, m.cost, c.req.param('id'), c.get('hid')).run()
+  const r = await c.env.DB.prepare(`UPDATE materials SET kind=?, category=?, title=?, body=?, cost_json=?, guidance_json=COALESCE(?,guidance_json), updated_at=datetime('now') WHERE id = ? AND hospital_id = ?`)
+    .bind(m.kind, m.category, m.title, m.body, m.cost, m.guidance, c.req.param('id'), c.get('hid')).run()
   if (!r.meta.changes) return c.json({ error: 'not_found' }, 404)
   const row = await c.env.DB.prepare('SELECT * FROM materials WHERE id = ?').bind(c.req.param('id')).first<MaterialRow>()
   return c.json({ material: materialOut(row!) })
@@ -246,7 +284,7 @@ api.post('/materials/:id/images', async (c) => {
   await c.env.MEDIA.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } })
   const caption = String(form?.get('caption') || '').slice(0, 60)
   images.push({ key, ...(caption ? { caption } : {}), media_type: video ? 'video' : 'image' })
-  await c.env.DB.prepare(`UPDATE materials SET images_json = ?, updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
+  await c.env.DB.prepare(`UPDATE materials SET images_json = ?, guidance_json = json_set(guidance_json, '$.external_allowed', json('false'), '$.deidentified', json('false')), updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
   return c.json({ images })
 })
 api.delete('/materials/:id/images', async (c) => {
@@ -254,17 +292,33 @@ api.delete('/materials/:id/images', async (c) => {
   const key = c.req.query('key') || ''
   const row = await c.env.DB.prepare('SELECT * FROM materials WHERE id = ? AND hospital_id = ?').bind(c.req.param('id'), hid).first<MaterialRow>()
   if (!row) return c.json({ error: 'not_found' }, 404)
-  const images = parseJson<ImageRef[]>(row.images_json, []).filter((i) => i.key !== key)
-  await c.env.DB.prepare(`UPDATE materials SET images_json = ?, updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
+  const existing = parseJson<ImageRef[]>(row.images_json, [])
+  if (!key || !existing.some(i => i.key === key)) return c.json({error:'이미지를 찾을 수 없습니다.'},404)
+  const images = existing.filter((i) => i.key !== key)
+  await c.env.DB.prepare(`UPDATE materials SET images_json = ?, guidance_json = json_set(guidance_json, '$.external_allowed', json('false'), '$.deidentified', json('false')), updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
   // 발송된 안내장 스냅샷이 같은 키를 참조할 수 있으므로 R2 객체는 지우지 않는다(보관).
   return c.json({ images })
 })
 
 // ─── 발송(안내장) ───
-api.post('/dispatches', async (c) => {
+api.use('/dispatches*', bodyLimit({maxSize:65536,onError:c=>c.json({error:'발송 요청이 너무 큽니다.'},413)}))
+api.on('POST', ['/dispatches', '/dispatches/preview'], async (c) => {
   const hid = c.get('hid')
   const b = await c.req.json().catch(() => ({} as any))
-  const ids: number[] = Array.isArray(b.material_ids) ? b.material_ids.map(Number).filter(Number.isInteger) : []
+  if (!b || typeof b !== 'object' || Array.isArray(b)) return c.json({error:'올바른 요청이 필요합니다.'},400)
+  const preview = c.req.path.endsWith('/preview')
+  const requestKey = b.request_key
+  if (!preview && (typeof requestKey !== 'string' || !/^[a-zA-Z0-9_-]{16,80}$/.test(requestKey))) return c.json({error:'발송 요청 키가 필요합니다.'},400)
+  const requestHash = await digest({material_ids:b.material_ids,phone:b.phone || '',label:b.label || '',channel:b.channel,include_annotations:b.include_annotations === true,annotation_scope:b.annotation_scope || '',preview_hash:b.preview_hash})
+  if (!preview) {
+    const prior = await c.env.DB.prepare('SELECT * FROM dispatches WHERE hospital_id=? AND request_key=?').bind(hid,requestKey).first<any>()
+    if (prior) {
+      if (prior.request_hash !== requestHash) return c.json({error:'같은 요청 키로 다른 내용을 보낼 수 없습니다.'},409)
+      return c.json({id:prior.id,token:prior.token,url:`${baseUrl(c)}/g/${prior.token}`,status:prior.status,error:prior.error,replayed:true})
+    }
+  }
+  const ids: number[] = Array.isArray(b.material_ids) ? [...new Set<number>(b.material_ids.map(Number).filter(Number.isInteger))] : []
+  if (ids.length > 40) return c.json({error:'안내장에는 최대 40개 자료를 담을 수 있습니다.'},400)
   if (!ids.length) return c.json({ error: '보낼 자료를 하나 이상 고르세요' }, 400)
   const channel = b.channel === 'link' ? 'link' : 'alimtalk'
   const label = b.label ? String(b.label).slice(0, 40) : null
@@ -274,13 +328,17 @@ api.post('/dispatches', async (c) => {
   const placeholders = ids.map(() => '?').join(',')
   const rows = await c.env.DB.prepare(`SELECT * FROM materials WHERE hospital_id = ? AND active = 1 AND id IN (${placeholders})`).bind(hid, ...ids).all<MaterialRow>()
   const byId = new Map((rows.results || []).map((m) => [m.id, m]))
+  if (byId.size !== ids.length) return c.json({error:'삭제되었거나 접근할 수 없는 자료가 있습니다. 목록을 다시 확인하세요.'},409)
+  for (const row of rows.results) { const issue = shareIssue(materialOut(row)); if (issue) return c.json({error:issue},400) }
+  const scope = b.annotation_scope || ''
+  if (scope && (typeof scope !== 'string' || !/^[a-zA-Z0-9_-]{16,80}$/.test(scope))) return c.json({error:'설명 세션을 확인하세요.'},400)
   const savedNotes = b.include_annotations === true
-    ? (await c.env.DB.prepare(`SELECT material_id, media_key, image_key, video_time FROM material_annotations WHERE hospital_id = ? AND material_id IN (${placeholders}) AND image_key IS NOT NULL`).bind(hid, ...ids).all<{material_id: number; media_key: string; image_key: string; video_time: number | null}>()).results
+    ? (await c.env.DB.prepare(`SELECT material_id, media_key, image_key, video_time FROM ${scope ? 'scoped_annotations' : 'material_annotations'} WHERE hospital_id = ? AND material_id IN (${placeholders}) AND image_key IS NOT NULL ${scope ? 'AND scope=?' : ''} ORDER BY material_id, media_key`).bind(hid, ...ids, ...(scope ? [scope] : [])).all<{material_id: number; media_key: string; image_key: string; video_time: number | null}>()).results
     : []
   const snapshot = ids.filter((id) => byId.has(id)).map((id) => {
     const m = materialOut(byId.get(id)!)
     const notes = savedNotes.filter(a => a.material_id === m.id && m.images.some(im => im.key === a.media_key)).map(a => ({ media_key: a.media_key, image_key: a.image_key, video_time: a.video_time }))
-    return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body, images: m.images, cost: m.cost, is_example: m.is_example, annotations: notes }
+    return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body, images: m.images, cost: m.cost, is_example: m.is_example, annotations: notes, guidance: publicGuidance(m.guidance) }
   })
   if (!snapshot.length) return c.json({ error: '보낼 자료가 없습니다' }, 400)
 
@@ -295,10 +353,19 @@ api.post('/dispatches', async (c) => {
     pEnc = await encPhone(phone, c.env.PHONE_ENC_KEY)
     last4 = phone.slice(-4)
   }
+  const hospital = {name:h.name,phone:h.phone,address:h.address,chat_url:h.chat_url,booking_url:h.booking_url}
+  const previewHash = await digest({snapshot,hospital,days:h.link_days,phone:phone || '',label,channel})
+  if (preview) return c.json({materials:snapshot,hospital,preview_hash:previewHash,sent_at:new Date().toISOString(),expires_at:new Date(Date.now()+(Number(h.link_days)||30)*86400000).toISOString()})
+  if (b.preview_hash !== previewHash || b.confirmed !== true) return c.json({error:'자료 또는 필기가 변경되었거나 최종 확인이 없습니다. 미리보기를 다시 확인하세요.'},409)
   const token = randomToken(16)
   const days = Math.max(7, Math.min(180, Number(h.link_days) || 30))
-  const r = await c.env.DB.prepare(`INSERT INTO dispatches (hospital_id, token, label, phone_enc, phone_hash, phone_last4, materials_json, channel, status, expires_at) VALUES (?,?,?,?,?,?,?,?,?, datetime('now', '+${days} days'))`)
-    .bind(hid, token, label, pEnc, pHash, last4, JSON.stringify(snapshot), channel, channel === 'link' ? 'link' : 'created').run()
+  const r = await c.env.DB.prepare(`INSERT INTO dispatches (hospital_id, token, label, phone_enc, phone_hash, phone_last4, materials_json, channel, status, expires_at, request_key, request_hash) VALUES (?,?,?,?,?,?,?,?,?, datetime('now', '+${days} days'),?,?) ON CONFLICT(hospital_id,request_key) DO NOTHING`)
+    .bind(hid, token, label, pEnc, pHash, last4, JSON.stringify(snapshot), channel, channel === 'link' ? 'link' : 'created', requestKey, requestHash).run()
+  if (!r.meta.changes) {
+    const prior = await c.env.DB.prepare('SELECT * FROM dispatches WHERE hospital_id=? AND request_key=?').bind(hid,requestKey).first<any>()
+    if (prior?.request_hash !== requestHash) return c.json({error:'발송 요청 키 충돌'},409)
+    return c.json({id:prior.id,token:prior.token,url:`${baseUrl(c)}/g/${prior.token}`,status:prior.status,error:prior.error,replayed:true})
+  }
   const id = Number(r.meta.last_row_id)
   const url = `${baseUrl(c)}/g/${token}`
 
@@ -312,11 +379,26 @@ api.post('/dispatches', async (c) => {
   }
   const res = await sendAlimtalk(c.env, phone!, { '#{병원명}': h.name, '#{안내장링크}': url.replace(/^https?:\/\//, '') })
   if (res.ok) {
-    await c.env.DB.prepare(`UPDATE dispatches SET status = 'sent', solapi_group_id = ?, sent_at = datetime('now') WHERE id = ?`).bind(res.groupId || null, id).run()
-    return c.json({ id, token, url, status: 'sent' })
+    await c.env.DB.prepare(`UPDATE dispatches SET status = 'accepted', solapi_group_id = ?, sent_at = datetime('now') WHERE id = ?`).bind(res.groupId || null, id).run()
+    return c.json({ id, token, url, status: 'accepted' })
   }
-  await c.env.DB.prepare(`UPDATE dispatches SET status = 'failed', error = ? WHERE id = ?`).bind(String(res.error || '발송 실패').slice(0, 200), id).run()
-  return c.json({ id, token, url, status: 'failed', error: res.error })
+  const status = res.uncertain ? 'unknown' : 'failed'
+  await c.env.DB.prepare(`UPDATE dispatches SET status = ?, error = ?, solapi_group_id = ? WHERE id = ?`).bind(status, String(res.error || '발송 실패').slice(0, 200), res.groupId || null, id).run()
+  return c.json({ id, token, url, status, error: res.error })
+})
+// Status checks never resend. Ambiguous network failures remain unknown to prevent duplicates.
+api.post('/dispatches/:id/status', async c => {
+  const d = await c.env.DB.prepare('SELECT * FROM dispatches WHERE id=? AND hospital_id=?').bind(c.req.param('id'),c.get('hid')).first<any>()
+  if (!d) return c.json({error:'안내장을 찾을 수 없습니다.'},404)
+  if (d.solapi_group_id && ['sent','accepted','unknown','created'].includes(d.status)) {
+    const result = await deliveryStatus(c.env,d.solapi_group_id)
+    if (result.status) {
+      await c.env.DB.prepare('UPDATE dispatches SET status=?,error=? WHERE id=? AND hospital_id=? AND status=?').bind(result.status,result.error || null,d.id,c.get('hid'),d.status).run()
+      return c.json({status:result.status,error:result.error})
+    }
+    return c.json({status:d.status,error:result.error})
+  }
+  return c.json({status:d.status,error:d.error})
 })
 api.get('/dispatches', async (c) => {
   const limit = Math.max(1, Math.min(200, Number(c.req.query('limit')) || 50))
@@ -331,7 +413,7 @@ api.get('/dispatches', async (c) => {
 })
 api.get('/stats', async (c) => {
   const hid = c.get('hid')
-  const q = async (days: number) => (await c.env.DB.prepare(`SELECT COUNT(*) AS sent, SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened FROM dispatches WHERE hospital_id = ? AND status IN ('sent','link') AND created_at >= datetime('now', '-${days} days')`).bind(hid).first<any>()) || {}
+  const q = async (days: number) => (await c.env.DB.prepare(`SELECT COUNT(*) AS sent, SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened FROM dispatches WHERE hospital_id = ? AND status IN ('sent','accepted','delivered','link') AND created_at >= datetime('now', '-${days} days')`).bind(hid).first<any>()) || {}
   const s7 = await q(7), s30 = await q(30)
   return c.json({ d7: { sent: Number(s7.sent || 0), opened: Number(s7.opened || 0) }, d30: { sent: Number(s30.sent || 0), opened: Number(s30.opened || 0) } })
 })

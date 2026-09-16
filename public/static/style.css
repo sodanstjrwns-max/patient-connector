@@ -1,4 +1,27 @@
 /* Patient Connect 공통 스타일 */
+.safety-dialog { width:min(94vw,560px); max-height:90dvh; border:1px solid #dbe5ed; border-radius:20px; padding:24px; color:#1e293b; box-shadow:0 24px 80px #0f172a40; }
+.safety-dialog::backdrop {background:#0f172aa8;backdrop-filter:blur(4px)}
+.safety-dialog h2 {font-size:1.25rem;font-weight:800;margin-bottom:12px}
+.safety-dialog p {font-size:.85rem;line-height:1.7;margin-bottom:12px;color:#64748b}
+.safety-dialog button,.contact-button {display:inline-flex;padding:10px 14px;border:1px solid #dbe5ed;border-radius:10px;margin:5px 5px 5px 0;font-size:.85rem;background:#fff;color:#334155;align-items:center;justify-content:center}
+#session-start button {width:100%}
+.safety-dialog .primary-action {background:#0369a1;color:white;border-color:#0369a1;font-weight:700}
+.safety-dialog button:disabled {opacity:.45}
+.safety-dialog :focus-visible {outline:3px solid #38bdf8;outline-offset:2px}
+.handout-preview {width:min(96vw,760px);padding:0}
+.handout-preview>header,.handout-preview>footer {padding:20px;background:white}
+.handout-preview>footer {position:sticky;bottom:0;border-top:1px solid #e2e8f0;font-size:.85rem}
+.preview-content {background:#f1f5f9;padding:12px}
+#preview-error,#session-error {color:#b91c1c}
+.guidance-panel,.guidance-editor {background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px;margin:18px 0;color:#334155;font-size:.85rem}
+.guidance-panel h3,.guidance-editor legend {font-weight:800}
+.guidance-panel dt {font-weight:700;margin-top:12px}.guidance-panel dd{white-space:pre-wrap;overflow-wrap:anywhere;color:#64748b}
+.guidance-editor label {display:block;margin-top:12px}.guidance-editor p{color:#64748b;font-size:.8rem;line-height:1.6}
+.guidance-editor input:not([type=checkbox]),.guidance-editor textarea{display:block;width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:8px;margin-top:5px;background:white}
+.material-sets {display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:20px;padding:14px;background:#f0f9ff;border:1px solid #d0eaf8;border-radius:12px;font-size:.8rem}
+.material-sets>span{display:inline-flex;border:1px solid #bae6fd;border-radius:8px;background:white}.material-sets button{padding:8px}.material-sets button:disabled{opacity:.4}
+@media(max-width:640px){.safety-dialog{padding:16px}.handout-preview{padding:0}.handout-preview>footer{padding:12px}.preview-content{padding:0}}
+
 .fade-in { animation: fadeIn .25s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none;} }
 .pc-body { line-height: 1.75; }

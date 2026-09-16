@@ -8,6 +8,11 @@ type Stroke = { tool: 'pen' | 'highlighter' | 'eraser'; color: string; width: nu
 type Annotation = { hospital_id: number; material_id: number; media_key: string; strokes_json: string; image_key: string | null; video_time: number | null; version: number; write_key: string }
 const app = new Hono<{ Bindings: Bindings; Variables: { hid: number } }>()
 function fail(message: string, status: 400 | 404 | 409 = 400): never { throw new HTTPException(status, { message }) }
+function scopeOf(c: any) {
+  const scope = c.req.query('scope') || ''
+  if (scope && !/^[a-zA-Z0-9_-]{16,80}$/.test(scope)) fail('설명 세션을 확인하세요.')
+  return scope
+}
 const out = (a: Annotation) => ({ media_key: a.media_key, strokes: JSON.parse(a.strokes_json), image_key: a.image_key, video_time: a.video_time, version: a.version })
 async function material(c: any) {
   const m = await c.env.DB.prepare('SELECT id, images_json FROM materials WHERE id = ? AND hospital_id = ? AND active = 1').bind(c.req.param('id'), c.get('hid')).first()
@@ -32,7 +37,8 @@ app.onError((e, c) => c.json({ error: e instanceof HTTPException ? e.message : '
 app.use('/:id/annotations', bodyLimit({ maxSize: 4 * 1024 * 1024, onError: c => c.json({ error: '필기 요청이 너무 큽니다.' }, 413) }))
 app.get('/:id/annotations', async c => {
   const m = await material(c), media = JSON.parse(m.images_json)
-  const records = await c.env.DB.prepare('SELECT * FROM material_annotations WHERE hospital_id = ? AND material_id = ?').bind(c.get('hid'), m.id).all<Annotation>()
+  const scope = scopeOf(c)
+  const records = await c.env.DB.prepare(scope ? 'SELECT * FROM scoped_annotations WHERE hospital_id = ? AND material_id = ? AND scope = ?' : 'SELECT * FROM material_annotations WHERE hospital_id = ? AND material_id = ?').bind(c.get('hid'), m.id, ...(scope ? [scope] : [])).all<Annotation>()
   c.header('Cache-Control', 'private, no-store')
   return c.json({ annotations: records.results.filter(a => media.some((x: any) => x.key === a.media_key)).map(out) })
 })
@@ -45,7 +51,8 @@ app.put('/:id/annotations', async c => {
   if (!media) fail('이 자료에 연결된 이미지·영상만 필기할 수 있습니다.')
   if (!Number.isInteger(b.version) || b.version < 0 || typeof b.write_key !== 'string' || !/^[a-zA-Z0-9_-]{16,80}$/.test(b.write_key)) fail('저장 버전을 확인해 주세요.')
   const hid = c.get('hid')
-  const current = await c.env.DB.prepare('SELECT * FROM material_annotations WHERE hospital_id = ? AND material_id = ? AND media_key = ?').bind(hid, m.id, b.media_key).first<Annotation>()
+  const scope = scopeOf(c), table = scope ? 'scoped_annotations' : 'material_annotations'
+  const current = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE hospital_id = ? AND material_id = ? AND media_key = ? ${scope ? 'AND scope = ?' : ''}`).bind(hid, m.id, b.media_key, ...(scope ? [scope] : [])).first<Annotation>()
   if (current && current.write_key === b.write_key) return c.json({ annotation: out(current), replayed: true })
   if ((current?.version || 0) !== b.version) fail('다른 화면에서 필기가 변경되었습니다. 현재 필기는 유지됩니다. 서버 내용을 다시 확인해 주세요.', 409)
   const strokes = strokesOf(b.strokes)
@@ -65,8 +72,8 @@ app.put('/:id/annotations', async c => {
   }
   const version = (current?.version || 0) + 1
   const result = current
-    ? await c.env.DB.prepare("UPDATE material_annotations SET strokes_json=?, image_key=?, video_time=?, version=?, write_key=?, updated_at=datetime('now') WHERE hospital_id=? AND material_id=? AND media_key=? AND version=?").bind(JSON.stringify(strokes), imageKey, time, version, b.write_key, hid, m.id, b.media_key, b.version).run()
-    : await c.env.DB.prepare('INSERT INTO material_annotations (hospital_id,material_id,media_key,strokes_json,image_key,video_time,version,write_key) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING').bind(hid,m.id,b.media_key,JSON.stringify(strokes),imageKey,time,version,b.write_key).run()
+    ? await c.env.DB.prepare(`UPDATE ${table} SET strokes_json=?, image_key=?, video_time=?, version=?, write_key=?, updated_at=datetime('now') WHERE hospital_id=? AND material_id=? AND media_key=? AND version=? ${scope ? "AND scope=?" : ""}`).bind(JSON.stringify(strokes), imageKey, time, version, b.write_key, hid, m.id, b.media_key, b.version, ...(scope ? [scope] : [])).run()
+    : await c.env.DB.prepare(`INSERT INTO ${table} (hospital_id,material_id,media_key,strokes_json,image_key,video_time,version,write_key${scope ? ',scope' : ''}) VALUES (?,?,?,?,?,?,?,?${scope ? ',?' : ''}) ON CONFLICT DO NOTHING`).bind(hid,m.id,b.media_key,JSON.stringify(strokes),imageKey,time,version,b.write_key, ...(scope ? [scope] : [])).run()
   if (!result.meta.changes) fail('다른 화면에서 먼저 저장했습니다. 현재 필기는 유지됩니다.', 409)
   c.header('Cache-Control', 'private, no-store')
   return c.json({ annotation: { media_key: b.media_key, strokes, image_key: imageKey, video_time: time, version } })

@@ -22,7 +22,7 @@ app.route('/api/v1', psApi)
 app.route('/api', api)
 
 // ─── HTML 셸 ───
-const ASSET_VER = 'v20260916-annotations'
+const ASSET_VER = 'v20260916-safe-consult'
 const shell = (title: string, script: string, opts: { bodyClass?: string; noindex?: boolean; desc?: string } = {}) => `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -40,7 +40,7 @@ const shell = (title: string, script: string, opts: { bodyClass?: string; noinde
 </head>
 <body class="${opts.bodyClass || 'bg-slate-50'} font-sans text-slate-800">
   <div id="app"></div>
-  ${script === 'app.js' ? `<script src="/static/annotations.js?${ASSET_VER}"></script>` : ''}
+  ${script === 'app.js' ? `<script src="/static/annotations.js?${ASSET_VER}"></script><script src="/static/guide.js?${ASSET_VER}"></script>` : ''}
   <script src="/static/${script}?${ASSET_VER}"></script>
 </body>
 </html>`

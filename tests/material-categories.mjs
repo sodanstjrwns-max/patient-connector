@@ -10,11 +10,13 @@ function sql(command) { execFileSync('npx', [...dbArgs, '--command', command], {
 const clinic = 900001;
 const cookie = (id) => { const payload = `${id}.${Date.now() + 3600000}`; return 'pc_session=' + payload + '.' + createHmac('sha256', 'pc-dev-session-secret').update(payload).digest('base64url'); };
 async function request(path, method='GET', body, id=clinic) {
+ if(path==='/dispatches'&&method==='POST'){const pre=await request('/dispatches/preview','POST',body,id);if(pre.status!==200)return pre;body={...body,confirmed:true,preview_hash:pre.data.preview_hash,request_key:crypto.randomUUID()}}
+
  const r=await fetch(base+'/api'+path,{method,headers:{Cookie:cookie(id),'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
  return {status:r.status,data:await r.json()};
 }
 let count=0; const check=(value,label)=>{assert(value,label);count++;console.log('PASS',label);};
-sql("INSERT OR IGNORE INTO hospitals (id, ps_hospital_id, name) VALUES (900001, 'category-qa', '분류검증 치과'), (900002, 'category-qa-other', '다른검증 치과'); DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id=900001); DELETE FROM dispatches WHERE hospital_id=900001; DELETE FROM materials WHERE hospital_id=900001;");
+sql("INSERT OR IGNORE INTO hospitals (id, ps_hospital_id, name) VALUES (900001, 'category-qa', '분류검증 치과'), (900002, 'category-qa-other', '다른검증 치과'); DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id=900001); DELETE FROM dispatches WHERE hospital_id=900001; DELETE FROM scoped_annotations WHERE hospital_id=900001; DELETE FROM material_sets WHERE hospital_id=900001; DELETE FROM materials WHERE hospital_id=900001;");
 const browser=await chromium.launch();
 try {
  const fixtures=[['explain','임플란트 과정','임플란트'],['disease','잇몸질환 이해','잇몸'],['cost','임플란트 비용','임플란트'],['before_after','교정 전후','교정'],['notice','발치 후 주의사항','임플란트']];
@@ -23,6 +25,9 @@ try {
  check((await request('/materials')).data.materials.length===5,'All existing and new kinds remain visible');
  check((await request('/materials','GET',undefined,900002)).data.materials.length===0,'New kind remains clinic-scoped');
  check((await request('/materials/'+saved[1].id,'PUT',saved[1],900002)).status===404,'Other clinic cannot reclassify disease material');
+ const g={included:'합성 테스트 범위',extra:'없음',variability:'검사 후 확인',basis_date:new Date().toISOString().slice(0,10),valid_until:'2099-12-31',external_allowed:true,deidentified:true,consent_ref:'QA 동의 범위',treatment:'합성 사례',period:'테스트 기간',individual_notice:'개인차가 있습니다'};
+ for(const m of saved.filter(m=>['cost','before_after'].includes(m.kind)))await request('/materials/'+m.id,'PUT',{...m,guidance:g});
+ sql(`UPDATE materials SET images_json='[{"key":"examples/implant.png"},{"key":"examples/orthodontics.png"}]' WHERE id=${saved[3].id}`);
  const dispatch=await request('/dispatches','POST',{material_ids:saved.map(m=>m.id),channel:'link'});
  check(dispatch.data.status==='link','Mixed categories can be published as link without sending messages');
  const ctx=await browser.newContext({viewport:{width:1360,height:920}});
@@ -53,7 +58,7 @@ try {
  check(await page.locator('[data-add]').count()===2,'New disease material persists across reload');
  await page.locator('[data-edit]').first().click();await page.locator('[data-kind="explain"]').click();await page.locator('#ed-save').click();await page.waitForSelector('#editor',{state:'detached'});
  check(await page.locator('[data-add]').count()===1,'Reclassification updates the current filter immediately');
- await page.locator('[data-add]').first().click();await page.locator('[data-tab="present"]').click();await page.locator('#go').click();
+ await page.locator('[data-add]').first().click();await page.locator('[data-tab="present"]').click();await page.locator('#go').click();await page.locator('#session-clean').click();await page.waitForSelector('.present');
  check((await page.locator('.present').innerText()).includes('질환설명'),'Presentation shows disease label and content');await page.locator('#cl').click();
  await page.locator('[data-tab="send"]').click();
  check((await page.locator('#main').innerText()).includes('질환설명'),'Sending list keeps selected disease type');
@@ -74,5 +79,5 @@ try {
  console.log(`${count} category checks passed`);
 }finally{
  await browser.close();
- sql('DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id=900001); DELETE FROM dispatches WHERE hospital_id=900001; DELETE FROM materials WHERE hospital_id=900001; DELETE FROM hospitals WHERE id IN (900001,900002);');
+ sql('DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id=900001); DELETE FROM dispatches WHERE hospital_id=900001; DELETE FROM scoped_annotations WHERE hospital_id=900001; DELETE FROM material_sets WHERE hospital_id=900001; DELETE FROM materials WHERE hospital_id=900001; DELETE FROM hospitals WHERE id IN (900001,900002);');
 }

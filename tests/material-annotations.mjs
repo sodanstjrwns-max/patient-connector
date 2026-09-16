@@ -7,8 +7,10 @@ import assert from 'node:assert/strict';
 const base='http://localhost:3000', hid=900041;
 const token=id=>{const p=`${id}.${Date.now()+3600000}`;return p+'.'+createHmac('sha256','pc-dev-session-secret').update(p).digest('base64url')};
 const sql=q=>execFileSync('npx',['wrangler','d1','execute','patient-connect-production','--local','--persist-to','.wrangler/category-tests','--command',q],{stdio:'pipe'});
-const clean=()=>sql('DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id=900041); DELETE FROM dispatches WHERE hospital_id=900041; DELETE FROM material_annotations WHERE hospital_id=900041; DELETE FROM materials WHERE hospital_id=900041; DELETE FROM hospitals WHERE id=900041;');
-async function api(path,body,method=body===undefined?'GET':'POST',clinic=hid,extra={}){const r=await fetch(base+'/api'+path,{method,headers:{...(clinic?{Cookie:'pc_session='+token(clinic)}:{}),'Content-Type':'application/json',...extra},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()}}
+const clean=()=>sql('DELETE FROM views WHERE dispatch_id IN (SELECT id FROM dispatches WHERE hospital_id=900041); DELETE FROM dispatches WHERE hospital_id=900041; DELETE FROM material_annotations WHERE hospital_id=900041; DELETE FROM scoped_annotations WHERE hospital_id=900041; DELETE FROM material_sets WHERE hospital_id=900041; DELETE FROM materials WHERE hospital_id=900041; DELETE FROM hospitals WHERE id=900041;');
+async function api(path,body,method=body===undefined?'GET':'POST',clinic=hid,extra={}){
+ if(path==='/dispatches'&&method==='POST'){const pre=await api('/dispatches/preview',body,'POST',clinic,extra);if(pre.status!==200)return pre;body={...body,confirmed:true,preview_hash:pre.data.preview_hash,request_key:crypto.randomUUID()}}
+const r=await fetch(base+'/api'+path,{method,headers:{...(clinic?{Cookie:'pc_session='+token(clinic)}:{}),'Content-Type':'application/json',...extra},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,data:await r.json()}}
 async function upload(id,data,type,name){const body=new FormData();body.set('file',new Blob([data],{type}),name);const r=await fetch(base+`/api/materials/${id}/images`,{method:'POST',body,headers:{Cookie:'pc_session='+token(hid)}});assert.equal(r.status,200);return r.json()}
 const check=(v,label)=>{assert(v,label);count++;console.log('PASS',label)};let count=0;
 const png='data:image/png;base64,'+fs.readFileSync('public/static/mockups/implant.png').toString('base64');
@@ -18,7 +20,7 @@ const browser=await chromium.launch();
 clean();sql("INSERT INTO hospitals(id,ps_hospital_id,name) VALUES(900041,'annotations-qa','필기 검증 치과');");
 try {
  await api('/materials/examples',{confirmed:true});const materials=(await api('/materials')).data.materials,first=materials[0],second=materials[1];
- const path=`/materials/${first.id}/annotations`, source=first.images[0].key;
+ let path=`/materials/${first.id}/annotations`;const source=first.images[0].key;
  check((await api(path,undefined,'GET',null)).status===401,'Reading annotations requires a clinic session');
  check((await api(path,undefined,'GET',900042)).status===404,'Cross-clinic annotation reads are denied');
  const payload={media_key:source,version:0,write_key:randomUUID(),strokes:[stroke],image_png:png};
@@ -45,7 +47,8 @@ try {
  const extra=await upload(first.id,fs.readFileSync('public/static/mockups/orthodontics.png'),'image/png','other.png');const secondKey=extra.images[1].key;
  const ctx=await browser.newContext({viewport:{width:1440,height:1100}});await ctx.addCookies([{name:'pc_session',value:token(hid),url:base}]);const p=await ctx.newPage(),errors=[];
  p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());
- await p.goto(base+'/app');await p.waitForSelector(`[data-add="${first.id}"]`);await p.locator(`[data-add="${first.id}"]`).click();await p.locator(`[data-add="${second.id}"]`).click();await p.locator('[data-tab="present"]').click();await p.locator('#go').click();
+ await p.goto(base+'/app');await p.waitForSelector(`[data-add="${first.id}"]`);await p.locator(`[data-add="${first.id}"]`).click();await p.locator(`[data-add="${second.id}"]`).click();await p.locator('[data-tab="present"]').click();await p.locator('#go').click();await p.locator('#session-clean').click();await p.waitForSelector('.present');
+ const scope=await p.evaluate(()=>sessionStorage.getItem('pc_scope_900041'));path+='?scope='+scope;
  const board=key=>p.locator(`[data-annotation-key="${key}"]`);
  async function draw(b,start=[.2,.3],end=[.55,.55],tool='pen'){
   await b.locator(`[data-tool="${tool}"]`).click();await b.locator('canvas').scrollIntoViewIfNeeded();const box=await b.locator('canvas').boundingBox();await p.mouse.move(box.x+box.width*start[0],box.y+box.height*start[1]);await p.mouse.down();await p.mouse.move(box.x+box.width*end[0],box.y+box.height*end[1],{steps:12});await p.mouse.up();
@@ -71,16 +74,16 @@ try {
  check((await api(`/materials/${second.id}/annotations`)).data.annotations.length===0,'Drawing does not leak into another material');
  await p.locator('#pv').click();await p.waitForSelector(`[data-annotation-key="${source}"]`);await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
  check(await board(source).locator('canvas').evaluate(c=>c.toDataURL())===pixels,'Returning to a material restores its exact drawing');
- await p.locator('#cl').click();await p.reload();await p.waitForSelector(`[data-preview="${first.id}"]`);await p.locator(`[data-preview="${first.id}"]`).click();await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
+ await p.locator('#cl').click();await p.reload();await p.waitForSelector(`[data-preview="${first.id}"]`);await p.locator(`[data-preview="${first.id}"]`).click();await p.locator('#session-continue').click();await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
  check(await board(source).locator('canvas').evaluate(c=>c.toDataURL())===pixels,'Server-saved vectors restore after a full page reload');
  await p.setViewportSize({width:820,height:1180});
  const shape=await board(source).locator('canvas').boundingBox();
  check(Math.abs(shape.width/shape.height-1.6)<.01,'Annotation surface preserves source aspect ratio on tablet');
  await draw(board(source),[.1,.8],[.7,.8]);
- let lost=false;await p.route('**/annotations',async route=>{if(route.request().method()==='PUT'&&!lost){lost=true;await route.fetch();await route.abort('failed')}else await route.continue()});
+ let lost=false;await p.route('**/annotations?*',async route=>{if(route.request().method()==='PUT'&&!lost){lost=true;await route.fetch();await route.abort('failed')}else await route.continue()});
  await board(source).locator('[data-action="save"]').click();await p.waitForFunction(()=>[...document.querySelectorAll('.annotation-status')].some(e=>e.textContent.includes('실패')||e.textContent.includes('결과 확인')||e.textContent.includes('fetch')));
  const committed=(await api(path)).data.annotations.find(a=>a.media_key===source);
- await p.unroute('**/annotations');await board(source).locator('[data-action="save"]').click();await p.waitForFunction(()=>document.querySelector('.annotation-status').textContent.includes('병원에 저장'));
+ await p.unroute('**/annotations?*');await board(source).locator('[data-action="save"]').click();await p.waitForFunction(()=>document.querySelector('.annotation-status').textContent.includes('현재 설명에 저장'));
  check((await api(path)).data.annotations.find(a=>a.media_key===source).version===committed.version,'UI retries the same write after a response is lost');
  await draw(board(source),[.3,.1],[.7,.3]);
  const latest=(await api(path)).data.annotations.find(a=>a.media_key===source);
@@ -89,24 +92,24 @@ try {
  check(await p.evaluate(()=>PCAnnotations.dirty()),'Conflict preserves local unsaved input instead of overwriting server data');
  await board(source).locator('[data-action="reload"]').click();await p.waitForFunction(()=>!PCAnnotations.dirty());
  await p.locator('#ex').click();await p.waitForSelector('#s-annotations');
- check(await p.locator('#s-annotations').isChecked(),'Sending from a drawn explanation visibly selects annotation inclusion');
+ check(!await p.locator('#s-annotations').isChecked(),'Annotation inclusion requires an explicit choice even after drawing');
  check((await p.locator('#main').innerText()).includes(first.title),'Direct explanation hands its current material to the sending view');
  check(hash(fs.readFileSync('public/static/mockups/implant.png'))===originalHash,'Annotation workflows never modify original images');
  // Real video scene capture.
  fs.mkdirSync('.test-results',{recursive:true});execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=320x180:rate=12','-t','2','-c:v','libvpx','-an','.test-results/annotation-fixture.webm']);
  const video=(await api('/materials',{kind:'explain',category:'치아교정',title:'영상 필기 검증'})).data.material;
  const media=(await upload(video.id,fs.readFileSync('.test-results/annotation-fixture.webm'),'video/webm','test.webm')).images[0];
- await p.reload();await p.waitForSelector(`[data-preview="${video.id}"]`);await p.locator(`[data-preview="${video.id}"]`).click();await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
+ await p.reload();await p.waitForSelector(`[data-preview="${video.id}"]`);await p.locator(`[data-preview="${video.id}"]`).click();await p.locator('#session-continue').click();await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
  await board(media.key).locator('video').evaluate(async v=>{v.currentTime=.5;await new Promise(r=>v.addEventListener('seeked',r,{once:true}))});
  await draw(board(media.key));
  check(await board(media.key).locator('video').evaluate(v=>v.paused),'Pen mode pauses a video before drawing');
- await board(media.key).locator('[data-action="save"]').click();await p.waitForFunction(()=>document.querySelector('.annotation-status').textContent.includes('병원에 저장'));
- const videoNote=(await api(`/materials/${video.id}/annotations`)).data.annotations[0];
+ await board(media.key).locator('[data-action="save"]').click();await p.waitForFunction(()=>document.querySelector('.annotation-status').textContent.includes('현재 설명에 저장'));
+ const videoNote=(await api(`/materials/${video.id}/annotations?scope=${scope}`)).data.annotations[0];
  check(videoNote.image_key&&Math.abs(videoNote.video_time-.5)<.15,'Video annotation stores a frozen PNG with the source scene time');
  await board(media.key).locator('[data-tool="view"]').click();await board(media.key).locator('video').evaluate(async v=>{v.muted=true;await v.play()});
  check(await board(media.key).locator('canvas').evaluate(c=>getComputedStyle(c).opacity)==='0','Annotations do not float over unrelated moving video frames');
  await board(media.key).locator('video').evaluate(v=>v.pause());await p.locator('#cl').click();
- const published=(await api('/dispatches',{channel:'link',material_ids:[first.id,video.id],include_annotations:true})).data;
+ const published=(await api('/dispatches',{channel:'link',material_ids:[first.id,video.id],include_annotations:true,annotation_scope:scope})).data;
  const patient=await browser.newPage({viewport:{width:390,height:844}});patient.on('pageerror',e=>errors.push(e.message));await patient.goto(base+'/g/'+published.token);await patient.waitForSelector('.patient-annotation');
  check(await patient.locator('.patient-annotation').count()===3,'Patient handout includes both image notes and a video scene capture');
  check(await patient.locator('video').count()===1,'Patient handout preserves the original playable video');

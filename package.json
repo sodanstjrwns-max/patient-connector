@@ -12,6 +12,7 @@
     "test:library": "node tests/material-library.mjs",
     "test:media": "node tests/material-media.mjs",
     "test:annotations": "node tests/material-annotations.mjs",
+    "test:safety": "node tests/consultation-safety.mjs",
     "mockups:render": "node scripts/render-media-mockups.mjs",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings"
   },
