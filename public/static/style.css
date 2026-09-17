@@ -68,6 +68,8 @@
 .example-dialog button:disabled { opacity: .5; }
 #sample-status { color: #be123c; }
 @media (max-width: 640px) { .example-dialog { padding: 1.1rem; } }
+/* Let media cards shrink inside the single-column mobile grid. */
+#material-grid > * { min-width: 0; }
 .media-card-cover { display: block; position: relative; width: 100%; aspect-ratio: 8/5; overflow: hidden; border-radius: .75rem .75rem 0 0; background: #eff3fa; }
 .media-card-cover > img { width: 100%; height: 100%; object-fit: contain; transition: transform .2s; }
 .media-card-cover:hover > img { transform: scale(1.02); }
