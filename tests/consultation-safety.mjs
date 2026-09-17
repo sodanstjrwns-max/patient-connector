@@ -85,7 +85,7 @@ try {
   // Browser flow: new/continue, reusable set, preflight, confirmation, ambiguous response replay.
   const ctx=await browser.newContext({viewport:{width:1280,height:960}});await ctx.addCookies([{name:'pc_session',value:token(hid),url:base}]);
   const p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());
-  await p.goto(base+'/app');await p.waitForSelector('[data-preview]');await p.locator(`[data-preview="${first.id}"]`).click();
+  await p.goto(base+'/app');await p.waitForSelector('#browse-all');await p.locator('#browse-all').click();await p.waitForSelector('[data-preview]');await p.locator(`[data-preview="${first.id}"]`).click();
   check(await p.locator('#session-clean').isVisible(),'Starting an explanation requires an explicit clean or saved choice');
   await p.locator('#session-copy').click();await p.waitForSelector('[data-tool="pen"]:enabled');
   check(await p.evaluate(()=>PCAnnotations.hasMarks([Number(document.querySelector('[data-preview]').dataset.preview)])),'Explicitly copied shared strokes render in explanation');
@@ -94,7 +94,7 @@ try {
   check(!await p.evaluate(()=>PCAnnotations.hasMarks([Number(document.querySelector('[data-preview]').dataset.preview)])),'New clean explanation shows no previous annotations');
   check(await p.evaluate(()=>sessionStorage.getItem('pc_scope_900061'))!==oldScope,'New explanation gets an independent persisted scope');
   await p.locator('#ex').click();await p.waitForSelector('#s-link');check(!await p.locator('#s-annotations').isChecked(),'Sending defaults to original materials only');
-  await p.locator('[data-tab="library"]').click();await p.locator('[data-set]').click();await p.locator('[data-tab="send"]').click();await p.locator('#send-order').click();
+  await p.locator('[data-tab="library"]').click();await p.locator('.library-bundles>summary').click();await p.locator('[data-set]').click();await p.locator('[data-tab="send"]').click();await p.locator('#send-order').click();
   const uiCount=await count();await p.locator('#s-link').click();await p.waitForSelector('#dispatch-preview');
   check((await p.locator('.preview-content').innerText()).includes('공용 비용 안내'),'Final preview uses patient renderer with cost terms');
   check(await p.locator('.preview-content a[href="https://example.com/booking"]').count()===1,'Preview includes configured booking button');

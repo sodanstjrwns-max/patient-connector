@@ -3,12 +3,12 @@
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const KIND = { explain: '진료설명', disease: '질환설명', cost: '비용설명', before_after: '비포애프터', notice: '주의사항' };
-  const LIBRARY_KINDS = ['explain', 'disease', 'cost', 'before_after'];
+  const LIBRARY_KINDS = ['explain', 'disease', 'notice', 'cost', 'before_after'];
   // Legacy precautions remain visible under treatment explanations without rewriting stored snapshots.
   const groupKind = (kind) => kind === 'notice' ? 'explain' : kind;
   const KIND_COLOR = { explain: 'bg-sky-100 text-sky-800', disease: 'bg-emerald-100 text-emerald-800', before_after: 'bg-violet-100 text-violet-800', cost: 'bg-amber-100 text-amber-800', notice: 'bg-rose-100 text-rose-800' };
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
-  const state = { me: null, materials: [], today: [], tab: 'library', dispatches: [], stats: null, library: { categories: {}, examples: [], imported_count: 0 }, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null, sets: [], scope: '' };
+  const state = { me: null, materials: [], today: [], tab: 'library', dispatches: [], stats: null, library: { categories: {}, examples: [], imported_count: 0 }, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null, sets: [], scope: '', overview: true };
   const app = $('#app');
 
   async function api(path, opt) {
@@ -23,7 +23,7 @@
   }
   function imgUrl(key, token) { return '/a/' + key + (token ? '?t=' + token : ''); }
   const isVideo = im => im?.media_type === 'video' || /\.(mp4|webm)$/i.test(im?.key || '');
-  const mediaHtml = (im, token, cls='w-full') => isVideo(im) ? `<video src="${imgUrl(im.key, token)}" controls playsinline preload="metadata" class="${cls}" aria-label="${esc(im.caption || '설명 영상')}"></video>` : `<img src="${imgUrl(im.key, token)}" alt="${esc(im.caption || '설명 이미지')}" class="${cls}" loading="lazy">`;
+  const mediaHtml = (im, token, cls='w-full') => isVideo(im) ? `<video src="${imgUrl(im.key, token)}" ${im.poster_key ? `poster="${imgUrl(im.poster_key, token)}"` : ''} controls playsinline preload="metadata" class="${cls}" aria-label="${esc(im.caption || '설명 영상')}"></video>` : `<img src="${imgUrl(im.key, token)}" alt="${esc(im.caption || '설명 이미지')}" class="${cls}" loading="lazy">`;
   function toast(msg, ok) {
     const t = document.createElement('div');
     t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm z-[70] fade-in ' + (ok === false ? 'bg-rose-600' : 'bg-slate-900');
@@ -61,12 +61,36 @@
     const existing = state.materials.filter(m => !kind || groupKind(m.kind) === groupKind(kind)).map(m => m.category).filter(Boolean);
     return [...new Set([...preset, ...existing])];
   }
+  const clinicalCategories = [
+    ['임플란트', '식립·뼈이식·치료 선택·유지관리'],
+    ['보철·틀니', '크라운·브리지·틀니의 구조와 관리'],
+    ['충치·신경치료', '치수·충치 이해부터 치료 후 수복까지'],
+    ['잇몸치료', '스케일링·치주수술·잇몸질환'],
+    ['치아교정', '치아이동·교정장치·유지장치 관리'],
+    ['사랑니·발치', '매복 사랑니·발치 과정·회복'],
+    ['소아치과', '유치·영구치·불소·보호자 관리'],
+    ['심미치료', '라미네이트·변색·미백과 주의사항'],
+    ['턱관절', '관절원판·턱 근육·생활관리'],
+    ['구강점막', '입안 검사·궤양·흰 병변·점액낭종'],
+    ['예방·구강관리', '칫솔질·치실·치간칫솔'],
+    ['진료 전·후 안내', '복용약·마취·진정·임신·의사소통'],
+  ];
+  const categoryAliases = { '보철치료':'보철·틀니', '치아상실':'보철·틀니', '충치치료':'충치·신경치료', '충치':'충치·신경치료', '신경치료':'충치·신경치료', '치수·치근단 질환':'충치·신경치료', '치아균열·파절':'충치·신경치료', '잇몸질환':'잇몸치료', '부정교합':'치아교정', '사랑니·매복치':'사랑니·발치', '턱관절치료':'턱관절', '턱관절질환':'턱관절', '구강점막질환':'구강점막', '치아변색':'심미치료', '예방·검진':'예방·구강관리' };
+  const categoryOf = m => categoryAliases[m.category] || m.category || '기타 자료';
+  const categoryList = () => [...clinicalCategories.map(([name])=>name), ...new Set(state.materials.map(categoryOf).filter(name=>!clinicalCategories.some(([n])=>n===name)))];
+  const kindMatches = (m, k) => !k || (k==='notice' ? m.kind==='notice' : groupKind(m.kind)===k);
+  const secondsLabel = n => {const seconds=Math.round(n);return Number.isFinite(seconds)&&seconds>0?`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`:'영상'};
+  const coverHtml = (im, title) => isVideo(im)
+    ? `${im.poster_key ? `<img src="${imgUrl(im.poster_key)}" alt="${esc(title)} 영상 장면" loading="lazy" class="video-poster">` : `<video src="${imgUrl(im.key)}#t=0.1" muted playsinline preload="metadata" aria-hidden="true" tabindex="-1"></video>`}<span class="video-play-badge" aria-hidden="true"><i class="fa-solid fa-play"></i></span><span class="video-duration">${secondsLabel(im.duration_seconds)}</span>`
+    : mediaHtml(im);
   function materialCard(m, extra) {
-    const img = m.images[0] ? `<button class="media-card-cover" data-preview="${m.id}" aria-label="${esc(m.title)} 크게 보기">${isVideo(m.images[0]) ? '<span class="video-cover"><i class="fa-solid fa-circle-play"></i><span>영상 설명자료</span></span>' : mediaHtml(m.images[0])}<span class="media-cover-label">${isVideo(m.images[0]) ? '영상' : '이미지'} · ${m.images.length}개 <i class="fa-solid fa-expand"></i></span></button>` : `<button data-preview="${m.id}" class="empty-media-cover" aria-label="${esc(m.title)} 설명 보기"><i class="fa-regular fa-image"></i><span>이미지·영상 추가 전</span></button>`;
-    return `<div class="bg-white rounded-xl border shadow-sm flex flex-col fade-in">
+    const im=m.images[0];
+    const img = im ? `<button class="media-card-cover" data-preview="${m.id}" aria-label="${esc(m.title)} 크게 보기">${coverHtml(im,m.title)}${!isVideo(im)?'<span class="media-cover-label">이미지 <i class="fa-solid fa-expand"></i></span>':''}</button>` : `<button data-preview="${m.id}" class="empty-media-cover" aria-label="${esc(m.title)} 설명 보기"><i class="fa-regular fa-file-lines"></i><span>글·비용 안내</span></button>`;
+    const label=m.kind==='notice'?'관리·주의사항':m.kind==='disease'?'질환 이해':KIND[m.kind];
+    return `<div class="material-card bg-white rounded-xl border shadow-sm flex flex-col fade-in">
       ${img}
       <div class="p-3 flex-1">
-        <div class="flex flex-wrap items-center gap-2 text-xs"><span class="px-1.5 py-0.5 rounded ${KIND_COLOR[m.kind]}">${KIND[m.kind]}</span>${m.is_example ? '<span class="example-badge">검토용 예시</span>' : ''}${m.kind==='before_after'?`<span class="example-badge">${m.guidance?.external_allowed?'외부 전송 확인됨':'병원 내 설명용'}</span>`:''}${m.category ? `<span class="text-slate-500">${esc(m.category)}</span>` : ''}</div>
+        <div class="flex flex-wrap items-center gap-2 text-xs"><span class="px-1.5 py-0.5 rounded ${KIND_COLOR[m.kind]}">${label}</span>${m.is_example ? '<span class="example-badge">검토용 예시</span>' : ''}${m.kind==='before_after'?`<span class="example-badge">${m.guidance?.external_allowed?'외부 전송 확인됨':'병원 내 설명용'}</span>`:''}<span class="text-slate-500">${esc(categoryOf(m))}</span></div>
         <div class="font-bold mt-1.5 leading-snug">${esc(m.title)}</div>
         <div class="text-xs text-slate-500 mt-1 line-clamp-2">${esc((m.body || '').replace(/\n/g, ' '))}${m.kind === 'cost' && m.cost.length ? ' · 항목 ' + m.cost.length + '개' : ''}</div>
       </div>
@@ -75,43 +99,49 @@
   }
   function renderLibrary(main) {
     const q = state.filter.trim().toLocaleLowerCase();
-    const list = state.materials.filter((m) => (!state.kindFilter || groupKind(m.kind) === state.kindFilter) && (!state.categoryFilter || m.category === state.categoryFilter) && (!q || (m.title + ' ' + (m.category || '') + ' ' + (m.body || '')).toLocaleLowerCase().includes(q)));
-    const cats = categoriesFor(state.kindFilter);
-    const categoryLabel = state.kindFilter === 'disease' ? '질환 분류' : state.kindFilter ? '진료 분류' : '세부 분류';
-    const allExamplesAdded = state.library.examples.length > 0 && state.library.imported_count >= state.library.examples.length && !state.library.missing_images;
-    const countKind = (kind) => state.materials.filter((m) => !kind || groupKind(m.kind) === kind).length;
-    main.innerHTML = `
-      <div class="flex flex-wrap items-center gap-3 mb-4">
-        <h2 class="text-lg font-bold">자료함 <span class="text-sm font-normal text-slate-500">${state.materials.length}개</span></h2>
-        <input id="q" value="${esc(state.filter)}" aria-label="자료 검색" placeholder="제목·진료 항목·내용 검색" class="border rounded-lg px-3 py-2 text-sm w-56">
-        <button id="add-examples" class="ml-auto px-3 py-2 rounded-lg border bg-white text-sm font-semibold" ${allExamplesAdded ? 'disabled' : ''}>${allExamplesAdded ? '이미지 목업 추가됨' : state.library.missing_images ? '기존 예시에 이미지 채우기' : '이미지 목업 ' + state.library.examples.length + '개 넣기'}</button>
-        <button id="new" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-1"></i>자료 등록</button>
-      </div>
-      ${setsHtml()}
-      <nav class="material-kind-tabs" aria-label="자료 유형">${[['', '전체'], ...LIBRARY_KINDS.map(k => [k, KIND[k]])].map(([k, label]) => `<button data-kind-filter="${k}" aria-pressed="${state.kindFilter === k}">${label}<span>${countKind(k)}</span></button>`).join('')}</nav>
-      <div class="material-category-filters" aria-label="${categoryLabel}"><span>${categoryLabel}</span><button data-cat="" aria-pressed="${!state.categoryFilter}">전체</button>${cats.map(c => `<button data-cat="${esc(c)}" aria-pressed="${state.categoryFilter === c}">${esc(c)}<small>${state.materials.filter(m => (!state.kindFilter || groupKind(m.kind) === state.kindFilter) && m.category === c).length}</small></button>`).join('')}</div>
-      <p id="material-result-count" class="text-xs text-slate-500 mb-4" aria-live="polite">${state.kindFilter ? KIND[state.kindFilter] : '전체 자료'} · ${list.length}개${state.kindFilter === 'explain' ? ' · 기존 주의사항 포함' : ''}</p>
-      ${list.length ? `<div id="material-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map((m) => materialCard(m, `
-          <button data-add="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg ${state.today.includes(m.id) ? 'bg-sky-100 text-sky-800' : 'bg-slate-100 hover:bg-slate-200'}">${state.today.includes(m.id) ? '<i class="fa-solid fa-check mr-1"></i>오늘 설명에 담김' : '<i class="fa-solid fa-plus mr-1"></i>오늘 설명에 담기'}</button>
-          <button data-edit="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200"><i class="fa-solid fa-pen"></i></button>`)).join('')}</div>`
-        : `<div class="bg-white rounded-xl border p-10 text-center text-slate-500">
-            <div class="text-3xl mb-2">🗂️</div>
-            <p class="font-semibold text-slate-700">${state.materials.length ? '선택한 조건에 맞는 자료가 없습니다' : '아직 등록한 자료가 없습니다'}</p>
-            <p class="text-sm mt-1">${state.materials.length ? '다른 자료 유형이나 진료 항목을 선택하거나 검색어를 바꿔 보세요.' : '진료 과정, 질환의 원인, 비용표, 치료 전후 자료를 분류해서 등록해 보세요.'}</p>
-            ${state.materials.length ? '<button id="reset-filters" class="mt-4 px-4 py-2 rounded-lg border text-sm font-semibold">필터 초기화</button>' : ''}
-            <button id="new2" class="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold">${state.kindFilter ? KIND[state.kindFilter] + ' 등록' : '첫 자료 등록'}</button>
-          </div>`}`;
+    const home=state.overview && !q && !state.kindFilter && !state.categoryFilter;
+    const list = state.materials.filter(m => kindMatches(m,state.kindFilter) && (!state.categoryFilter || categoryOf(m)===state.categoryFilter) && (!q || (m.title+' '+categoryOf(m)+' '+(m.body||'')).toLocaleLowerCase().includes(q)));
+    const cats=categoryList(), countKind=k=>state.materials.filter(m=>(!state.categoryFilter||categoryOf(m)===state.categoryFilter)&&kindMatches(m,k)).length;
+    const allExamplesAdded=state.library.examples.length>0 && state.library.imported_count>=state.library.examples.length && !state.library.missing_images;
+    const groups=cats.map(name=>({name,items:state.materials.filter(m=>categoryOf(m)===name),description:clinicalCategories.find(([n])=>n===name)?.[1]||'병원에서 등록한 설명자료'})).filter(g=>g.items.length);
+    main.innerHTML=`
+      <div class="library-heading">${home?'<a class="library-back" href="https://hub.patientfunnel.kr/">← 허브로</a>':'<button id="library-back" class="library-back">← 카테고리로</button>'}<h2>${home?'진료별 설명자료':esc(state.categoryFilter||'전체 설명자료')} <span>${home?state.materials.length:list.length}개</span></h2></div>
+      <div class="library-toolbar"><input id="q" value="${esc(state.filter)}" aria-label="자료 검색" placeholder="제목·진료 항목·내용 검색"><button id="new" class="primary-action"><i class="fa-solid fa-plus"></i> 자료 등록</button><button id="add-examples" ${allExamplesAdded?'disabled':''}>${allExamplesAdded?'예시 자료 추가됨':state.library.missing_images?'예시 이미지 채우기':'예시 자료 넣기'}</button></div>
+      ${home?`<div class="category-intro"><p>설명할 진료를 먼저 고르세요.</p><button id="browse-all">전체 자료 보기 →</button></div><div class="clinical-category-grid">${groups.map(g=>{
+        const cover=g.items.find(m=>m.images.some(im=>im.poster_key)) || g.items.find(m=>m.images.length);
+        const im=cover?.images.find(im=>im.poster_key)||cover?.images[0];
+        const videos=g.items.filter(m=>m.images.some(isVideo)).length;
+        return `<button class="clinical-category-card" data-category-open="${esc(g.name)}"><span class="category-cover">${im?coverHtml(im,g.name):'<i class="fa-regular fa-file-lines"></i>'}<span class="category-count">${g.items.length}개</span></span><span class="category-copy"><strong>${esc(g.name)} <i class="fa-solid fa-arrow-right"></i></strong><span>${esc(g.description)}</span><small>${videos?`영상 ${videos}개`:'설명자료'}${g.items.length>videos&&videos?' · 글/이미지 '+(g.items.length-videos)+'개':''}</small></span></button>`;
+      }).join('')}</div>`:`
+      <nav class="material-kind-tabs" aria-label="자료 유형">${[['','전체'],...LIBRARY_KINDS.map(k=>[k,k==='notice'?'관리·주의사항':KIND[k]])].map(([k,label])=>`<button data-kind-filter="${k}" aria-pressed="${state.kindFilter===k}">${label}<span>${countKind(k)}</span></button>`).join('')}</nav>
+      <div class="material-category-filters" aria-label="진료 카테고리"><button data-cat="" aria-pressed="${!state.categoryFilter}">전체 카테고리</button>${cats.map(c=>`<button data-cat="${esc(c)}" aria-pressed="${state.categoryFilter===c}">${esc(c)}<small>${state.materials.filter(m=>kindMatches(m,state.kindFilter)&&categoryOf(m)===c).length}</small></button>`).join('')}</div>
+      <p id="material-result-count" class="text-xs text-slate-500 mb-4" aria-live="polite">${state.kindFilter==='notice'?'관리·주의사항':state.kindFilter?KIND[state.kindFilter]:'전체 자료'} · ${list.length}개${state.kindFilter==='explain'?' · 관리·주의사항 포함':''}</p>
+      ${list.length?`<div id="material-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(m=>materialCard(m,`<button data-add="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg ${state.today.includes(m.id)?'bg-sky-100 text-sky-800':'bg-slate-100 hover:bg-slate-200'}">${state.today.includes(m.id)?'✓ 오늘 설명에 담김':'+ 오늘 설명에 담기'}</button><button data-edit="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200" aria-label="${esc(m.title)} 수정"><i class="fa-solid fa-pen"></i></button>`)).join('')}</div>`:`<div class="library-empty"><p>선택한 조건에 맞는 자료가 없습니다</p><button id="reset-filters">필터 초기화</button></div>`}`}
+      <details class="library-bundles"><summary>자주 쓰는 설명 묶음 <span>${state.sets.length}개</span></summary>${setsHtml()}</details>`;
     bindSets(main);
-    $('#q').oninput = (e) => { state.filter = e.target.value; renderLibrary(main); $('#q').focus(); $('#q').setSelectionRange(state.filter.length, state.filter.length); };
-    main.querySelectorAll('[data-kind-filter]').forEach((b) => b.onclick = () => { state.kindFilter = b.dataset.kindFilter; state.categoryFilter = ''; renderLibrary(main); });
-    main.querySelectorAll('[data-cat]').forEach((b) => b.onclick = () => { state.categoryFilter = b.dataset.cat; renderLibrary(main); });
-    const reset = $('#reset-filters'); if (reset) reset.onclick = () => { state.filter = ''; state.kindFilter = ''; state.categoryFilter = ''; renderLibrary(main); };
-    $('#add-examples').onclick = openExamples;
-    const nb = $('#new') || $('#new2'); if (nb) nb.onclick = () => openEditor(null);
-    const nb2 = $('#new2'); if (nb2) nb2.onclick = () => openEditor(null);
-    main.querySelectorAll('[data-add]').forEach((b) => b.onclick = () => { const id = Number(b.dataset.add); state.today = state.today.includes(id) ? state.today.filter((x) => x !== id) : [...state.today, id]; saveToday(); render(); });
-    main.querySelectorAll('[data-preview]').forEach(b => b.onclick = () => startPresent([state.materials.find(m => m.id === Number(b.dataset.preview))]));
-    main.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => openEditor(state.materials.find((m) => m.id === Number(b.dataset.edit))));
+    $('#q').oninput=e=>{state.filter=e.target.value;renderLibrary(main);$('#q').focus();$('#q').setSelectionRange(state.filter.length,state.filter.length)};
+    const back=$('#library-back');if(back)back.onclick=()=>{state.overview=true;state.filter='';state.kindFilter='';state.categoryFilter='';renderLibrary(main);scrollTo(0,0)};
+    const all=$('#browse-all');if(all)all.onclick=()=>{state.overview=false;renderLibrary(main);scrollTo(0,0)};
+    main.querySelectorAll('[data-category-open]').forEach(b=>b.onclick=()=>{state.categoryFilter=b.dataset.categoryOpen;state.kindFilter='';state.overview=false;renderLibrary(main);scrollTo(0,0)});
+    main.querySelectorAll('[data-kind-filter]').forEach(b=>b.onclick=()=>{state.kindFilter=b.dataset.kindFilter;renderLibrary(main)});
+    main.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{state.categoryFilter=b.dataset.cat;renderLibrary(main)});
+    const reset=$('#reset-filters');if(reset)reset.onclick=()=>{state.filter='';state.kindFilter='';state.categoryFilter='';state.overview=false;renderLibrary(main)};
+    $('#add-examples').onclick=openExamples;$('#new').onclick=()=>openEditor(null);
+    main.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const id=Number(b.dataset.add);state.today=state.today.includes(id)?state.today.filter(x=>x!==id):[...state.today,id];saveToday();render()});
+    main.querySelectorAll('[data-preview]').forEach(b=>b.onclick=()=>startPresent([state.materials.find(m=>m.id===Number(b.dataset.preview))]));
+    main.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEditor(state.materials.find(m=>m.id===Number(b.dataset.edit))));
+  }
+
+  async function videoPoster(file) {
+    const video=document.createElement('video'),url=URL.createObjectURL(file);video.muted=true;video.preload='auto';
+    try {
+      await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('영상 장면을 읽지 못했습니다. 재생 가능한 MP4 또는 WebM을 선택해 주세요.')),20000);video.onloadeddata=()=>{clearTimeout(timer);resolve()};video.onerror=()=>{clearTimeout(timer);reject(new Error('재생할 수 없는 영상입니다.'))};video.src=url;});
+      const duration=video.duration;
+      await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('영상 썸네일을 만들지 못했습니다.')),15000);video.onseeked=()=>{clearTimeout(timer);resolve()};video.currentTime=Math.min(Number.isFinite(duration)?duration/3:0.1,3);});
+      const canvas=document.createElement('canvas');canvas.width=Math.min(768,video.videoWidth);canvas.height=Math.round(canvas.width*video.videoHeight/video.videoWidth);canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.85));if(!blob)throw new Error('썸네일을 만들지 못했습니다.');
+      return {blob,duration};
+    }finally{video.pause();video.removeAttribute('src');video.load();URL.revokeObjectURL(url)}
   }
 
   function openExamples() {
@@ -137,7 +167,7 @@
       try {
         const result = await api('/materials/examples', { method: 'POST', body: JSON.stringify({ confirmed: true }) });
         await Promise.all([loadMaterials(), loadLibrary()]);
-        busy = false; close(); state.kindFilter = ''; state.categoryFilter = ''; state.filter = ''; render();
+        busy = false; close(); state.kindFilter = ''; state.categoryFilter = ''; state.filter = ''; state.overview=false; render();
         toast(result.added ? `이미지 목업 ${result.added}개를 추가했습니다.` : result.updated ? `기존 예시 ${result.updated}개에 이미지를 채웠습니다.` : '이미 추가한 목업은 그대로 유지했습니다.');
       } catch (e) { $('#sample-status').textContent = e.message; }
       finally { busy = false; if (box.isConnected) { $('#sample-import').disabled = false; $('#sample-cancel').disabled = false; } }
@@ -163,7 +193,7 @@
     const costRows = (m.cost.length ? m.cost : []).map((c, i) => `<tr><td><input data-c="name" data-i="${i}" value="${esc(c.name)}" placeholder="항목" class="w-full border rounded px-2 py-1"></td><td><input data-c="price" data-i="${i}" type="number" value="${c.price}" class="w-28 border rounded px-2 py-1 text-right"></td><td><input data-c="qty" data-i="${i}" type="number" value="${c.qty || 1}" class="w-16 border rounded px-2 py-1 text-right"></td><td><input data-c="note" data-i="${i}" value="${esc(c.note || '')}" placeholder="비고" class="w-full border rounded px-2 py-1"></td><td><button data-cdel="${i}" class="text-slate-400 hover:text-rose-600"><i class="fa-solid fa-xmark"></i></button></td></tr>`).join('');
     const total = m.cost.reduce((s, c) => s + (Number(c.price) || 0) * (Number(c.qty) || 1), 0);
     const imgLimit = m.kind === 'before_after' ? 2 : 6;
-    const categoryOptions = state.library.categories[groupKind(m.kind)] || [];
+    const categoryOptions = [...new Set([...clinicalCategories.map(([name])=>name), ...(state.library.categories[groupKind(m.kind)] || [])])];
     const customCategory = !!m.category && !categoryOptions.includes(m.category);
     box.innerHTML = `<div class="fixed inset-0 bg-black/40 z-40 flex items-start justify-center overflow-auto p-4">
       <div class="bg-white rounded-2xl w-full max-w-2xl my-6 fade-in">
@@ -171,7 +201,7 @@
         <div class="p-5 space-y-4 text-sm">
           <div class="flex flex-wrap gap-2" aria-label="자료 유형 선택">${LIBRARY_KINDS.map(k => `<button data-kind="${k}" aria-pressed="${groupKind(m.kind) === k}" class="px-3 py-1.5 rounded-full border ${groupKind(m.kind) === k ? 'bg-slate-900 text-white' : ''}">${KIND[k]}</button>`).join('')}</div>
           ${m.is_example ? `<p class="example-editor-notice">${esc(state.library.example_notice)}</p>` : ''}
-          ${m.kind === 'notice' ? '<p class="text-xs text-slate-500">기존 주의사항 자료입니다. 진료설명에 함께 표시하며, 유형을 직접 변경하지 않으면 기존 주의사항 분류를 유지합니다.</p>' : ''}
+          ${m.kind === 'notice' ? '<p class="text-xs text-slate-500">치료 전후 관리와 생활 주의사항을 안내하는 자료입니다.</p>' : ''}
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <label class="sm:col-span-2 min-w-0">제목<input id="ed-title" value="${esc(m.title)}" maxlength="80" placeholder="예: 임플란트 치료 과정" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
             <label>${m.kind === 'disease' ? '질환 분류' : '진료 분류'}<select id="ed-category-select" class="mt-1 w-full border rounded-lg px-3 py-2"><option value="">분류 선택</option>${categoryOptions.map(c => `<option value="${esc(c)}" ${m.category === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}<option value="__custom" ${customCategory ? 'selected' : ''}>직접 입력</option></select><input id="ed-cat" value="${esc(m.category || '')}" maxlength="30" placeholder="사용자 분류 입력" aria-label="직접 입력 분류" class="mt-1 w-full border rounded-lg px-3 py-2 ${customCategory ? '' : 'hidden'}"></label>
@@ -217,10 +247,12 @@
       const file = f.files[0]; if (!file) return;
       const fd = new FormData(); fd.append('file', file);
       try {
+        f.disabled=true;
+        if(file.type.startsWith('video/')) { const poster=await videoPoster(file);fd.append('poster',poster.blob,'poster.jpg');if(Number.isFinite(poster.duration))fd.append('duration_seconds',String(poster.duration)); }
         const r = await fetch('/api/materials/' + m.id + '/images', { method: 'POST', body: fd }); const j = await r.json();
         if (!r.ok) throw new Error(j.error || '업로드 실패');
         sync(); m.images = j.images; m.guidance = {...m.guidance, external_allowed:false, deidentified:false}; await loadMaterials(); renderEditor();
-      } catch (e) { toast(e.message, false); }
+      } catch (e) { toast(e.message, false); } finally {f.disabled=false;}
     };
     box.querySelectorAll('[data-imgdel]').forEach((b) => b.onclick = async () => { const j = await api('/materials/' + m.id + '/images?key=' + encodeURIComponent(b.dataset.imgdel), { method: 'DELETE' }); sync(); m.images = j.images; m.guidance = {...m.guidance, external_allowed:false, deidentified:false}; await loadMaterials(); renderEditor(); });
   }
@@ -295,10 +327,11 @@
   const annotationApi=(path,opt)=>api(path+'?scope='+encodeURIComponent(state.scope),opt);
   function presentSlides(list) {
     let i = 0, annotationView = null, navigating = false;
+    const returnFocus=document.activeElement, returnScroll=scrollY;
     const box = document.createElement('div'); box.className = 'present'; document.body.appendChild(box);
     const draw = () => {
       const m = list[i];
-      box.innerHTML = `<div class="stage fade-in"><div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${slideHtml(m)}${PCGuide.guidanceHtml(m)}</div></div>
+      box.innerHTML = `<header class="presentation-header"><button id="present-back">← 뒤로 · ${state.tab==='library'?'자료함':'선택 목록'}</button><span>${esc(categoryOf(m))}</span></header><div class="stage fade-in"><div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${slideHtml(m)}${PCGuide.guidanceHtml(m)}</div></div>
         <div class="flex items-center gap-3 px-6 py-4 border-t border-slate-800 bg-slate-950/60">
           <button id="pv" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i> 이전</button>
           <span class="text-slate-400 text-sm">${i + 1} / ${list.length}</span>
@@ -310,7 +343,7 @@
       annotationView = window.PCAnnotations.mount(box, m, annotationApi);
       $('#pv', box).onclick = () => move(-1); $('#nx', box).onclick = () => move(1);
       $('#fs', box).onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen?.(); };
-      $('#cl', box).onclick = () => close(); $('#ex', box).onclick = () => close(true);
+      $('#present-back', box).onclick = () => close(); $('#cl', box).onclick = () => close(); $('#ex', box).onclick = () => close(true);
     };
     const move = async delta => {
       if (navigating || i + delta < 0 || i + delta >= list.length) return;
@@ -322,7 +355,7 @@
     const key = e => { if (e.target.closest('.annotation-toolbar') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); else if (e.key === 'Escape') close(); };
     const close = async (send = false) => {
       if (navigating) return; navigating = true;
-      try { await annotationView?.flush(); box.querySelectorAll('video').forEach(v => v.pause()); document.removeEventListener('keydown', key); if (document.fullscreenElement) await document.exitFullscreen(); box.remove(); if (send) { state.today = list.map(m => m.id); saveToday(); state.tab = 'send'; render(); } }
+      try { await annotationView?.flush(); box.querySelectorAll('video').forEach(v => v.pause()); document.removeEventListener('keydown', key); if (document.fullscreenElement) await document.exitFullscreen(); box.remove(); if(!send){scrollTo(0,returnScroll);returnFocus?.focus({preventScroll:true});} if (send) { state.today = list.map(m => m.id); saveToday(); state.tab = 'send'; render(); } }
       catch (e) { toast(e.message, false); }
       finally { navigating = false; }
     };

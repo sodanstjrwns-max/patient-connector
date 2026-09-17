@@ -51,7 +51,7 @@ try {
  const published=(await api('/dispatches',{channel:'link',material_ids:[video.id,first.id]})).data;
  check((await fetch(base+'/a/'+key+'?t='+published.token)).status===200,'Valid guide token can fetch only its included video');
  const ctx=await browser.newContext({viewport:{width:1440,height:1000}});await ctx.addCookies([{name:'pc_session',value:token(hid),url:base}]);const p=await ctx.newPage(), errors=[];p.on('pageerror',e=>errors.push(e.message));
- await p.goto(base+'/app');await p.waitForSelector('.media-card-cover');await p.waitForFunction(()=>[...document.querySelectorAll('.media-card-cover>img')].every(i=>i.complete&&i.naturalWidth>0));
+ await p.goto(base+'/app');await p.waitForSelector('#browse-all');await p.locator('#browse-all').click();await p.waitForSelector('.media-card-cover');await p.waitForFunction(()=>[...document.querySelectorAll('.media-card-cover>img')].every(i=>i.complete&&i.naturalWidth>0));
  check(await p.locator('.media-card-cover>img').count()===8,'Library displays loaded image thumbnails instead of text-only placeholders');
  await p.waitForTimeout(400);await p.screenshot({path:'.test-results/image-library-desktop.png',fullPage:true});
  await p.locator(`[data-preview="${first.id}"]`).click();await p.locator('#session-clean').click();await p.waitForSelector('.media-stage img');

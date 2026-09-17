@@ -47,7 +47,7 @@ try {
  const extra=await upload(first.id,fs.readFileSync('public/static/mockups/orthodontics.png'),'image/png','other.png');const secondKey=extra.images[1].key;
  const ctx=await browser.newContext({viewport:{width:1440,height:1100}});await ctx.addCookies([{name:'pc_session',value:token(hid),url:base}]);const p=await ctx.newPage(),errors=[];
  p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());
- await p.goto(base+'/app');await p.waitForSelector(`[data-add="${first.id}"]`);await p.locator(`[data-add="${first.id}"]`).click();await p.locator(`[data-add="${second.id}"]`).click();await p.locator('[data-tab="present"]').click();await p.locator('#go').click();await p.locator('#session-clean').click();await p.waitForSelector('.present');
+ await p.goto(base+'/app');await p.waitForSelector('#browse-all');await p.locator('#browse-all').click();await p.waitForSelector(`[data-add="${first.id}"]`);await p.locator(`[data-add="${first.id}"]`).click();await p.locator(`[data-add="${second.id}"]`).click();await p.locator('[data-tab="present"]').click();await p.locator('#go').click();await p.locator('#session-clean').click();await p.waitForSelector('.present');
  const scope=await p.evaluate(()=>sessionStorage.getItem('pc_scope_900041'));path+='?scope='+scope;
  const board=key=>p.locator(`[data-annotation-key="${key}"]`);
  async function draw(b,start=[.2,.3],end=[.55,.55],tool='pen'){
@@ -74,7 +74,7 @@ try {
  check((await api(`/materials/${second.id}/annotations`)).data.annotations.length===0,'Drawing does not leak into another material');
  await p.locator('#pv').click();await p.waitForSelector(`[data-annotation-key="${source}"]`);await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
  check(await board(source).locator('canvas').evaluate(c=>c.toDataURL())===pixels,'Returning to a material restores its exact drawing');
- await p.locator('#cl').click();await p.reload();await p.waitForSelector(`[data-preview="${first.id}"]`);await p.locator(`[data-preview="${first.id}"]`).click();await p.locator('#session-continue').click();await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
+ await p.locator('#cl').click();await p.reload();await p.waitForSelector('#browse-all');await p.locator('#browse-all').click();await p.waitForSelector(`[data-preview="${first.id}"]`);await p.locator(`[data-preview="${first.id}"]`).click();await p.locator('#session-continue').click();await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
  check(await board(source).locator('canvas').evaluate(c=>c.toDataURL())===pixels,'Server-saved vectors restore after a full page reload');
  await p.setViewportSize({width:820,height:1180});
  const shape=await board(source).locator('canvas').boundingBox();
@@ -99,7 +99,7 @@ try {
  fs.mkdirSync('.test-results',{recursive:true});execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=320x180:rate=12','-t','2','-c:v','libvpx','-an','.test-results/annotation-fixture.webm']);
  const video=(await api('/materials',{kind:'explain',category:'치아교정',title:'영상 필기 검증'})).data.material;
  const media=(await upload(video.id,fs.readFileSync('.test-results/annotation-fixture.webm'),'video/webm','test.webm')).images[0];
- await p.reload();await p.waitForSelector(`[data-preview="${video.id}"]`);await p.locator(`[data-preview="${video.id}"]`).click();await p.locator('#session-continue').click();await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
+ await p.reload();await p.waitForSelector('#browse-all');await p.locator('#browse-all').click();await p.waitForSelector(`[data-preview="${video.id}"]`);await p.locator(`[data-preview="${video.id}"]`).click();await p.locator('#session-continue').click();await p.waitForFunction(()=>!document.querySelector('[data-tool="pen"]').disabled);
  await board(media.key).locator('video').evaluate(async v=>{v.currentTime=.5;await new Promise(r=>v.addEventListener('seeked',r,{once:true}))});
  await draw(board(media.key));
  check(await board(media.key).locator('video').evaluate(v=>v.paused),'Pen mode pauses a video before drawing');

@@ -41,7 +41,7 @@ function baseUrl(c: any): string {
 function parseJson<T>(s: string | null | undefined, fallback: T): T {
   try { return s ? (JSON.parse(s) as T) : fallback } catch { return fallback }
 }
-type ImageRef = { key: string; caption?: string; media_type?: 'image' | 'video' }
+type ImageRef = { key: string; caption?: string; media_type?: 'image' | 'video'; poster_key?: string; duration_seconds?: number }
 type CostItem = { name: string; price: number; qty?: number; note?: string }
 type MaterialRow = { id: number; hospital_id: number; kind: string; category: string | null; title: string; body: string | null; images_json: string; cost_json: string; sort: number; active: number; updated_at: string; example_key?: string | null; guidance_json?: string }
 function materialOut(m: MaterialRow) {
@@ -285,12 +285,37 @@ api.post('/materials/:id/images', async (c) => {
   const valid = ext === 'png' ? head[0] === 137 && ascii(1, 4) === 'PNG' : ext === 'jpg' ? head[0] === 255 && head[1] === 216 && head[2] === 255 : ext === 'webp' ? ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP' : ext === 'mp4' ? ascii(4, 8) === 'ftyp' : head[0] === 26 && head[1] === 69 && head[2] === 223 && head[3] === 163
   if (!valid) return c.json({ error: '파일 내용과 형식이 일치하지 않습니다' }, 400)
   const images = parseJson<ImageRef[]>(row.images_json, [])
+  const posterFor = String(form?.get('poster_for') || '')
+  if (posterFor) {
+    const target = images.find(im => im.key === posterFor && (im.media_type === 'video' || /\.(mp4|webm)$/.test(im.key)))
+    if (!target) return c.json({ error: '이 자료의 영상을 찾을 수 없습니다' }, 404)
+    if (video) return c.json({ error: '썸네일은 이미지로 올려주세요' }, 400)
+    const posterKey = `h${hid}/m${row.id}/${randomToken(8)}.${ext}`
+    await c.env.MEDIA.put(posterKey, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } })
+    target.poster_key = posterKey
+    const duration = Number(form?.get('duration_seconds'))
+    if (Number.isFinite(duration) && duration > 0 && duration <= 86400) target.duration_seconds = duration
+    const saved = await c.env.DB.prepare("UPDATE materials SET images_json = ?, updated_at = datetime('now') WHERE id = ? AND images_json = ?").bind(JSON.stringify(images), row.id, row.images_json).run()
+    if (!saved.meta.changes) return c.json({ error: '자료가 변경되었습니다. 새로고침 후 다시 시도해 주세요' }, 409)
+    return c.json({ images })
+  }
+  const poster = form?.get('poster')
+  if (poster instanceof File) {
+    const bytes = new Uint8Array(await poster.slice(0, 3).arrayBuffer())
+    if (!video || poster.type !== 'image/jpeg' || !poster.size || poster.size > 512 * 1024 || bytes[0] !== 255 || bytes[1] !== 216 || bytes[2] !== 255) return c.json({ error: '영상 썸네일은 512KB 이하의 JPG 이미지로 올려주세요' }, 400)
+  }
   const limit = row.kind === 'before_after' ? 2 : 6
   if (images.length >= limit) return c.json({ error: `이 자료에는 이미지를 ${limit}장까지 넣을 수 있습니다` }, 400)
   const key = `h${hid}/m${row.id}/${randomToken(8)}.${ext}`
   await c.env.MEDIA.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } })
   const caption = String(form?.get('caption') || '').slice(0, 60)
-  images.push({ key, ...(caption ? { caption } : {}), media_type: video ? 'video' : 'image' })
+  let posterKey: string | undefined
+  if (video && poster instanceof File) {
+    posterKey = `h${hid}/m${row.id}/${randomToken(8)}.jpg`
+    await c.env.MEDIA.put(posterKey, await poster.arrayBuffer(), { httpMetadata: { contentType: 'image/jpeg' } })
+  }
+  const duration = Number(form?.get('duration_seconds'))
+  images.push({ key, ...(caption ? { caption } : {}), media_type: video ? 'video' : 'image', ...(posterKey ? { poster_key: posterKey } : {}), ...(video && Number.isFinite(duration) && duration > 0 && duration <= 86400 ? { duration_seconds: duration } : {}) })
   await c.env.DB.prepare(`UPDATE materials SET images_json = ?, guidance_json = json_set(guidance_json, '$.external_allowed', json('false'), '$.deidentified', json('false')), updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
   return c.json({ images })
 })
