@@ -404,18 +404,36 @@
     const st = state.stats || { d7: { sent: 0, opened: 0 }, d30: { sent: 0, opened: 0 } };
     const rate = (x) => x.sent ? Math.round(x.opened / x.sent * 100) + '%' : '-';
     const badge = { sent: 'bg-emerald-100 text-emerald-800', link: 'bg-sky-100 text-sky-800', failed: 'bg-rose-100 text-rose-800', created: 'bg-slate-100', blocked: 'bg-slate-100' };
-    const label = { sent: '접수 (전달 미확인)', accepted:'접수 (전달 대기)', delivered:'전달 완료', unknown:'결과 확인 필요', link: '링크 생성', failed: '실패', created: '접수 확인 중', blocked: '차단' };
+    const label = { sent: '접수 (전달 미확인)', accepted:'접수 (전달 대기)', delivered:'전달 완료', unknown:'결과 확인 필요', link: '링크 생성', retry_failed:'재시도 실패', retrying:'재발송 확인 중', failed: '실패', created: '접수 확인 중', blocked: '차단' };
     main.innerHTML = `
       <div class="grid sm:grid-cols-4 gap-3 mb-5 text-sm">
         ${[['7일 발행·접수', st.d7.sent], ['7일 열람률', rate(st.d7)], ['30일 발행·접수', st.d30.sent], ['30일 열람률', rate(st.d30)]].map(([l, v]) => `<div class="bg-white border rounded-xl p-4"><div class="text-slate-500 text-xs">${l}</div><div class="text-2xl font-extrabold mt-1">${v}</div></div>`).join('')}
       </div>
       <div class="bg-white border rounded-xl overflow-hidden">
         <table class="w-full text-sm"><thead class="bg-slate-50 text-xs text-slate-500"><tr><th class="text-left px-4 py-2">보낸 때</th><th class="text-left px-2 py-2">번호</th><th class="text-left px-2 py-2">자료</th><th class="text-left px-2 py-2">메모</th><th class="text-left px-2 py-2">상태</th><th class="text-left px-2 py-2">열람</th><th></th></tr></thead>
-        <tbody>${state.dispatches.length ? state.dispatches.map((d) => `<tr class="border-t"><td class="px-4 py-2 whitespace-nowrap text-slate-600">${esc((d.sent_at || d.created_at).slice(0, 16))}</td><td class="px-2 py-2 whitespace-nowrap">${esc(d.phone)}</td><td class="px-2 py-2 max-w-xs truncate" title="${esc(d.titles.join(', '))}">${esc(d.titles.join(', '))}</td><td class="px-2 py-2 text-slate-500">${esc(d.label || '')}</td><td class="px-2 py-2"><span class="px-1.5 py-0.5 rounded text-xs ${badge[d.status] || 'bg-slate-100'}" title="${esc(d.error || '')}">${label[d.status] || d.status}</span>${d.error?`<p class="text-xs text-rose-700">${esc(d.error)}</p>`:''}${['sent','accepted','created','unknown'].includes(d.status)?`<button data-status="${d.id}" class="contact-button">결과 확인</button>`:''}</td><td class="px-2 py-2 whitespace-nowrap">${d.first_opened_at ? `<span class="text-emerald-700">열람 ${d.open_count}회</span>` : '<span class="text-slate-400">아직</span>'}</td><td class="px-2 py-2"><button data-copy="${esc(d.url)}" class="text-slate-400 hover:text-slate-800" title="링크 복사"><i class="fa-solid fa-link"></i></button></td></tr>`).join('') : `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">아직 보낸 안내장이 없습니다</td></tr>`}</tbody></table>
+        <tbody>${state.dispatches.length ? state.dispatches.map((d) => `<tr class="border-t"><td class="px-4 py-2 whitespace-nowrap text-slate-600">${esc((d.sent_at || d.created_at).slice(0, 16))}</td><td class="px-2 py-2 whitespace-nowrap">${esc(d.phone)}</td><td class="px-2 py-2 max-w-xs truncate" title="${esc(d.titles.join(', '))}">${esc(d.titles.join(', '))}</td><td class="px-2 py-2 text-slate-500">${esc(d.label || '')}</td><td class="px-2 py-2"><span class="px-1.5 py-0.5 rounded text-xs ${badge[d.status] || 'bg-slate-100'}" title="${esc(d.error || '')}">${label[d.status] || d.status}</span>${d.error?`<p class="text-xs text-rose-700">${esc(d.error)}</p>`:''}${['sent','accepted','created','unknown','retrying'].includes(d.status)?`<button data-status="${d.id}" class="contact-button">결과 확인</button>`:''}</td><td class="px-2 py-2 whitespace-nowrap">${d.first_opened_at ? `<span class="text-emerald-700">열람 ${d.open_count}회</span>` : '<span class="text-slate-400">아직</span>'}</td><td class="px-2 py-2"><button data-copy="${esc(d.url)}" class="text-slate-400 hover:text-slate-800" title="링크 복사"><i class="fa-solid fa-link"></i></button>${d.status==='failed'&&d.channel==='alimtalk'?`<button data-resend="${d.id}" class="contact-button">재발송 확인</button>`:''}</td></tr>`).join('') : `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">아직 보낸 안내장이 없습니다</td></tr>`}</tbody></table>
       </div>
       <p class="text-xs text-slate-400 mt-3">통신 결과가 불확실한 요청은 자동 재발송하지 않습니다. 실패 시 링크를 복사해 전달하거나 SOLAPI 콘솔에서 먼저 확인하세요.<br>번호 원문은 발송 후 7일 내 파기되며 마지막 4자리만 남습니다. 링크는 ${state.me.hospital.link_days}일 뒤 만료됩니다.</p>`;
     main.querySelectorAll('[data-status]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{const r=await api('/dispatches/'+b.dataset.status+'/status',{method:'POST'});await loadHistory();render();if(r.error)toast(r.error,false)}catch(e){toast(e.message,false)}finally{b.disabled=false}});
     main.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copy); toast('링크를 복사했습니다'); });
+    main.querySelectorAll('[data-resend]').forEach(b=>b.onclick=async()=>{
+      b.disabled=true;
+      try {
+        const path='/dispatches/'+b.dataset.resend+'/resend';
+        const preview=await api(path,{method:'POST',body:JSON.stringify({preview:true})});
+        const dialog=document.createElement('dialog');dialog.className='safety-dialog handout-preview';
+        dialog.innerHTML=`<header><h2>기존 안내장 재발송 확인</h2><p>기존 수신번호 ${esc(preview.phone)} · 기존 자료와 필기를 그대로 보냅니다. 비용·사례가 바뀌었다면 새 안내장을 만드세요.</p></header><div class="preview-content">${PCGuide.render(preview)}</div><footer><label><input type="checkbox" data-retry-confirm>수신 대상·내용·동의를 확인했습니다.</label><p role="status"></p><button data-retry-cancel>취소</button><button data-retry-send class="primary-action">확인 · 1회 재발송</button></footer>`;
+        document.body.append(dialog);dialog.showModal();let busy=false;
+        dialog.oncancel=e=>{if(busy)e.preventDefault()};dialog.onclose=()=>dialog.remove();
+        $('[data-retry-cancel]',dialog).onclick=()=>dialog.close();
+        $('[data-retry-send]',dialog).onclick=async()=>{
+          if(busy)return;if(!$('[data-retry-confirm]',dialog).checked){$('[role=status]',dialog).textContent='최종 확인란을 체크해 주세요.';return}
+          busy=true;dialog.querySelectorAll('button').forEach(x=>x.disabled=true);
+          try{const r=await api(path,{method:'POST',body:JSON.stringify({confirmed:true,preview_hash:preview.preview_hash})});toast(r.ok?'재발송 요청 접수 · 전달 여부는 결과 확인에서 확인하세요.':(r.error||'전달 결과 확인 필요'),r.ok)}catch(e){toast(e.message+' 발송내역에서 결과를 먼저 확인하세요.',false)}
+          finally{busy=false;dialog.close();await loadHistory();render()}
+        };
+      }catch(e){toast(e.message,false)}finally{b.disabled=false}
+    });
   }
 
   // ─── 설정 ───

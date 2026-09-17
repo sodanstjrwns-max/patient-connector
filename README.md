@@ -7,7 +7,8 @@
 - 운영: https://patient-connect.pages.dev
 - 병원 콘솔: https://patient-connect.pages.dev/app (Patient Hub SSO)
 - GitHub: https://github.com/sodanstjrwns-max/patient-connector
-- 실제 GitHub 기준: `5abc7ad`. 변경 전 `origin/main`을 다시 fetch하여 원격 추가 변경이 없음을 확인했습니다. 로컬 개선은 GitHub에 아직 푸시하지 않았습니다.
+- 2026-09-17 GitHub 최신화: 원격 `9bbb4f4`(공식 도메인·번호 파기·재발송·템플릿 문서)와 로컬 `6d25fb8`까지의 자료함/미디어/필기/안전 업그레이드를 병합했습니다. 사용자 요청에 따라 검증된 병합 커밋을 `origin/main`에 정상 푸시하며 강제 푸시하지 않습니다.
+- 병합된 `APP_BASE_URL`: `https://connect.patientfunnel.kr`. 이번 작업은 Git 동기화이며 별도 운영 배포·실제 발송은 수행하지 않습니다. 새 코드 자산 버전은 `v20260917-git-sync`; 아래 운영 검증 기록은 이전 배포 기준입니다.
 - 기존 운영 배포: https://6fea281b.patient-connect.pages.dev (`4329ba6`, 2026-09-16).
 - **상담 안전 업그레이드 운영 반영 완료 (2026-09-16)**: https://8e45c0c2.patient-connect.pages.dev, 소스 커밋 `e806091`, 자산 버전 `v20260916-safe-consult`. 마이그레이션 `0001`~`0004` 적용 완료.
 - 배포 경로: 사용자 소유 Cloudflare Pages `patient-connect`, 브랜치 `main`. 기존 시크릿을 교체하지 않습니다.
@@ -68,7 +69,7 @@
 - 병원+request_key 고유 제약과 요청 hash로 동시 클릭·응답 유실 재시도의 중복 발행을 막습니다. 동일 키로 다른 내용을 보내면 거절합니다. 미확정 네트워크 오류 시 UI는 같은 요청의 결과 확인만 허용합니다.
 - SOLAPI 접수는 `accepted`, 명시적 전달 성공은 `delivered`, 확정 실패는 `failed`, 접수 여부를 알 수 없는 통신 장애는 `unknown`으로 구분합니다. 기존 `sent`도 전달 미확인으로 표시합니다.
 - 발송내역의 **결과 확인**은 SOLAPI 그룹 조회만 수행하며 메시지를 다시 보내지 않습니다. SOLAPI 공식 Node SDK 6.0.1의 group endpoint 및 count.sentSuccess/sentFailed 필드를 참조했습니다.
-- 자동 재발송은 하지 않습니다. 특히 unknown/created를 재발송하면 중복될 수 있으므로 SOLAPI 콘솔에서 확인해야 합니다. 실패 시 기존 안내장 링크 복사로 직접 전달할 수 있습니다. 동일 요청의 결과 재조회와 실제 새 발송은 구분됩니다.
+- 자동 재발송은 하지 않습니다. **확정 실패 건은 기존 안내장 미리보기와 확인을 거쳐 수동 재발송**할 수 있습니다. 병원 소유권, 7일 번호 보관기간, 안내장 만료, 수신거부, 삭제/변경된 비용·사례를 다시 검사합니다. 원자적 상태 변경과 이전 발송 시도에 묶인 확인 해시로 동시 클릭/오래된 확인을 차단합니다. 과거 코드가 실패로 기록한 불확실한 건은 공급자 실패 확인 없이는 재발송하지 않습니다. 특히 unknown/created/retrying는 SOLAPI 콘솔에서 확인해야 합니다. 실패 시 기존 안내장 링크 복사로 직접 전달할 수 있습니다. 동일 요청의 결과 재조회와 실제 새 발송은 구분됩니다.
 - 통계는 링크 발행·카카오 접수 기준이며 실제 전달 완료율로 해석하면 안 됩니다.
 - 설정에서 병원 전화, `https://pf.kakao.com/...` 상담 주소, HTTPS 예약 주소를 저장하면 안내장 하단에 표시합니다. 주소 미입력 시 해당 버튼은 숨깁니다. 카카오 발신 채널과 병원 상담 채널 링크는 별개입니다.
 
@@ -100,6 +101,8 @@
 | `/api/dispatches/preview` | POST `{material_ids, channel, phone?, label?, include_annotations?, annotation_scope?}` |
 | `/api/dispatches` | 미리보기 확인 후 POST / 발송내역 GET `?limit=` |
 | `/api/dispatches/:id/status` | POST 전달 결과 조회, 재발송 없음 |
+| `/api/dispatches/:id/resend` | POST `{preview:true}`로 기존 안내장 확인 → `{confirmed:true,preview_hash}`로 확정 실패 건 재발송 |
+| `/api/v1/ops/purge` | POST + Bearer PS_SERVICE_KEY, 7일 지난 번호 원문 파기 |
 | `/g/:token`, `/api/g/:token` | 환자 안내장 / JSON |
 | `/optout/:token` | 병원별 수신거부 |
 | `/a/*` | 권한 검사된 미디어 |
@@ -128,10 +131,11 @@ npm run test:library
 npm run test:media
 npm run test:annotations
 npm run test:safety
+npm run test:git-sync # Node 22 node:sqlite 테스트 어댑터, 외부 발송은 모의 처리
 ```
 
 - 테스트는 localhost + 별도 `.wrangler/category-tests` D1/R2 + 합성 병원만 사용. Playwright Chromium, ffmpeg 필요.
-- 기존 회귀 134개(분류30/카탈로그32/미디어32/필기40), 신규 안전 58개 통과. 안전 테스트는 scope 분리·사례/비용 정책·미리보기 변경 감지·동시 발행·UI 응답 유실·모바일·연락처·SOLAPI 모의 응답을 포함합니다.
+- 병합 후 전체 228개 통과: 기존 회귀 134개(분류30/카탈로그32/미디어32/필기40), 안전 58개, Git 병합·재발송·파기 검증 36개. 안전 테스트는 scope 분리·사례/비용 정책·미리보기 변경 감지·동시 발행·UI 응답 유실·모바일·연락처·SOLAPI 모의 응답을 포함합니다.
 - SOLAPI 검사는 stub Fetch만 사용합니다. 실제 Hub 사용자 로그인 완료나 실제 환자 메시지 전송 성공을 검증했다고 해석하지 마세요.
 - 빌드 시 `emptyOutDir: true`. 실행 중 Wrangler watcher 경합을 피하려면 PM2 중지 → 포트 정리 → 빌드 → PM2 시작 → curl readiness 순서를 사용합니다.
 - 테스트/운영 SQL 백업은 Git 제외 `.test-results/`. 운영 백업은 복원 무결성 검사를 수행하며 R2 전체 백업은 아닙니다.
@@ -142,5 +146,7 @@ npm run test:safety
 - 병원의 실제 상담/예약 URL 입력, 의료진의 실제 비용·사례·동의 범위 검토. 시스템이 임의 금액이나 법적 승인을 대신 입력하지 않습니다.
 - 실물 iPad/Apple Pencil/Safari, 압력 감응, 완전한 오프라인 저장은 별도 검증/개발 필요.
 - 영상 하나에 여러 장면 동시 보관, scope 보관기간·미사용 R2 파일 정리 및 상담 간 저장 필기 탐색은 후속 과제입니다.
-- 자동 발송 재시도/웹훅은 제공하지 않습니다. 결과 조회 후 명시적 운영 판단이 필요합니다.
-- GitHub 푸시는 별도 승인 후 진행합니다. 새 운영 변경 전 반드시 실제 `origin`을 fetch하세요.
+- 자동 발송 재시도/웹훅은 제공하지 않습니다. 수동 재발송의 접수·전달 결과도 구분하며 통신이 불확실하면 다시 보내지 않습니다.
+- `/me` 호출 시 지연 파기 및 서비스 키 보호 `/api/v1/ops/purge`가 구현되어 있습니다. 외부 스케줄러의 주기 호출 설정은 이 저장소 밖의 작업이며 이번에 확인하지 않았습니다. 호출이 전혀 없으면 정해진 시각에 파기가 실행되는 것은 아닙니다.
+- `docs/alimtalk-template.md`는 GitHub에서 가져온 검토 초안입니다. 현재 발송 코드의 두 변수와 초안의 추가 변수(환자명·병원전화)는 다르므로 승인 템플릿과 코드가 일치하는지 확정해야 합니다. 환자명 개인화를 새로 도입하지 않았습니다.
+- 새 운영 변경 전 반드시 실제 `origin`을 fetch하세요.

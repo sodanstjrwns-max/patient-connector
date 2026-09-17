@@ -11,7 +11,7 @@
     { "binding": "MEDIA", "bucket_name": "patient-connect-assets" }
   ],
   "vars": {
-    "APP_BASE_URL": "https://patient-connect.pages.dev",
+    "APP_BASE_URL": "https://connect.patientfunnel.kr",
     "PLATFORM_FROM_NUMBER": "01044451873",
     "PLATFORM_PF_ID": "KA01PF260915060458432vfkViHs6vOA"
   }

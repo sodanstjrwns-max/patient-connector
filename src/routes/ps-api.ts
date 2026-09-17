@@ -3,6 +3,7 @@
 import { Hono } from 'hono'
 import { checkSolapiCredentials, alimtalkReady } from '../lib/solapi'
 import { timingSafeEqualStr } from '../lib/util'
+import { purgeOldPhones } from './api'
 
 type Bindings = { DB: D1Database; PS_SERVICE_KEY?: string; PS_SSO_SECRET?: string } & Record<string, any>
 type Vars = { hid: number }
@@ -22,6 +23,18 @@ psApi.post('/hub-events', async (c) => {
   return c.json({ ok: true })
 })
 
+// 운영: 번호 원문 파기(7일 경과분). 인증: Bearer PS_SERVICE_KEY, 병원 헤더 불필요. ps-monitor 가 매일 호출.
+psApi.post('/ops/purge', async (c) => {
+  const key = c.env.PS_SERVICE_KEY
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+  if (!key || !token || !timingSafeEqualStr(token, key)) return err(c, 401, 'unauthorized', '유효하지 않은 서비스 키')
+  try {
+    const purged = await purgeOldPhones(c.env.DB)
+    return c.json({ ok: true, purged })
+  } catch { return err(c, 500, 'purge_failed', '번호 파기 작업에 실패했습니다. 다시 확인해 주세요.') }
+})
+
 psApi.use('/*', async (c, next) => {
   const key = c.env.PS_SERVICE_KEY
   if (!key) return err(c, 500, 'not_configured', 'PS_SERVICE_KEY가 설정되지 않았습니다')
@@ -39,8 +52,8 @@ psApi.use('/*', async (c, next) => {
 psApi.get('/signals', async (c) => {
   const hid = c.get('hid')
   const q = async (sql: string, ...args: any[]) => (await c.env.DB.prepare(sql).bind(...args).first<any>()) || {}
-  const s7 = await q(`SELECT COUNT(*) AS sent, SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened FROM dispatches WHERE hospital_id = ? AND status IN ('sent','link') AND created_at >= datetime('now','-7 days')`, hid)
-  const s30 = await q(`SELECT COUNT(*) AS sent, SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened FROM dispatches WHERE hospital_id = ? AND status IN ('sent','link') AND created_at >= datetime('now','-30 days')`, hid)
+  const s7 = await q(`SELECT COUNT(*) AS sent, SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened FROM dispatches WHERE hospital_id = ? AND status IN ('sent','accepted','delivered','link') AND created_at >= datetime('now','-7 days')`, hid)
+  const s30 = await q(`SELECT COUNT(*) AS sent, SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened FROM dispatches WHERE hospital_id = ? AND status IN ('sent','accepted','delivered','link') AND created_at >= datetime('now','-30 days')`, hid)
   const m = await q(`SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND active = 1`, hid)
   const sent7 = Number(s7.sent || 0), opened7 = Number(s7.opened || 0)
   return c.json({

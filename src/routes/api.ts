@@ -57,6 +57,12 @@ function sanitizeCost(input: unknown): CostItem[] {
   })).filter((x) => x.name)
 }
 
+/** 개인정보처리방침 약속: 수신번호 원문은 발송 후 7일 내 파기. 앱 사용 시마다 지연 실행 + ps-monitor 일일 호출(ps-api /ops/purge). */
+export async function purgeOldPhones(db: D1Database): Promise<number> {
+  const r = await db.prepare(`UPDATE dispatches SET phone_enc = NULL WHERE phone_enc IS NOT NULL AND created_at < datetime('now', '-7 days')`).run()
+  return Number(r.meta.changes || 0)
+}
+
 // ─── 허브 SSO ───
 api.get('/auth/hub', (c) => {
   const cb = `${baseUrl(c)}/api/auth/hub/callback`
@@ -138,6 +144,7 @@ api.use('/*', async (c, next) => {
 })
 
 api.get('/me', async (c) => {
+  await purgeOldPhones(c.env.DB).catch(() => undefined)
   const h = await c.env.DB.prepare('SELECT id, ps_hospital_id, name, phone, address, link_days, chat_url, booking_url FROM hospitals WHERE id = ?').bind(c.get('hid')).first<any>()
   if (!h) { c.header('Set-Cookie', clearCookie()); return c.json({ error: 'no_hospital', auth_required: true }, 401) }
   return c.json({ hospital: h, alimtalk_ready: alimtalkReady(c.env), base_url: baseUrl(c) })
@@ -390,7 +397,7 @@ api.on('POST', ['/dispatches', '/dispatches/preview'], async (c) => {
 api.post('/dispatches/:id/status', async c => {
   const d = await c.env.DB.prepare('SELECT * FROM dispatches WHERE id=? AND hospital_id=?').bind(c.req.param('id'),c.get('hid')).first<any>()
   if (!d) return c.json({error:'안내장을 찾을 수 없습니다.'},404)
-  if (d.solapi_group_id && ['sent','accepted','unknown','created'].includes(d.status)) {
+  if (d.solapi_group_id && ['sent','accepted','unknown','created','retrying'].includes(d.status)) {
     const result = await deliveryStatus(c.env,d.solapi_group_id)
     if (result.status) {
       await c.env.DB.prepare('UPDATE dispatches SET status=?,error=? WHERE id=? AND hospital_id=? AND status=?').bind(result.status,result.error || null,d.id,c.get('hid'),d.status).run()
@@ -399,6 +406,49 @@ api.post('/dispatches/:id/status', async c => {
     return c.json({status:d.status,error:result.error})
   }
   return c.json({status:d.status,error:d.error})
+})
+// One explicit retry of a verified failed delivery. Never retry an ambiguous result.
+// Each confirmation is bound to the failed provider attempt; a claim prevents concurrent sends.
+api.post('/dispatches/:id/resend', async (c) => {
+  const hid = c.get('hid')
+  const d = await c.env.DB.prepare('SELECT * FROM dispatches WHERE id = ? AND hospital_id = ?').bind(c.req.param('id'), hid).first<any>()
+  if (!d) return c.json({ error: 'not_found' }, 404)
+  if (d.channel !== 'alimtalk' || d.status !== 'failed') return c.json({ error: '확정 실패 건만 재발송할 수 있습니다. 발송내역에서 결과를 확인하세요.' }, 409)
+  const created = Date.parse(d.created_at.replace(' ', 'T')+'Z'), expires = Date.parse(d.expires_at.replace(' ', 'T')+'Z')
+  if (!d.phone_enc || !Number.isFinite(created) || created <= Date.now()-7*86400000 || !Number.isFinite(expires) || expires <= Date.now()) return c.json({error:'번호 보관기간 또는 안내장 유효기간이 지났습니다. 새 안내장을 확인해 주세요.'},400)
+  if (!alimtalkReady(c.env) || !c.env.PHONE_ENC_KEY) return c.json({error:'알림톡 설정이 완료되지 않았습니다.'},503)
+  // Old clients reported network ambiguity as failed. Require a provider-confirmed failure for them.
+  if (!d.request_key && (!d.solapi_group_id || (await deliveryStatus(c.env,d.solapi_group_id)).status !== 'failed')) return c.json({error:'과거 발송의 실패 여부가 확정되지 않았습니다. SOLAPI 콘솔에서 확인하세요.'},409)
+  const { decPhone } = await import('../lib/util')
+  let phone: string
+  try { phone = await decPhone(d.phone_enc,c.env.PHONE_ENC_KEY) } catch { return c.json({error:'수신번호를 복원하지 못했습니다.'},400) }
+  if (await c.env.DB.prepare('SELECT 1 FROM optouts WHERE hospital_id=? AND phone_hash=?').bind(hid,await phoneHash(phone,hid)).first()) return c.json({error:'수신거부한 번호에는 재발송할 수 없습니다.'},409)
+  const h = await c.env.DB.prepare('SELECT name,phone,address,chat_url,booking_url FROM hospitals WHERE id=?').bind(hid).first<any>()
+  if (!h) return c.json({error:'no_hospital'},401)
+  const snapshot = parseJson<any[]>(d.materials_json,[])
+  if (!snapshot.length || snapshot.length>40) return c.json({error:'기존 안내장을 확인할 수 없습니다.'},409)
+  for (const m of snapshot) {
+    const live = await c.env.DB.prepare('SELECT * FROM materials WHERE id=? AND hospital_id=? AND active=1').bind(m.id,hid).first<MaterialRow>()
+    if (!live) return c.json({error:'자료가 삭제되었습니다. 새 안내장을 준비해 주세요.'},409)
+    const issue = shareIssue(materialOut(live))
+    if (issue) return c.json({error:issue},409)
+    // A previously issued cost/case snapshot may no longer meet the live terms/consent scope.
+    if (['cost','before_after'].includes(m.kind) || ['cost','before_after'].includes(live.kind)) {
+      const current = materialOut(live)
+      if (m.kind!==current.kind || JSON.stringify(m.images)!==JSON.stringify(current.images) || JSON.stringify(m.cost)!==JSON.stringify(current.cost) || JSON.stringify(m.guidance)!==JSON.stringify(publicGuidance(current.guidance)) || m.body!==current.body || m.title!==current.title) return c.json({error:'비용·사례 자료가 변경되었습니다. 최신 자료로 새 안내장을 준비해 주세요.'},409)
+    }
+  }
+  const hash = await digest({id:d.id,snapshot,hospital:h,phone_hash:await phoneHash(phone,hid),expires_at:d.expires_at,group_id:d.solapi_group_id,sent_at:d.sent_at,error:d.error})
+  const b = await c.req.json().catch(()=>({} as any))
+  if (b?.preview === true) return c.json({hospital:h,materials:snapshot,preview_hash:hash,sent_at:d.sent_at || d.created_at,expires_at:d.expires_at,phone:maskPhone(d.phone_last4)})
+  if (b?.confirmed!==true || b?.preview_hash!==hash) return c.json({error:'재발송 미리보기와 수신 대상을 먼저 확인하세요.'},409)
+  const claimed=await c.env.DB.prepare("UPDATE dispatches SET status='retrying',solapi_group_id=NULL,error=NULL WHERE id=? AND hospital_id=? AND status='failed' AND solapi_group_id IS ? AND sent_at IS ? AND phone_enc IS NOT NULL AND created_at>datetime('now','-7 days') AND expires_at>datetime('now')").bind(d.id,hid,d.solapi_group_id,d.sent_at).run()
+  if (!claimed.meta.changes) return c.json({error:'이미 다른 화면에서 재발송을 시작했거나 보관기간이 지났습니다. 결과를 확인하세요.'},409)
+  const url = `${baseUrl(c)}/g/${d.token}`
+  const res=await sendAlimtalk(c.env,phone,{'#{병원명}':h.name,'#{안내장링크}':url.replace(/^https?:\/\//,'')})
+  const status=res.ok?'accepted':res.uncertain?'unknown':'retry_failed'
+  await c.env.DB.prepare("UPDATE dispatches SET status=?,error=?,solapi_group_id=?,sent_at=CASE WHEN ?='accepted' THEN datetime('now') ELSE sent_at END WHERE id=? AND hospital_id=? AND status='retrying'").bind(status,res.error || null,res.groupId || null,status,d.id,hid).run()
+  return c.json({ok:res.ok,status,error:res.error,url})
 })
 api.get('/dispatches', async (c) => {
   const limit = Math.max(1, Math.min(200, Number(c.req.query('limit')) || 50))
