@@ -304,6 +304,55 @@
     const imgs = m.images.map((im) => `<figure>${mediaHtml(im, token)}${im.caption ? `<figcaption class="text-center text-slate-400 mt-2">${esc(im.caption)}</figcaption>` : ''}</figure>`).join('');
     return `<div class="grid ${m.images.length ? 'lg:grid-cols-2' : ''} gap-8 items-start">${m.body ? `<div class="text">${bodyHtml(m.body)}</div>` : ''}${imgs ? `<div class="space-y-4">${imgs}</div>` : ''}</div>`;
   }
+  // ─── 설명 화면 보조: 확대(핀치·휠·드래그), 전후 슬라이더, 포인트 모드 ───
+  function openLightbox(srcs, idx) {
+    if (!srcs.length) return;
+    const lb = document.createElement('div'); lb.className = 'pc-lightbox';
+    let i = Math.max(0, Math.min(idx, srcs.length - 1)), scale = 1, tx = 0, ty = 0;
+    const draw = () => { lb.innerHTML = `<button class="lb-close" aria-label="닫기">&times;</button>${srcs.length > 1 ? `<button class="lb-prev" aria-label="이전">&#8249;</button><button class="lb-next" aria-label="다음">&#8250;</button><span class="lb-count">${i + 1} / ${srcs.length}</span>` : ''}<div class="lb-stage"><img src="${srcs[i]}" alt="" draggable="false"></div><div class="lb-hint">두 손가락으로 벌리거나 휠로 확대 · 두 번 탭하면 원래 크기</div>`; scale = 1; tx = ty = 0; bind(); };
+    const apply = () => { const img = lb.querySelector('img'); if (img) img.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
+    const bind = () => {
+      lb.querySelector('.lb-close').onclick = close;
+      const p = lb.querySelector('.lb-prev'), n = lb.querySelector('.lb-next');
+      if (p) p.onclick = () => { i = (i - 1 + srcs.length) % srcs.length; draw(); };
+      if (n) n.onclick = () => { i = (i + 1) % srcs.length; draw(); };
+      const st = lb.querySelector('.lb-stage'), img = lb.querySelector('img');
+      const pts = new Map(); let lastDist = 0, lastTap = 0, dragging = false, sx = 0, sy = 0;
+      st.addEventListener('wheel', e => { e.preventDefault(); scale = Math.min(6, Math.max(1, scale * (e.deltaY < 0 ? 1.12 : 0.89))); if (scale === 1) { tx = ty = 0; } apply(); }, { passive: false });
+      st.addEventListener('pointerdown', e => { st.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 1) { dragging = true; sx = e.clientX - tx; sy = e.clientY - ty; const now = Date.now(); if (now - lastTap < 320) { scale = scale > 1 ? 1 : 2.2; tx = ty = 0; apply(); } lastTap = now; } if (pts.size === 2) { const [a, b] = [...pts.values()]; lastDist = Math.hypot(a.x - b.x, a.y - b.y); } });
+      st.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 2) { const [a, b] = [...pts.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); if (lastDist) scale = Math.min(6, Math.max(1, scale * (d / lastDist))); lastDist = d; apply(); } else if (dragging && scale > 1) { tx = e.clientX - sx; ty = e.clientY - sy; apply(); } });
+      const up = e => { pts.delete(e.pointerId); if (pts.size < 2) lastDist = 0; if (!pts.size) dragging = false; };
+      st.addEventListener('pointerup', up); st.addEventListener('pointercancel', up);
+      img.onload = apply;
+    };
+    const close = () => { document.removeEventListener('keydown', onKey); lb.remove(); };
+    const onKey = e => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowRight' && srcs.length > 1) { i = (i + 1) % srcs.length; draw(); } else if (e.key === 'ArrowLeft' && srcs.length > 1) { i = (i - 1 + srcs.length) % srcs.length; draw(); } };
+    document.addEventListener('keydown', onKey); document.body.appendChild(lb); draw();
+  }
+  function baSliderHtml(m) {
+    const [b, a] = m.images;
+    return `<div class="ba-compare" id="ba-compare"><img src="${imgUrl(b.key)}" alt="치료 전" class="ba-before" draggable="false"><div class="ba-after-wrap"><img src="${imgUrl(a.key)}" alt="치료 후" class="ba-after" draggable="false"></div><div class="ba-handle"></div><span class="ba-label ba-label-l">치료 전</span><span class="ba-label ba-label-r">치료 후</span></div>
+      <input type="range" id="ba-range" min="0" max="100" value="50" class="ba-range" aria-label="전후 비교 위치"><p class="text-slate-400 text-sm mt-2">가운데 막대를 좌우로 움직여 비교합니다.</p>${m.body ? `<div class="text mt-6">${bodyHtml(m.body)}</div>` : ''}`;
+  }
+  function bindBaSlider(box) {
+    const wrap = $('#ba-compare', box), range = $('#ba-range', box); if (!wrap || !range) return;
+    const set = v => { wrap.style.setProperty('--ba', v + '%'); range.value = v; };
+    range.oninput = () => set(Number(range.value)); set(50);
+    let down = false;
+    const at = e => { const r = wrap.getBoundingClientRect(); set(Math.round(Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100)))); };
+    wrap.addEventListener('pointerdown', e => { down = true; wrap.setPointerCapture(e.pointerId); at(e); });
+    wrap.addEventListener('pointermove', e => { if (down) at(e); });
+    wrap.addEventListener('pointerup', () => { down = false; }); wrap.addEventListener('pointercancel', () => { down = false; });
+  }
+  function applyPointMode(box) {
+    const lines = [...box.querySelectorAll('.stage .text > div')];
+    box.classList.toggle('point-mode', !!state.pointMode && lines.length > 0);
+    if (!state.pointMode || !lines.length) return;
+    state.pointIdx = Math.max(0, Math.min(state.pointIdx || 0, lines.length - 1));
+    lines.forEach((el, k) => { el.classList.toggle('pt-on', k === state.pointIdx); el.classList.toggle('pt-done', k < state.pointIdx); el.onclick = () => { state.pointIdx = k; applyPointMode(box); }; });
+    lines[state.pointIdx].scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function stepPoint(box, delta) { const n = box.querySelectorAll('.stage .text > div').length; if (!n) return; state.pointIdx = Math.max(0, Math.min(n - 1, (state.pointIdx || 0) + delta)); applyPointMode(box); }
   function startPresent(list) {
     if(document.querySelector('#session-start'))return;
     const dialog=document.createElement('dialog');dialog.id='session-start';dialog.className='safety-dialog';
@@ -338,11 +387,18 @@
           <button id="pv" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i> 이전</button>
           <span class="text-slate-400 text-sm">${i + 1} / ${list.length}</span>
           <button id="nx" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === list.length - 1 ? 'disabled' : ''}>다음 <i class="fa-solid fa-chevron-right"></i></button>
+          <span class="present-tools">${m.images.some(im=>!isVideo(im))?`<button id="zoom" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" title="사진 확대 (핀치·휠)"><i class="fa-solid fa-magnifying-glass-plus"></i> 확대</button>`:''}${m.kind==='before_after'&&m.images.length===2?`<button id="ba-slider" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.baSlider}"><i class="fa-solid fa-sliders"></i> 전후 슬라이더</button>`:''}${/\S/.test(m.body||'')?`<button id="point" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.pointMode}" title="항목을 하나씩 짚어가며 보여줍니다 (↓·Space 다음, ↑ 이전)"><i class="fa-solid fa-hand-pointer"></i> 포인트</button>`:''}</span>
           <button id="fs" class="ml-auto px-3 py-2 rounded-lg bg-slate-800 text-sm"><i class="fa-solid fa-expand"></i></button>
           <button id="ex" class="px-4 py-2 rounded-lg bg-sky-600 text-sm font-semibold">설명 끝 · 보내기</button>
           <button id="cl" class="px-3 py-2 rounded-lg bg-slate-800 text-sm">닫기</button>
         </div>`;
-      annotationView = window.PCAnnotations.mount(box, m, annotationApi);
+      if (state.baSlider && m.kind==='before_after' && m.images.length===2) { $('.stage', box).innerHTML = `<div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${baSliderHtml(m)}</div>`; bindBaSlider(box); annotationView = null; }
+      else annotationView = window.PCAnnotations.mount(box, m, annotationApi);
+      applyPointMode(box);
+      const zb = $('#zoom', box); if (zb) zb.onclick = () => { const srcs = m.images.filter(im => !isVideo(im)).map(im => imgUrl(im.key)); openLightbox(srcs, 0); };
+      const bs = $('#ba-slider', box); if (bs) bs.onclick = async () => { try { await annotationView?.flush(); } catch (e) { toast(e.message, false); return; } state.baSlider = !state.baSlider; draw(); };
+      const pb = $('#point', box); if (pb) pb.onclick = () => { state.pointMode = !state.pointMode; state.pointIdx = 0; draw(); };
+      box.querySelectorAll('.stage img').forEach(img => { if (!img.closest('.annotation-surface')) { img.style.cursor = 'zoom-in'; img.addEventListener('dblclick', () => openLightbox([img.currentSrc || img.src], 0)); } });
       $('#pv', box).onclick = () => move(-1); $('#nx', box).onclick = () => move(1);
       $('#fs', box).onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen?.(); };
       $('#present-back', box).onclick = () => close(); $('#cl', box).onclick = () => close(); $('#ex', box).onclick = () => close(true);
@@ -354,7 +410,7 @@
       catch (e) { toast(e.message, false); }
       finally { navigating = false; }
     };
-    const key = e => { if (e.target.closest('.annotation-toolbar') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); else if (e.key === 'Escape') close(); };
+    const key = e => { if (e.target.closest('.annotation-toolbar') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (document.querySelector('.pc-lightbox')) return; if (state.pointMode && (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'ArrowUp')) { e.preventDefault(); stepPoint(box, e.key === 'ArrowUp' ? -1 : 1); return; } if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); else if (e.key === 'Escape') close(); };
     const close = async (send = false) => {
       if (navigating) return; navigating = true;
       try { await annotationView?.flush(); box.querySelectorAll('video').forEach(v => v.pause()); document.removeEventListener('keydown', key); if (document.fullscreenElement) await document.exitFullscreen(); box.remove(); if(!send){scrollTo(0,returnScroll);returnFocus?.focus({preventScroll:true});} if (send) { state.today = list.map(m => m.id); saveToday(); state.tab = 'send'; render(); } }

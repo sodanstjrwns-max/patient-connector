@@ -131,3 +131,24 @@
 .brand-logo-box{width:120px;height:56px;border:1px dashed #cbd5e1;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#f8fafc;overflow:hidden}.brand-logo-box img{max-width:100%;max-height:100%;object-fit:contain}
 .present-brand{display:inline-flex;align-items:center;gap:10px;color:#e2e8f0}.present-brand img{height:28px;max-width:140px;object-fit:contain;background:#fff;border-radius:6px;padding:2px 6px}
 .present .text .li:before{color:var(--pc-accent,#38bdf8)}.present .presentation-header{border-bottom:2px solid var(--pc-accent,#334155)}
+
+/* 설명 화면 보조 도구: 확대·전후 슬라이더·포인트 모드 (2026-09-19) */
+.present-tools{display:inline-flex;gap:6px;margin-left:8px}.present-tools button[aria-pressed="true"]{background:#0369a1;color:#fff}
+.pc-lightbox{position:fixed;inset:0;z-index:80;background:#000000f0;display:flex;align-items:center;justify-content:center}
+.pc-lightbox .lb-stage{width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;cursor:grab}
+.pc-lightbox img{max-width:96vw;max-height:92vh;object-fit:contain;transform-origin:center;transition:transform .05s linear;user-select:none;-webkit-user-drag:none}
+.pc-lightbox .lb-close,.pc-lightbox .lb-prev,.pc-lightbox .lb-next{position:absolute;z-index:2;width:48px;height:48px;border-radius:50%;background:#ffffff22;color:#fff;font-size:30px;line-height:1;display:grid;place-items:center}
+.pc-lightbox .lb-close{top:14px;right:14px}.pc-lightbox .lb-prev{left:14px;top:50%;transform:translateY(-50%)}.pc-lightbox .lb-next{right:14px;top:50%;transform:translateY(-50%)}
+.pc-lightbox .lb-count{position:absolute;top:24px;left:50%;transform:translateX(-50%);color:#cbd5e1;font-size:13px}
+.pc-lightbox .lb-hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:#94a3b8;font-size:12px;background:#0f172acc;padding:6px 12px;border-radius:999px;white-space:nowrap}
+.ba-compare{--ba:50%;position:relative;width:min(100%,900px);aspect-ratio:4/3;margin:0 auto;border-radius:.75rem;overflow:hidden;background:#1e293b;touch-action:none;user-select:none}
+.ba-compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;max-height:none;border-radius:0}
+.ba-compare .ba-after-wrap{position:absolute;inset:0;clip-path:inset(0 calc(100% - var(--ba)) 0 0)}
+.ba-compare .ba-after{width:100%}
+.ba-compare .ba-handle{position:absolute;top:0;bottom:0;left:var(--ba);width:3px;background:#fff;box-shadow:0 0 0 1px #0004}
+.ba-compare .ba-handle:after{content:'◀ ▶';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;color:#0f172a;font-size:11px;padding:8px 6px;border-radius:999px;white-space:nowrap}
+.ba-label{position:absolute;top:10px;padding:4px 10px;border-radius:999px;background:#0f172acc;color:#fff;font-size:12px;font-weight:700}.ba-label-l{left:10px}.ba-label-r{right:10px}
+.ba-range{width:min(100%,900px);display:block;margin:12px auto 0;accent-color:#38bdf8}
+.present.point-mode .stage .text > div{transition:opacity .2s,transform .2s;opacity:.28;cursor:pointer;padding:.15em .4em;border-radius:.4em}
+.present.point-mode .stage .text > div.pt-done{opacity:.55}
+.present.point-mode .stage .text > div.pt-on{opacity:1;background:#ffffff14;box-shadow:inset 4px 0 0 var(--pc-accent,#38bdf8);transform:translateX(4px)}
