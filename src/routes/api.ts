@@ -96,7 +96,7 @@ api.post('/auth/logout', (c) => { c.header('Set-Cookie', clearCookie()); return 
 // ─── 공개: 안내장·수신거부 (세션 불필요) ───
 async function loadDispatchByToken(c: any, token: string) {
   if (!/^[0-9a-f]{32}$/.test(token)) return null
-  const d = (await c.env.DB.prepare(`SELECT d.*, h.name AS h_name, h.phone AS h_phone, h.address AS h_address, h.chat_url, h.booking_url FROM dispatches d JOIN hospitals h ON h.id = d.hospital_id WHERE d.token = ?`).bind(token).first()) as any
+  const d = (await c.env.DB.prepare(`SELECT d.*, h.name AS h_name, h.phone AS h_phone, h.address AS h_address, h.chat_url, h.booking_url, h.logo_key, h.primary_color, h.tagline FROM dispatches d JOIN hospitals h ON h.id = d.hospital_id WHERE d.token = ?`).bind(token).first()) as any
   return d || null
 }
 api.get('/g/:token', async (c) => {
@@ -109,7 +109,7 @@ api.get('/g/:token', async (c) => {
     c.env.DB.prepare(`INSERT INTO views (dispatch_id, material_index) VALUES (?, NULL)`).bind(d.id),
   ]).catch(() => undefined)
   return c.json({
-    hospital: { name: d.h_name, phone: d.h_phone, address: d.h_address, chat_url: d.chat_url, booking_url: d.booking_url },
+    hospital: { name: d.h_name, phone: d.h_phone, address: d.h_address, chat_url: d.chat_url, booking_url: d.booking_url, logo_key: d.logo_key, primary_color: d.primary_color, tagline: d.tagline },
     materials: parseJson<any[]>(d.materials_json, []),
     sent_at: d.sent_at || d.created_at, expires_at: d.expires_at, token: d.token,
   })
@@ -145,7 +145,7 @@ api.use('/*', async (c, next) => {
 
 api.get('/me', async (c) => {
   await purgeOldPhones(c.env.DB).catch(() => undefined)
-  const h = await c.env.DB.prepare('SELECT id, ps_hospital_id, name, phone, address, link_days, chat_url, booking_url FROM hospitals WHERE id = ?').bind(c.get('hid')).first<any>()
+  const h = await c.env.DB.prepare('SELECT id, ps_hospital_id, name, phone, address, link_days, chat_url, booking_url, logo_key, primary_color, tagline FROM hospitals WHERE id = ?').bind(c.get('hid')).first<any>()
   if (!h) { c.header('Set-Cookie', clearCookie()); return c.json({ error: 'no_hospital', auth_required: true }, 401) }
   return c.json({ hospital: h, alimtalk_ready: alimtalkReady(c.env), base_url: baseUrl(c) })
 })
@@ -156,7 +156,28 @@ api.put('/settings', async (c) => {
   const linkDays = Math.max(7, Math.min(180, Math.round(Number(b.link_days) || 30)))
   let chat, booking
   try { chat = safeLink(b.chat_url, true); booking = safeLink(b.booking_url) } catch (e: any) { return c.json({ error: e.message }, 400) }
-  await c.env.DB.prepare('UPDATE hospitals SET phone = ?, address = ?, link_days = ?, chat_url = ?, booking_url = ? WHERE id = ?').bind(phone, address, linkDays, chat, booking, c.get('hid')).run()
+  const color = typeof b.primary_color === 'string' && /^#[0-9a-fA-F]{6}$/.test(b.primary_color.trim()) ? b.primary_color.trim().toLowerCase() : null
+  const tagline = b.tagline ? String(b.tagline).trim().slice(0, 60) : null
+  await c.env.DB.prepare('UPDATE hospitals SET phone = ?, address = ?, link_days = ?, chat_url = ?, booking_url = ?, primary_color = ?, tagline = ? WHERE id = ?').bind(phone, address, linkDays, chat, booking, color, tagline, c.get('hid')).run()
+  return c.json({ ok: true })
+})
+// 병원 로고 (multipart file) → R2 h{hid}/brand/logo-*.ext. 안내장 토큰으로도 열람 가능(index.tsx /a/* 게이트).
+const LOGO_TYPES: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+api.post('/settings/logo', async (c) => {
+  const hid = c.get('hid')
+  const form = await c.req.formData().catch(() => null)
+  const file = form?.get('file')
+  if (!(file instanceof File)) return c.json({ error: '파일이 없습니다' }, 400)
+  const ext = LOGO_TYPES[file.type]
+  if (!ext) return c.json({ error: '로고는 PNG·JPG·WebP 로 올려주세요 (배경 투명 PNG 권장)' }, 400)
+  if (file.size > 2 * 1024 * 1024) return c.json({ error: '로고는 2MB 이하로 올려주세요' }, 400)
+  const key = `h${hid}/brand/logo-${randomToken(6)}.${ext}`
+  await c.env.MEDIA.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } })
+  await c.env.DB.prepare('UPDATE hospitals SET logo_key = ? WHERE id = ?').bind(key, hid).run()
+  return c.json({ logo_key: key })
+})
+api.delete('/settings/logo', async (c) => {
+  await c.env.DB.prepare('UPDATE hospitals SET logo_key = NULL WHERE id = ?').bind(c.get('hid')).run()
   return c.json({ ok: true })
 })
 
@@ -385,7 +406,7 @@ api.on('POST', ['/dispatches', '/dispatches/preview'], async (c) => {
     pEnc = await encPhone(phone, c.env.PHONE_ENC_KEY)
     last4 = phone.slice(-4)
   }
-  const hospital = {name:h.name,phone:h.phone,address:h.address,chat_url:h.chat_url,booking_url:h.booking_url}
+  const hospital = {name:h.name,phone:h.phone,address:h.address,chat_url:h.chat_url,booking_url:h.booking_url,logo_key:h.logo_key||null,primary_color:h.primary_color||null,tagline:h.tagline||null}
   const previewHash = await digest({snapshot,hospital,days:h.link_days,phone:phone || '',label,channel})
   if (preview) return c.json({materials:snapshot,hospital,preview_hash:previewHash,sent_at:new Date().toISOString(),expires_at:new Date(Date.now()+(Number(h.link_days)||30)*86400000).toISOString()})
   if (b.preview_hash !== previewHash || b.confirmed !== true) return c.json({error:'자료 또는 필기가 변경되었거나 최종 확인이 없습니다. 미리보기를 다시 확인하세요.'},409)

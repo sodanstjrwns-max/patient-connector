@@ -331,7 +331,9 @@
     const box = document.createElement('div'); box.className = 'present'; document.body.appendChild(box);
     const draw = () => {
       const m = list[i];
-      box.innerHTML = `<header class="presentation-header"><button id="present-back">← 뒤로 · ${state.tab==='library'?'자료함':'선택 목록'}</button><span>${esc(categoryOf(m))}</span></header><div class="stage fade-in"><div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${slideHtml(m)}${PCGuide.guidanceHtml(m)}</div></div>
+      const hb = state.me.hospital, accent = /^#[0-9a-f]{6}$/i.test(hb.primary_color||'') ? hb.primary_color : '#38bdf8';
+      box.style.setProperty('--pc-accent', accent);
+      box.innerHTML = `<header class="presentation-header"><button id="present-back">← 뒤로 · ${state.tab==='library'?'자료함':'선택 목록'}</button><span class="present-brand">${hb.logo_key?`<img src="/a/${esc(hb.logo_key)}" alt="">`:''}<b>${esc(hb.name)}</b></span><span>${esc(categoryOf(m))}</span></header><div class="stage fade-in"><div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${slideHtml(m)}${PCGuide.guidanceHtml(m)}</div></div>
         <div class="flex items-center gap-3 px-6 py-4 border-t border-slate-800 bg-slate-950/60">
           <button id="pv" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i> 이전</button>
           <span class="text-slate-400 text-sm">${i + 1} / ${list.length}</span>
@@ -480,11 +482,21 @@
       <label class="block">병원 카카오 상담 주소<input id="st-chat" type="url" value="${esc(h.chat_url||'')}" placeholder="https://pf.kakao.com/..." class="mt-1 w-full border rounded-lg px-3 py-2"></label>
       <label class="block">예약 페이지 주소<input id="st-booking" type="url" value="${esc(h.booking_url||'')}" placeholder="https://..." class="mt-1 w-full border rounded-lg px-3 py-2"></label>
       <label class="block">안내장 링크 유효기간(일)<input id="st-days" type="number" min="7" max="180" value="${h.link_days}" class="mt-1 w-32 border rounded-lg px-3 py-2"></label>
+      <fieldset class="brand-editor"><legend>병원 브랜드 <span class="text-slate-400 font-normal">안내장·설명 화면 상단에 표시</span></legend>
+        <div class="flex items-center gap-3 mt-2">
+          <div class="brand-logo-box">${h.logo_key?`<img src="/a/${esc(h.logo_key)}" alt="로고">`:'<span class="text-xs text-slate-400">로고 없음</span>'}</div>
+          <div class="flex flex-col gap-1"><label class="contact-button" style="margin:0;cursor:pointer"><i class="fa-solid fa-upload mr-1"></i>로고 올리기<input id="st-logo" type="file" accept="image/png,image/jpeg,image/webp" class="hidden"></label>${h.logo_key?'<button id="st-logo-del" class="text-xs text-rose-600">로고 삭제</button>':''}<span class="text-[11px] text-slate-400">배경 투명 PNG · 2MB 이하</span></div>
+        </div>
+        <div class="flex items-center gap-3 mt-3"><label class="flex items-center gap-2">대표색 <input id="st-color" type="color" value="${esc(/^#[0-9a-f]{6}$/i.test(h.primary_color||'')?h.primary_color:'#0ea5e9')}"></label><span class="text-xs text-slate-400">버튼·강조 표시에 쓰입니다</span></div>
+        <label class="block mt-3">한 줄 소개 (선택)<input id="st-tagline" maxlength="60" value="${esc(h.tagline||'')}" placeholder="예: 천안 불당동 · 임플란트·교정 전문" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
+      </fieldset>
       <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">카카오 알림톡 상태: ${state.me.alimtalk_ready ? '<span class="text-emerald-700 font-semibold">사용 가능</span>' : '<span class="text-amber-700 font-semibold">설정 미완료</span>'} · 발송 채널은 페이션트퍼널의 'Patient Connect' 공용 채널이며 병원이 따로 개설할 것은 없습니다.</div>
       <div class="flex gap-2"><button id="st-save" class="px-5 py-2 rounded-lg bg-slate-900 text-white font-semibold">저장</button><button id="st-logout" class="ml-auto px-3 py-2 text-slate-500">로그아웃</button></div>
       <p class="text-xs text-slate-400"><a href="/legal-guide" target="_blank" class="underline">병원용 안내 문구</a> · <a href="/privacy" target="_blank" class="underline">개인정보처리방침</a></p>
     </div>`;
-    $('#st-save').onclick = async () => { try { await api('/settings', { method: 'PUT', body: JSON.stringify({ phone: $('#st-phone').value, address: $('#st-addr').value, link_days: $('#st-days').value, chat_url: $('#st-chat').value, booking_url: $('#st-booking').value }) }); await loadMe(); toast('저장했습니다'); render(); } catch (e) { toast(e.message, false); } };
+    $('#st-save').onclick = async () => { try { await api('/settings', { method: 'PUT', body: JSON.stringify({ phone: $('#st-phone').value, address: $('#st-addr').value, link_days: $('#st-days').value, chat_url: $('#st-chat').value, booking_url: $('#st-booking').value, primary_color: $('#st-color').value, tagline: $('#st-tagline').value }) }); await loadMe(); toast('저장했습니다'); render(); } catch (e) { toast(e.message, false); } };
+    $('#st-logo').onchange = async () => { const f = $('#st-logo').files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); try { const r = await fetch('/api/settings/logo', { method: 'POST', body: fd }); const j = await r.json(); if (!r.ok) throw new Error(j.error || '업로드 실패'); await loadMe(); toast('로고를 올렸습니다'); render(); } catch (e) { toast(e.message, false); } };
+    const ld = $('#st-logo-del'); if (ld) ld.onclick = async () => { await api('/settings/logo', { method: 'DELETE' }); await loadMe(); render(); };
     $('#st-logout').onclick = async () => { await api('/auth/logout', { method: 'POST' }); location.href = '/'; };
   }
 

@@ -31,7 +31,7 @@
     }
     inner += guidanceHtml(x);
     return `<section class="bg-white rounded-2xl border p-5 mb-4 fade-in" data-i="${i}">
-      <div class="text-xs font-semibold text-sky-700">${KIND[x.kind] || ''}${x.category ? ' · ' + esc(x.category) : ''}</div>
+      <div class="text-xs font-semibold pc-kind text-sky-700">${KIND[x.kind] || ''}${x.category ? ' · ' + esc(x.category) : ''}</div>
       <h2 class="text-lg font-bold mt-1 mb-3">${esc(x.title)}</h2>${x.is_example ? '<p class="example-editor-notice mb-3">검토용 예시자료입니다. 실제 진료 안내는 담당 의료진에게 확인해 주세요.</p>' : ''}${inner}</section>`;
   }
 
@@ -41,19 +41,35 @@
     return fields.some(([,v])=>v) ? `<aside class="guidance-panel"><h3>${x.kind==='cost'?'공용 비용 안내 · 확정 견적이 아닙니다':'참고 사례 안내'}</h3><dl>${fields.filter(([,v])=>v).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></aside>` : '';
   }
   const safeContact=(v,chat=false)=>{try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password&&(!chat||u.hostname==='pf.kakao.com')?u.href:''}catch{return ''}};
+  const HEX=/^#[0-9a-f]{6}$/i;
+  const brandCss=h=>{const c=HEX.test(h.primary_color||'')?h.primary_color:'#0ea5e9';return `<style>.pc-brand{--pc-accent:${c}}.pc-brand .pc-body .li:before{color:var(--pc-accent)}.pc-brand .pc-kind{color:var(--pc-accent)}.pc-brand .pc-cta-primary{background:var(--pc-accent)}.pc-brand .pc-header{border-top:6px solid var(--pc-accent)}</style>`};
+  function ctaHtml(h){
+    const tel=h.phone?`<a href="tel:${esc(h.phone.replace(/[^+0-9]/g,''))}" class="pc-cta pc-cta-primary"><i class="fa-solid fa-phone"></i><span>전화 문의</span></a>`:'';
+    const chat=safeContact(h.chat_url,true)?`<a href="${esc(safeContact(h.chat_url,true))}" target="_blank" rel="noopener noreferrer" class="pc-cta pc-cta-kakao"><i class="fa-solid fa-comment"></i><span>카카오톡 문의</span></a>`:'';
+    const book=safeContact(h.booking_url)?`<a href="${esc(safeContact(h.booking_url))}" target="_blank" rel="noopener noreferrer" class="pc-cta pc-cta-book"><i class="fa-regular fa-calendar-check"></i><span>예약하기</span></a>`:'';
+    const items=[tel,chat,book].filter(Boolean);
+    return items.length?`<nav class="pc-cta-bar" aria-label="병원 연락">${items.join('')}</nav>`:'';
+  }
   function guideHtml(j) {
     const h=j.hospital;
-    return `<div class="max-w-md mx-auto px-4 py-6">
-      <header class="mb-5"><div class="text-xs text-slate-500">진료 안내장</div><h1 class="text-xl font-extrabold mt-0.5">${esc(h.name)}</h1><p class="text-sm text-slate-500 mt-1">${esc(j.sent_at.slice(0, 10))} 안내드린 자료입니다. 언제든 다시 읽어 보세요.</p></header>
+    const logo=h.logo_key?`<img src="/a/${esc(h.logo_key)}?t=${token}" alt="${esc(h.name)} 로고" class="pc-logo">`:'';
+    return `${brandCss(h)}<div class="pc-brand">
+      <header class="pc-header"><div class="max-w-md mx-auto px-4 pt-5 pb-4">
+        ${logo}
+        <div class="text-xs text-slate-500">진료 안내장</div><h1 class="text-xl font-extrabold mt-0.5">${esc(h.name)}</h1>
+        ${h.tagline?`<p class="text-sm text-slate-600 mt-1">${esc(h.tagline)}</p>`:''}
+        <p class="text-xs text-slate-400 mt-2">${esc(j.sent_at.slice(0, 10))} 안내드린 자료입니다. 언제든 다시 읽어 보세요.</p>
+      </div></header>
+      <div class="max-w-md mx-auto px-4 pb-28">
       ${j.materials.map(materialHtml).join('')}
       <footer class="mt-6 text-sm text-slate-600 bg-slate-50 rounded-2xl p-4">
         <div class="font-semibold">${esc(h.name)}</div>
-        ${h.phone ? `<a href="tel:${esc(h.phone.replace(/[^+0-9]/g,''))}" class="inline-flex items-center mt-2 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold"><i class="fa-solid fa-phone mr-2"></i>${esc(h.phone)}</a>` : ''}
-        ${safeContact(h.chat_url,true) ? `<a href="${esc(safeContact(h.chat_url,true))}" target="_blank" rel="noopener noreferrer" class="contact-button">병원 카카오 상담</a>` : ''}
-        ${safeContact(h.booking_url) ? `<a href="${esc(safeContact(h.booking_url))}" target="_blank" rel="noopener noreferrer" class="contact-button">예약 페이지 열기</a>` : ''}
-        ${h.address ? `<div class="text-xs text-slate-500 mt-2">${esc(h.address)}</div>` : ''}
-        <div class="text-xs text-slate-400 mt-4 leading-relaxed">이 안내장은 ${esc(h.name)}의 요청으로 'Patient Connect'(페이션트퍼널)가 전달합니다. 링크는 ${esc(j.expires_at.slice(0, 10))}까지 열립니다.<br>${token ? `<a href="/optout/${token}" class="underline">이 병원의 카카오톡 안내 수신거부</a>` : '미리보기 · 아직 발행되지 않았습니다'} · <a href="/privacy" class="underline">개인정보처리방침</a></div>
-      </footer></div>`;
+        ${h.phone ? `<div class="text-xs text-slate-500 mt-1">전화 ${esc(h.phone)}</div>` : ''}
+        ${h.address ? `<div class="text-xs text-slate-500 mt-1">${esc(h.address)}</div>` : ''}
+        <div class="text-xs text-slate-400 mt-4 leading-relaxed">이 안내장은 ${esc(h.name)}의 요청으로 'Patient Connect'(페이션트퍼널)가 전달합니다. 링크는 ${esc(j.expires_at.slice(0, 10))}까지 열립니다.<br><a href="/optout/${token}" class="underline">이 병원의 카카오톡 안내 수신거부</a> · <a href="/privacy" class="underline">개인정보처리방침</a></div>
+      </footer></div>
+      ${ctaHtml(h)}
+    </div>`;
   }
   window.PCGuide={render:guideHtml,materialHtml,guidanceHtml};
   if (!m) return;

@@ -22,7 +22,7 @@ app.route('/api/v1', psApi)
 app.route('/api', api)
 
 // ─── HTML 셸 ───
-const ASSET_VER = 'v20260917-video-library'
+const ASSET_VER = 'v20260919a'
 const shell = (title: string, script: string, opts: { bodyClass?: string; noindex?: boolean; desc?: string } = {}) => `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -58,15 +58,16 @@ app.get('/a/*', async (c) => {
   const key = decodeURIComponent(new URL(c.req.url).pathname.slice(3))
   // Bundled example images are intentionally public; arbitrary keys never bypass ownership checks.
   if (materialExamples.some(m => m.image === key)) return c.redirect('/static/mockups/' + key.slice('examples/'.length))
-  if (!/^h\d+\/m\d+\/[0-9a-f]+\.(jpg|png|webp|mp4|webm)$/.test(key)) return c.text('not found', 404)
+  if (!/^h\d+\/(m\d+|brand)\/[0-9a-z-]+\.(jpg|png|webp|mp4|webm)$/.test(key)) return c.text('not found', 404)
+  const isBrand = /^h\d+\/brand\//.test(key)
   let allowed = false
   const sid = await verifySession(getSessionToken(c.req.header('Cookie')), c.env.SESSION_SECRET)
   if (sid && key.startsWith(`h${sid}/`)) allowed = true
   if (!allowed) {
     const t = c.req.query('t') || ''
     if (/^[0-9a-f]{32}$/.test(t)) {
-      const d = await c.env.DB.prepare('SELECT materials_json, expires_at FROM dispatches WHERE token = ?').bind(t).first<{ materials_json: string; expires_at: string }>()
-      if (d && new Date(d.expires_at.replace(' ', 'T') + 'Z').getTime() >= Date.now() && d.materials_json.includes(`"${key}"`)) allowed = true
+      const d = await c.env.DB.prepare('SELECT hospital_id, materials_json, expires_at FROM dispatches WHERE token = ?').bind(t).first<{ hospital_id: number; materials_json: string; expires_at: string }>()
+      if (d && new Date(d.expires_at.replace(' ', 'T') + 'Z').getTime() >= Date.now() && (d.materials_json.includes(`"${key}"`) || (isBrand && key.startsWith(`h${d.hospital_id}/brand/`)))) allowed = true
     }
   }
   if (!allowed) return c.text('forbidden', 403)
