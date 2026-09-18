@@ -6,6 +6,7 @@ import { verifyHubSsoToken } from '../lib/hub-sso'
 import { normalizePhone, phoneHash, encPhone, randomToken, maskPhone } from '../lib/util'
 import { sendAlimtalk, alimtalkReady } from '../lib/solapi'
 import { materialCategories, materialExamples, exampleNotice } from '../lib/material-library'
+import { starterMaterials } from '../lib/material-starter'
 import annotations from './annotations'
 import { guidanceOf, publicGuidance, shareIssue, safeLink, digest } from '../lib/guidance'
 import { deliveryStatus } from '../lib/solapi'
@@ -217,9 +218,9 @@ api.delete('/material-sets/:id', async c => {
 // ─── 자료함 ───
 api.get('/material-library', async (c) => {
   const imported = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE ?')
-    .bind(c.get('hid'), 'dental-v1:%').first<{ n: number }>()
+    .bind(c.get('hid'), 'dental-%').first<{ n: number }>()
   const missing = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE 'dental-v1:%' AND active = 1 AND images_json = '[]'").bind(c.get('hid')).first<{ n: number }>()
-  return c.json({ missing_images: Number(missing?.n || 0), categories: materialCategories, example_notice: exampleNotice, examples: materialExamples.map(({ key, kind, category, title }) => ({ key, kind, category, title })), imported_count: Number(imported?.n || 0) })
+  return c.json({ missing_images: Number(missing?.n || 0), categories: materialCategories, example_notice: exampleNotice, examples: [...materialExamples.map(({ key, kind, category, title }) => ({ key, kind, category, title })), ...starterMaterials.map(({ key, kind, category, title }) => ({ key, kind, category, title }))], imported_count: Number(imported?.n || 0) })
 })
 api.post('/materials/examples', async (c) => {
   const origin = c.req.header('Origin')
@@ -235,9 +236,15 @@ api.post('/materials/examples', async (c) => {
     VALUES (?, ?, ?, ?, ?, ?, '[]', (SELECT COALESCE(MAX(sort), 0) + 1 FROM materials WHERE hospital_id = ?), ?)
     ON CONFLICT(hospital_id, example_key) DO NOTHING
   `).bind(hid, m.kind, m.category, m.title, m.body, JSON.stringify([{ key: m.image, caption: '설명용 이미지 목업 · 실제 임상자료 아님', media_type: 'image' }]), hid, m.key)))
+  // 시작 세트(문안만, 이미지 없음) — 같은 멱등 규칙
+  const starterResults = await c.env.DB.batch(starterMaterials.map(m => c.env.DB.prepare(`
+    INSERT INTO materials (hospital_id, kind, category, title, body, images_json, cost_json, guidance_json, sort, example_key)
+    VALUES (?, ?, ?, ?, ?, '[]', ?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM materials WHERE hospital_id = ?), ?)
+    ON CONFLICT(hospital_id, example_key) DO NOTHING
+  `).bind(hid, m.kind, m.category, m.title, m.body, JSON.stringify(m.cost || []), JSON.stringify(m.guidance || {}), hid, m.key)))
   // Only fill empty active examples after an explicit request; never replace uploaded media or edited text.
   const updates = await c.env.DB.batch(materialExamples.map(m => c.env.DB.prepare("UPDATE materials SET images_json = ?, updated_at = datetime('now') WHERE hospital_id = ? AND example_key = ? AND active = 1 AND images_json = '[]'").bind(JSON.stringify([{ key: m.image, caption: '설명용 이미지 목업 · 실제 임상자료 아님', media_type: 'image' }]), hid, m.key)))
-  return c.json({ added: results.reduce((n, r) => n + Number(r.meta.changes || 0), 0), updated: updates.reduce((n, r) => n + Number(r.meta.changes || 0), 0), total: materialExamples.length })
+  return c.json({ added: results.reduce((n, r) => n + Number(r.meta.changes || 0), 0) + starterResults.reduce((n, r) => n + Number(r.meta.changes || 0), 0), updated: updates.reduce((n, r) => n + Number(r.meta.changes || 0), 0), total: materialExamples.length + starterMaterials.length })
 })
 api.get('/materials', async (c) => {
   const all = c.req.query('all') === '1'
