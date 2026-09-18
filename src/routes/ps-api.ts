@@ -2,10 +2,11 @@
 // GET /api/v1/signals — 발송·열람 집계(비식별). 인증: Bearer {PS_SERVICE_KEY} + X-PS-Hospital-Id
 import { Hono } from 'hono'
 import { checkSolapiCredentials, alimtalkReady } from '../lib/solapi'
-import { timingSafeEqualStr } from '../lib/util'
+import { timingSafeEqualStr, randomToken } from '../lib/util'
+import { guidanceOf, publicGuidance, digest } from '../lib/guidance'
 import { purgeOldPhones } from './api'
 
-type Bindings = { DB: D1Database; PS_SERVICE_KEY?: string; PS_SSO_SECRET?: string } & Record<string, any>
+type Bindings = { DB: D1Database; PS_SERVICE_KEY?: string; PS_SSO_SECRET?: string; APP_BASE_URL?: string } & Record<string, any>
 type Vars = { hid: number }
 const psApi = new Hono<{ Bindings: Bindings; Variables: Vars }>()
 const err = (c: any, status: number, code: string, message: string) => c.json({ error: { code, message } }, status)
@@ -66,6 +67,41 @@ psApi.get('/signals', async (c) => {
       { signal_id: `connect:materials:${hid}`, key: 'materials', label: '등록 안내자료 수', value: Number(m.n || 0) },
     ],
   })
+})
+
+// POST /api/v1/topic-links — 리치 리포트 '자세히 보기' 연결. body {names:["임플란트","크라운"]}
+// 이름과 분류·제목이 맞는 공개 가능 자료(설명·질환·주의사항)를 최대 4개 묶어 180일짜리 링크 안내장을 만들거나 재사용한다.
+psApi.post('/topic-links', async (c) => {
+  const hid = c.get('hid')
+  const b = (await c.req.json().catch(() => ({}))) as { names?: unknown }
+  const names = Array.isArray(b.names) ? [...new Set(b.names.map((n) => String(n || '').trim().slice(0, 40)).filter(Boolean))].slice(0, 12) : []
+  if (!names.length) return c.json({ links: {} })
+  const h = await c.env.DB.prepare('SELECT id, name, phone, address, chat_url, booking_url, logo_key, primary_color, tagline, link_days FROM hospitals WHERE id = ?').bind(hid).first<any>()
+  if (!h) return err(c, 404, 'unknown_hospital', '병원 없음')
+  const base = (c.env.APP_BASE_URL || new URL(c.req.url).origin).replace(/\/$/, '')
+  const parse = (v: string | null, d: any) => { try { return v ? JSON.parse(v) : d } catch { return d } }
+  const out: Record<string, { url: string; titles: string[] }> = {}
+  for (const name of names) {
+    const q = `%${name.replace(/\s+/g, '')}%`
+    const rows = await c.env.DB.prepare(`SELECT * FROM materials WHERE hospital_id = ? AND active = 1 AND kind IN ('explain','disease','notice') AND (REPLACE(category,' ','') LIKE ? OR REPLACE(title,' ','') LIKE ?) ORDER BY CASE WHEN example_key IS NULL THEN 0 ELSE 1 END, kind = 'explain' DESC, sort ASC LIMIT 4`).bind(hid, q, q).all<any>()
+    const mats = rows.results || []
+    if (!mats.length) continue
+    const ids = mats.map((m) => m.id)
+    const snapshot = mats.map((m) => ({ id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body || '', images: parse(m.images_json, []), cost: parse(m.cost_json, []), is_example: !!m.example_key, annotations: [], guidance: publicGuidance(guidanceOf(parse(m.guidance_json, {}))) }))
+    const requestKey = `topic-${(await digest(name)).slice(0, 24)}`
+    const requestHash = await digest({ ids, name })
+    const prior = await c.env.DB.prepare(`SELECT token, request_hash, expires_at FROM dispatches WHERE hospital_id = ? AND request_key = ?`).bind(hid, requestKey).first<any>()
+    let token: string | null = null
+    if (prior && prior.request_hash === requestHash && new Date(String(prior.expires_at).replace(' ', 'T') + 'Z').getTime() > Date.now() + 7 * 86400000) token = prior.token
+    else {
+      token = randomToken(16)
+      if (prior) await c.env.DB.prepare('DELETE FROM dispatches WHERE hospital_id = ? AND request_key = ?').bind(hid, requestKey).run()
+      await c.env.DB.prepare(`INSERT INTO dispatches (hospital_id, token, label, materials_json, channel, status, sent_at, expires_at, request_key, request_hash) VALUES (?,?,?,?,'link','link',datetime('now'),datetime('now','+180 days'),?,?)`)
+        .bind(hid, token, `리치 연결 · ${name}`, JSON.stringify(snapshot), requestKey, requestHash).run()
+    }
+    out[name] = { url: `${base}/g/${token}`, titles: mats.map((m) => m.title) }
+  }
+  return c.json({ links: out })
 })
 
 psApi.get('/ops/solapi-check', async (c) => {
