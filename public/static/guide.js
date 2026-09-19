@@ -96,7 +96,8 @@
         const apply = (v) => { video.playbackRate = v; video.defaultPlaybackRate = v; paint(wrap, v); };
         apply(get());
         video.addEventListener('loadedmetadata', () => { video.playbackRate = get(); });
-        wrap.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); const v = parseFloat(b.dataset.speed); set(v); apply(v); }));
+        wrap._applySpeed = apply;
+        wrap.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); const v = parseFloat(b.dataset.speed); set(v); document.querySelectorAll('.pc-video').forEach((w) => { if (w._applySpeed) w._applySpeed(v); }); }));
       });
     }
     return { bind, get };
