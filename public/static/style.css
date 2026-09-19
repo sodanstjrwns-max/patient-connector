@@ -200,7 +200,13 @@
 .pc-mat-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .pc-mat-no{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--pc-accent)}
 .pc-kind-pill{font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;background:var(--fog);color:var(--ink2)}
-.pc-mat-explain .pc-kind-pill{background:#e6f4ff;color:#0b63b6}.pc-mat-disease .pc-kind-pill{background:#ffe9ec;color:#b5233b}.pc-mat-cost .pc-kind-pill{background:#fff3d6;color:#9a5b00}.pc-mat-before_after .pc-kind-pill{background:#efe9ff;color:#5b34c9}.pc-mat-notice .pc-kind-pill{background:#e4f8ee;color:#127a45}
+/* 종류 구분은 브랜드색 농도·형태로 (설명 = 채움, 질환 = 테두리, 비용 = 진함, 사례 = 점선, 주의 = 잉크) */
+.pc-kind-pill{border:1.5px solid transparent}
+.pc-mat-explain .pc-kind-pill{background:var(--pc-accent);color:#fff}
+.pc-mat-disease .pc-kind-pill{background:#fff;color:var(--pc-accent);border-color:var(--pc-accent)}
+.pc-mat-cost .pc-kind-pill{background:var(--ink);color:#fff}
+.pc-mat-before_after .pc-kind-pill{background:#fff;color:var(--ink2);border:1.5px dashed var(--mute)}
+.pc-mat-notice .pc-kind-pill{background:var(--fog);color:var(--ink);border-color:var(--line)}
 .pc-cat{font-size:11.5px;color:var(--mute);font-weight:600}
 .pc-mat-title{font-size:20px;font-weight:900;letter-spacing:-.02em;line-height:1.3;margin:0 0 12px}
 .pc-guide .pc-body{font-size:16px;line-height:1.8;color:var(--ink2)}
@@ -237,3 +243,5 @@
 /* 브랜드색에서 중립색 파생 (갈색이면 따뜻한 아이보리, 파랑이면 서늘한 안개) */
 @supports (color: color-mix(in srgb, red, blue)){.pc-guide{--ink:color-mix(in srgb,var(--pc-accent) 22%,#171512);--ink2:color-mix(in srgb,var(--pc-accent) 26%,#4b4744);--mute:color-mix(in srgb,var(--pc-accent) 16%,#8f8a86);--line:color-mix(in srgb,var(--pc-accent) 9%,#f1efec);--fog:color-mix(in srgb,var(--pc-accent) 4.5%,#faf9f7)}.pc-guide .pc-mat,.pc-guide .pc-selfsend,.pc-clinic,.pc-cost-total{background:color-mix(in srgb,var(--pc-accent) 1.5%,#fff)}.pc-cost-total{background:var(--fog)}}
 .pc-hero:before{background:linear-gradient(165deg,rgba(255,255,255,.18),rgba(0,0,0,0) 45%),linear-gradient(0deg,rgba(0,0,0,.4),rgba(0,0,0,.06))}
+
+.pc-guide .example-editor-notice{border-color:var(--line);background:var(--fog);color:var(--ink2)}
