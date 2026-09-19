@@ -25,14 +25,14 @@
       inner = `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure>${im ? `<img src="/a/${annotationFor(im, x.annotations)?.image_key || im.key}?t=${token}" class="w-full rounded-xl bg-slate-100 ${annotationFor(im, x.annotations) ? 'patient-annotation' : ''}" alt="${esc(l)}${annotationFor(im, x.annotations) ? ' · 필기 포함' : ''}">` : ''}<figcaption class="text-sm">${l}</figcaption></figure>`).join('')}</div>${x.body ? `<div class="pc-body mt-3">${bodyHtml(x.body)}</div>` : ''}`;
     } else if (x.kind === 'cost') {
       const total = x.cost.reduce((s, c) => s + (Number(c.price) || 0) * (Number(c.qty) || 1), 0);
-      inner = `${x.body ? `<div class="pc-body mb-3">${bodyHtml(x.body)}</div>` : ''}<table class="w-full text-sm"><tbody>${x.cost.map((c) => `<tr class="border-b"><td class="py-2">${esc(c.name)}${c.note ? `<div class="text-xs text-slate-500">${esc(c.note)}</div>` : ''}</td><td class="py-2 text-right text-slate-500 text-xs">${(c.qty || 1) > 1 ? `${won(c.price)} × ${c.qty}` : ''}</td><td class="py-2 text-right font-semibold whitespace-nowrap">${won((Number(c.price) || 0) * (Number(c.qty) || 1))}</td></tr>`).join('')}<tr><td class="py-3 font-bold" colspan="2">합계</td><td class="py-3 text-right font-extrabold">${won(total)}</td></tr></tbody></table><p class="text-xs text-slate-500 mt-2">안내 시점 기준 금액이며 진단에 따라 달라질 수 있습니다.</p>`;
+      inner = `${x.body ? `<div class="pc-body mb-3">${bodyHtml(x.body)}</div>` : ''}<div class="pc-cost">${x.cost.map((c) => `<div class="pc-cost-row"><div><b>${esc(c.name)}</b>${c.note ? `<small>${esc(c.note)}</small>` : ''}${(c.qty || 1) > 1 ? `<small>${won(c.price)} × ${c.qty}</small>` : ''}</div><span>${won((Number(c.price) || 0) * (Number(c.qty) || 1))}</span></div>`).join('')}<div class="pc-cost-total"><span>합계</span><b>${won(total)}</b></div></div><p class="pc-fine">안내 시점 기준 금액이며 진단에 따라 달라질 수 있습니다.</p>`;
     } else {
       inner = `${x.body ? `<div class="pc-body">${bodyHtml(x.body)}</div>` : ''}${x.images.map(im => img(im, x.annotations)).join('')}`;
     }
     inner += guidanceHtml(x);
-    return `<section class="bg-white rounded-2xl border p-5 mb-4 fade-in" data-i="${i}">
-      <div class="text-xs font-semibold pc-kind text-sky-700">${KIND[x.kind] || ''}${x.category ? ' · ' + esc(x.category) : ''}</div>
-      <h2 class="text-lg font-bold mt-1 mb-3">${esc(x.title)}</h2>${x.is_example ? '<p class="example-editor-notice mb-3">검토용 예시자료입니다. 실제 진료 안내는 담당 의료진에게 확인해 주세요.</p>' : ''}${inner}</section>`;
+    return `<section class="pc-mat pc-mat-${esc(x.kind)}" data-i="${i}" id="mat-${i}">
+      <div class="pc-mat-head"><span class="pc-mat-no">${String(i + 1).padStart(2, '0')}</span><span class="pc-kind-pill">${KIND[x.kind] || ''}</span>${x.category ? `<span class="pc-cat">${esc(x.category)}</span>` : ''}</div>
+      <h2 class="pc-mat-title">${esc(x.title)}</h2>${x.is_example ? '<p class="example-editor-notice mb-3">검토용 예시자료입니다. 실제 진료 안내는 담당 의료진에게 확인해 주세요.</p>' : ''}${inner}</section>`;
   }
 
   function guidanceHtml(x) {
@@ -56,25 +56,29 @@
   function guideHtml(j) {
     const h=j.hospital;
     const logo=h.logo_key?`<img src="/a/${esc(h.logo_key)}?t=${token}" alt="${esc(h.name)} 로고" class="pc-logo">`:'';
-    return `${brandCss(h)}<div class="pc-brand">
-      <header class="pc-header"><div class="max-w-md mx-auto px-4 pt-5 pb-4">
-        ${logo}
-        <div class="text-xs text-slate-500">진료 안내장</div><h1 class="text-xl font-extrabold mt-0.5">${esc(h.name)}</h1>
-        ${h.tagline?`<p class="text-sm text-slate-600 mt-1">${esc(h.tagline)}</p>`:''}
-        <p class="text-xs text-slate-400 mt-2">${esc(j.sent_at.slice(0, 10))} 안내드린 자료입니다. 언제든 다시 읽어 보세요.</p>
+    const d = new Date(String(j.sent_at).replace(' ', 'T'));
+    const dateTxt = isNaN(d) ? esc(j.sent_at.slice(0, 10)) : `${d.getMonth() + 1}월 ${d.getDate()}일`;
+    const kinds = [...new Set(j.materials.map((x) => x.kind))];
+    return `${brandCss(h)}<div class="pc-brand pc-guide">
+      <header class="pc-hero"><span class="pc-orb a"></span><span class="pc-orb b"></span><div class="pc-wrap">
+        <div class="pc-hero-top">${logo ? `<span class="pc-logo-chip">${logo}</span>` : `<span class="pc-logo-chip"><i class="fa-solid fa-tooth"></i>${esc(h.name)}</span>`}<span class="pc-date"><i class="fa-regular fa-calendar"></i>${dateTxt} 안내</span></div>
+        <p class="pc-eyebrow">진료 안내장</p>
+        <h1 class="pc-title">${esc(h.name)}에서<br>오늘 설명드린 자료입니다</h1>
+        ${h.tagline?`<p class="pc-tagline">${esc(h.tagline)}</p>`:''}
+        <div class="pc-meta"><span><i class="fa-solid fa-layer-group"></i>자료 ${j.materials.length}개</span>${kinds.map((k) => `<span>${KIND[k] || k}</span>`).join('')}</div>
+        ${j.materials.length > 2 ? `<nav class="pc-toc" aria-label="자료 바로가기">${j.materials.map((x, i) => `<a href="#mat-${i}"><b>${String(i + 1).padStart(2, '0')}</b>${esc(x.title)}</a>`).join('')}</nav>` : ''}
       </div></header>
-      <div class="max-w-md mx-auto px-4 pb-28">
+      <div class="pc-wrap pc-main">
       ${j.self_send ? friendHtml(h) : ''}
       ${j.materials.map(materialHtml).join('')}
       ${j.self_send ? `<section class="pc-selfsend" id="selfsend"><h3 class="font-bold"><i class="fa-solid fa-comment text-yellow-500 mr-1"></i>이 안내장을 카카오톡으로도 받아두기</h3>
         <p class="text-sm text-slate-600 mt-1">번호를 넣으시면 ${esc(h.name)} 이름으로 카카오톡 알림톡이 갑니다. 본인이 요청하실 때만 발송되며, 번호는 발송 후 7일 뒤 삭제됩니다.</p>
         <form id="ss-form"><input id="ss-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" maxlength="13" required><button type="submit">카카오톡으로 받기</button></form>
         <div id="ss-msg" class="text-sm mt-2" role="status"></div></section>` : ''}
-      <footer class="mt-6 text-sm text-slate-600 bg-slate-50 rounded-2xl p-4">
-        <div class="font-semibold">${esc(h.name)}</div>
-        ${h.phone ? `<div class="text-xs text-slate-500 mt-1">전화 ${esc(h.phone)}</div>` : ''}
-        ${h.address ? `<div class="text-xs text-slate-500 mt-1">${esc(h.address)}</div>` : ''}
-        <div class="text-xs text-slate-400 mt-4 leading-relaxed">이 안내장은 ${esc(h.name)}의 요청으로 'Patient Connect'(페이션트퍼널)가 전달합니다. 링크는 ${esc(j.expires_at.slice(0, 10))}까지 열립니다.<br><a href="/optout/${token}" class="underline">이 병원의 카카오톡 안내 수신거부</a> · <a href="/privacy" class="underline">개인정보처리방침</a></div>
+      <footer class="pc-foot">
+        <div class="pc-clinic"><b>${esc(h.name)}</b>${h.phone ? `<p><i class="fa-solid fa-phone"></i><a href="tel:${esc(h.phone.replace(/[^+0-9]/g,''))}">${esc(h.phone)}</a></p>` : ''}${h.address ? `<p><i class="fa-solid fa-location-dot"></i><span>${esc(h.address)}</span></p>` : ''}</div>
+        <p class="pc-legal">이 안내장은 ${esc(h.name)}의 요청으로 'Patient Connect'(페이션트퍼널)가 전달합니다. 링크는 ${esc(j.expires_at.slice(0, 10))}까지 열립니다. 안내 자료는 이해를 돕기 위한 것이며 진단·치료 계획은 담당 의료진의 판단에 따릅니다.</p>
+        <p class="pc-legal"><a href="/optout/${token}">이 병원의 카카오톡 안내 수신거부</a> · <a href="/privacy">개인정보처리방침</a></p>
       </footer></div>
       ${ctaHtml(h)}
     </div>`;
@@ -93,6 +97,8 @@
     const seen = new Set();
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const i = Number(e.target.dataset.i); if (!seen.has(i)) { seen.add(i); fetch('/api/g/' + token + '/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: i }) }).catch(() => {}); } } }), { threshold: 0.4 });
     app.querySelectorAll('[data-i]').forEach((el) => io.observe(el));
+    const reveal = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); reveal.unobserve(e.target); } }), { threshold: 0.06 });
+    app.querySelectorAll('.pc-mat, .pc-selfsend, .pc-foot').forEach((el) => reveal.observe(el));
     const fr = $('[data-friend]'); if (fr) fr.addEventListener('click', () => { fetch('/api/g/' + token + '/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: -1 }) }).catch(() => {}); });
     const ss = $('#ss-form');
     if (ss) ss.onsubmit = async (e) => {
