@@ -436,6 +436,7 @@
         </section>
         <section class="lg:col-span-2">
           <div class="bg-white border rounded-xl p-5 space-y-4 text-sm">
+            <div id="s-checkins"></div>
             <label class="block">환자 휴대전화<input id="s-phone" inputmode="numeric" placeholder="010-0000-0000" class="mt-1 w-full border rounded-lg px-3 py-2.5 text-lg tracking-wider" ${ready ? '' : 'disabled'}></label>
             <label class="block">내부 메모 <span class="text-slate-400">(환자에게 안 보임)</span><input id="s-label" maxlength="40" placeholder="예: 3시 임플란트 상담" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
             <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">카카오톡에 <b>[${esc(state.me.hospital.name)} 진료 안내]</b>로 도착하며, 마지막 줄에 "${esc(state.me.hospital.name)}의 요청으로 'Patient Connect'가 발송합니다"가 표시됩니다.<br>환자분께 번호 수집·발송 동의를 받으셨는지 확인하세요 (<a href="/legal-guide" target="_blank" class="underline">안내 문구</a>).</div>
@@ -446,6 +447,20 @@
           </div>
         </section>
       </div>`;
+    // 【2026-09-19】오늘 접수 환자(폼 신환+재진)에서 한 번 탭으로 수신자 선택 — 번호는 서버가 checkin_id 로 다시 읽는다
+    let picked = null;
+    const renderPicker = (d) => {
+      const box = $('#s-checkins'); if (!box) return;
+      if (!d || !d.enabled) { box.innerHTML = ''; return; }
+      box.innerHTML = `<div class="checkin-picker"><div class="flex items-center gap-2 mb-2"><b class="text-sm">오늘 접수 환자</b><span class="text-xs text-slate-400">${d.items.length}명 · 탭하면 수신자로</span><button id="s-ck-refresh" class="ml-auto text-xs text-slate-500"><i class="fa-solid fa-rotate"></i></button></div>
+        ${d.items.length ? `<div class="checkin-list">${d.items.map(it => `<button type="button" data-ck="${esc(it.id)}" data-name="${esc(it.name)}" data-last4="${esc(it.last4 || '')}" ${it.has_phone ? '' : 'disabled title="휴대폰 번호가 없는 접수"'} class="${picked && picked.id === it.id ? 'on' : ''}"><span class="ck-kind ${it.kind}">${it.kind === 'new' ? '신환' : '재진'}</span><b>${esc(it.name)}</b><small>${it.last4 ? '****-' + esc(it.last4) : '번호 없음'} · ${new Date(it.checked_in_at).toTimeString().slice(0, 5)}</small></button>`).join('')}</div>` : '<p class="text-xs text-slate-400">아직 접수한 환자분이 없습니다. 접수 태블릿에서 체크인하면 여기 뜹니다.</p>'}
+        ${picked ? `<p class="text-xs mt-2 text-emerald-700 font-semibold"><i class="fa-solid fa-check mr-1"></i>${esc(picked.name)}님(****-${esc(picked.last4)})에게 보냅니다 <button type="button" id="s-ck-clear" class="ml-2 text-slate-500 underline">해제</button></p>` : ''}</div>`;
+      box.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => { picked = { id: b.dataset.ck, name: b.dataset.name, last4: b.dataset.last4 }; $('#s-phone').value = ''; $('#s-phone').placeholder = picked.name + '님 · 접수 번호로 발송'; $('#s-phone').disabled = true; if (!$('#s-label').value) $('#s-label').value = picked.name; renderPicker(d); });
+      const cl = $('#s-ck-clear'); if (cl) cl.onclick = () => { picked = null; $('#s-phone').disabled = !ready; $('#s-phone').placeholder = '010-0000-0000'; renderPicker(d); };
+      const rf = $('#s-ck-refresh'); if (rf) rf.onclick = loadPicker;
+    };
+    const loadPicker = async () => { try { renderPicker(await api('/checkins')); } catch (e) { const box = $('#s-checkins'); if (box) box.innerHTML = `<p class="text-xs text-rose-600">오늘 접수 목록: ${esc(e.message)}</p>`; } };
+    loadPicker();
     $('#send-order').onclick=()=>{const order={disease:0,explain:1,notice:1,before_after:2,cost:3};state.today=[...list].sort((a,b)=>(order[a.kind]??4)-(order[b.kind]??4)).map(m=>m.id);saveToday();render()};
     const ids = list.map((m) => m.id);
     const showResult = (r) => {
@@ -464,11 +479,11 @@
         const includeAnnotations=$('#s-annotations').checked;
         if(includeAnnotations&&!state.scope)throw new Error('설명하기에서 이번 설명을 시작한 뒤 필기를 선택하세요.');
         if(includeAnnotations)await PCAnnotations.flush(ids);
-        const payload={material_ids:ids,phone:$('#s-phone').value,label:$('#s-label').value,channel,include_annotations:includeAnnotations,annotation_scope:state.scope};
+        const payload={material_ids:ids,phone:picked?'':$('#s-phone').value,checkin_id:picked?picked.id:undefined,label:$('#s-label').value,channel,include_annotations:includeAnnotations,annotation_scope:state.scope};
         const preview=await api('/dispatches/preview',{method:'POST',body:JSON.stringify(payload)});
         payload.preview_hash=preview.preview_hash;payload.request_key=crypto.randomUUID();payload.confirmed=true;
         const dialog=document.createElement('dialog');dialog.id='dispatch-preview';dialog.className='safety-dialog handout-preview';
-        dialog.innerHTML=`<header><h2>환자에게 전달될 안내장</h2><p>${channel==='link'?'링크 직접 전달':'카카오 수신번호: '+esc(payload.phone)} · ${includeAnnotations?'현재 설명 필기 포함':'원본 자료만'}</p><p>아직 발행·발송되지 않았습니다. 자료·순서·비용·필기와 수신번호를 확인하세요.</p></header><div class="preview-content">${PCGuide.render(preview)}</div><footer><label><input id="preview-confirmed" type="checkbox">내용·수신 대상·전송 권한을 확인했고, 필기에 다른 환자의 개인정보가 없습니다.</label><p id="preview-error" role="status"></p><button id="preview-cancel">돌아가서 수정</button><button id="preview-send" class="primary-action">${channel==='link'?'확인 · 링크 만들기':'확인 · 카카오톡 발송'}</button></footer>`;
+        dialog.innerHTML=`<header><h2>환자에게 전달될 안내장</h2><p>${channel==='link'?'링크 직접 전달':'카카오 수신번호: '+(picked?esc(picked.name)+'님 (접수 번호 ****-'+esc(picked.last4)+')':esc(payload.phone))} · ${includeAnnotations?'현재 설명 필기 포함':'원본 자료만'}</p><p>아직 발행·발송되지 않았습니다. 자료·순서·비용·필기와 수신번호를 확인하세요.</p></header><div class="preview-content">${PCGuide.render(preview)}</div><footer><label><input id="preview-confirmed" type="checkbox">내용·수신 대상·전송 권한을 확인했고, 필기에 다른 환자의 개인정보가 없습니다.</label><p id="preview-error" role="status"></p><button id="preview-cancel">돌아가서 수정</button><button id="preview-send" class="primary-action">${channel==='link'?'확인 · 링크 만들기':'확인 · 카카오톡 발송'}</button></footer>`;
         document.body.append(dialog);dialog.showModal();let sending=false,ambiguous=false;
         dialog.addEventListener('cancel',e=>{if(sending||ambiguous)e.preventDefault()});
         dialog.addEventListener('close',()=>dialog.remove());
@@ -479,7 +494,7 @@
           try{
             const r=await api('/dispatches',{method:'POST',body:JSON.stringify(payload)});
             ambiguous=false;dialog.close();showResult(r);
-            if(['sent','accepted','delivered'].includes(r.status)){$('#s-phone').value='';$('#s-label').value=''}
+            if(['sent','accepted','delivered'].includes(r.status)){$('#s-phone').value='';$('#s-label').value='';picked=null;$('#s-phone').disabled=!ready;$('#s-phone').placeholder='010-0000-0000';loadPicker()}
           }catch(e){
             ambiguous=!e.status||e.status>=500;
             $('#preview-error').textContent=e.message+(ambiguous?' 같은 요청으로 결과를 다시 확인하세요. 새 발송은 만들지 않습니다.':'');

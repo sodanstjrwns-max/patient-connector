@@ -9,6 +9,7 @@ import { materialCategories, materialExamples, exampleNotice } from '../lib/mate
 import { starterMaterials } from '../lib/material-starter'
 import annotations from './annotations'
 import { guidanceOf, publicGuidance, shareIssue, safeLink, digest } from '../lib/guidance'
+import { formKeyFor, fetchFormCheckins } from '../lib/form-checkins'
 import { deliveryStatus } from '../lib/solapi'
 
 export type Bindings = {
@@ -24,6 +25,8 @@ export type Bindings = {
   PLATFORM_FROM_NUMBER?: string
   PLATFORM_PF_ID?: string
   CONNECT_TEMPLATE_ID?: string
+  FORM_API_URL?: string
+  FORM_INTEGRATION_KEYS?: string   // 【2026-09-19】JSON {ps_hospital_id: pfk_…} — 폼 오늘 접수 목록
 }
 type Vars = { hid: number }
 const HUB_ORIGIN = 'https://hub.patientfunnel.kr'
@@ -395,6 +398,19 @@ api.delete('/materials/:id/images', async (c) => {
   return c.json({ images })
 })
 
+// ─── 【2026-09-19】오늘 접수 환자 (Patient Form 신환+재진 체크인) — 이름·구분·시각·마지막 4자리만 내린다. 전체 번호는 발송 시 서버가 checkin_id 로 다시 조회.
+async function formKeyForHid(c: any, hid: number): Promise<string | null> {
+  const h = await (c.env.DB as D1Database).prepare('SELECT ps_hospital_id FROM hospitals WHERE id = ?').bind(hid).first<any>()
+  return formKeyFor(c.env, h?.ps_hospital_id)
+}
+api.get('/checkins', async (c) => {
+  const key = await formKeyForHid(c, c.get('hid'))
+  if (!key) return c.json({ enabled: false, items: [] })
+  const r = await fetchFormCheckins(c.env, key, { q: c.req.query('q') || undefined })
+  if (!r.ok) return c.json({ error: r.error }, 502)
+  return c.json({ enabled: true, date: r.date, items: r.items.map((i) => { const d = String(i.phone || '').replace(/[^0-9]/g, ''); return { id: i.id, kind: i.visitKind, name: i.patientName, last4: d.length >= 4 ? d.slice(-4) : null, has_phone: d.length >= 10, checked_in_at: i.checkedInAt, dept: i.dept || [] } }) })
+})
+
 // ─── 발송(안내장) ───
 api.use('/dispatches*', bodyLimit({maxSize:65536,onError:c=>c.json({error:'발송 요청이 너무 큽니다.'},413)}))
 api.on('POST', ['/dispatches', '/dispatches/preview'], async (c) => {
@@ -404,7 +420,7 @@ api.on('POST', ['/dispatches', '/dispatches/preview'], async (c) => {
   const preview = c.req.path.endsWith('/preview')
   const requestKey = b.request_key
   if (!preview && (typeof requestKey !== 'string' || !/^[a-zA-Z0-9_-]{16,80}$/.test(requestKey))) return c.json({error:'발송 요청 키가 필요합니다.'},400)
-  const requestHash = await digest({material_ids:b.material_ids,phone:b.phone || '',label:b.label || '',channel:b.channel,include_annotations:b.include_annotations === true,annotation_scope:b.annotation_scope || '',preview_hash:b.preview_hash})
+  const requestHash = await digest({material_ids:b.material_ids,phone:b.phone || '',checkin_id:b.checkin_id || '',label:b.label || '',channel:b.channel,include_annotations:b.include_annotations === true,annotation_scope:b.annotation_scope || '',preview_hash:b.preview_hash})
   if (!preview) {
     const prior = await c.env.DB.prepare('SELECT * FROM dispatches WHERE hospital_id=? AND request_key=?').bind(hid,requestKey).first<any>()
     if (prior) {
@@ -439,7 +455,17 @@ api.on('POST', ['/dispatches', '/dispatches/preview'], async (c) => {
 
   let phone: string | null = null, pHash: string | null = null, pEnc: string | null = null, last4: string | null = null
   if (channel === 'alimtalk') {
-    phone = normalizePhone(String(b.phone || ''))
+    let rawPhone = String(b.phone || '')
+    if (b.checkin_id && /^(new|returning):\d+$/.test(String(b.checkin_id))) {
+      // 오늘 접수 목록에서 고른 환자: 번호는 서버가 폼에서 다시 읽는다 (브라우저에 전체 번호 없음)
+      const key = await formKeyForHid(c, hid)
+      if (!key) return c.json({ error: '폼 접수 연결이 없습니다' }, 400)
+      const r = await fetchFormCheckins(c.env, key, { limit: 200 })
+      const it = r.items.find((x) => x.id === String(b.checkin_id))
+      if (!r.ok || !it) return c.json({ error: '오늘 접수 목록에서 환자를 찾지 못했습니다. 목록을 새로고침하세요' }, 404)
+      rawPhone = String(it.phone || '')
+    }
+    phone = normalizePhone(rawPhone)
     if (!phone) return c.json({ error: '휴대전화번호를 확인하세요 (010으로 시작, 숫자만)' }, 400)
     pHash = await phoneHash(phone, hid)
     const opt = await c.env.DB.prepare('SELECT 1 FROM optouts WHERE hospital_id = ? AND phone_hash = ?').bind(hid, pHash).first()

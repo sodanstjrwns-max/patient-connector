@@ -226,3 +226,10 @@
 .pc-guide .pc-cta-bar{background:rgba(255,255,255,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
 .pc-guide .pc-cta{min-height:50px;border-radius:14px;font-size:14.5px}.pc-guide .pc-cta-primary{box-shadow:0 8px 20px rgba(0,0,0,.14)}
 @media(max-width:380px){.pc-title{font-size:23px}.pc-mat{padding:18px 16px}}
+
+/* 2026-09-19 오늘 접수 환자 선택 (보내기) */
+.checkin-picker{border:1px solid #e2e8f0;border-radius:12px;padding:12px;background:#f8fafc}
+.checkin-list{display:flex;flex-wrap:wrap;gap:6px;max-height:190px;overflow:auto}
+.checkin-list button{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;font-size:.8rem;line-height:1.2}
+.checkin-list button.on{border-color:#0369a1;background:#e0f2fe}.checkin-list button:disabled{opacity:.45}
+.checkin-list button small{color:#94a3b8;font-size:.7rem}.ck-kind{font-size:.65rem;font-weight:800;padding:2px 6px;border-radius:999px}.ck-kind.new{background:#e6f4ff;color:#0b63b6}.ck-kind.returning{background:#e4f8ee;color:#127a45}
