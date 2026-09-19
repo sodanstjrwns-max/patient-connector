@@ -99,6 +99,7 @@
     app.querySelectorAll('[data-i]').forEach((el) => io.observe(el));
     const reveal = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); reveal.unobserve(e.target); } }), { threshold: 0.06 });
     app.querySelectorAll('.pc-mat, .pc-selfsend, .pc-foot').forEach((el) => reveal.observe(el));
+    setTimeout(() => app.querySelectorAll('.pc-mat, .pc-selfsend, .pc-foot').forEach((el) => el.classList.add('in')), 1500);
     const fr = $('[data-friend]'); if (fr) fr.addEventListener('click', () => { fetch('/api/g/' + token + '/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: -1 }) }).catch(() => {}); });
     const ss = $('#ss-form');
     if (ss) ss.onsubmit = async (e) => {
