@@ -23,7 +23,9 @@
   }
   function imgUrl(key, token) { return '/a/' + key + (token ? '?t=' + token : ''); }
   const isVideo = im => im?.media_type === 'video' || /\.(mp4|webm)$/i.test(im?.key || '');
-  const mediaHtml = (im, token, cls='w-full') => isVideo(im) ? `<video src="${imgUrl(im.key, token)}" ${im.poster_key ? `poster="${imgUrl(im.poster_key, token)}"` : ''} controls playsinline preload="metadata" class="${cls}" aria-label="${esc(im.caption || '설명 영상')}"></video>` : `<img src="${imgUrl(im.key, token)}" alt="${esc(im.caption || '설명 이미지')}" class="${cls}" loading="lazy">`;
+  // 【2026-09-20】설명 영상 배속: 1·1.5·2·3배 (설명 화면·안내장 공통 .pc-speed, 선택값은 기기별 기억)
+  const speedBar = () => `<div class="pc-speed" role="group" aria-label="재생 속도">${[1,1.5,2,3].map(v => `<button type="button" data-speed="${v}">${v}×</button>`).join('')}</div>`;
+  const mediaHtml = (im, token, cls='w-full') => isVideo(im) ? `<div class="pc-video"><video src="${imgUrl(im.key, token)}" ${im.poster_key ? `poster="${imgUrl(im.poster_key, token)}"` : ''} controls playsinline preload="metadata" class="${cls}" aria-label="${esc(im.caption || '설명 영상')}"></video>${speedBar()}</div>` : `<img src="${imgUrl(im.key, token)}" alt="${esc(im.caption || '설명 이미지')}" class="${cls}" loading="lazy">`;
   function toast(msg, ok) {
     const t = document.createElement('div');
     t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm z-[70] fade-in ' + (ok === false ? 'bg-rose-600' : 'bg-slate-900');
@@ -393,6 +395,7 @@
           <button id="ex" class="px-4 py-2 rounded-lg bg-sky-600 text-sm font-semibold">설명 끝 · 보내기</button>
           <button id="cl" class="px-3 py-2 rounded-lg bg-slate-800 text-sm">닫기</button>
         </div>`;
+      PCSpeed.bind(box);
       if (state.baSlider && m.kind==='before_after' && m.images.length===2) { $('.stage', box).innerHTML = `<div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${baSliderHtml(m)}</div>`; bindBaSlider(box); annotationView = null; }
       else annotationView = window.PCAnnotations.mount(box, m, annotationApi);
       applyPointMode(box);

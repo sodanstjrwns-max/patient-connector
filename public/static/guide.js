@@ -13,7 +13,7 @@
   const img = (im, notes) => {
     const a = annotationFor(im, notes), video = isVideo(im);
     const time = a?.video_time == null ? '' : `${Math.floor(a.video_time / 60)}:${String(Math.floor(a.video_time % 60)).padStart(2, '0')}`;
-    return `<figure class="my-3">${video ? `<video src="/a/${im.key}?t=${token}" ${im.poster_key ? `poster="/a/${im.poster_key}?t=${token}"` : ''} controls playsinline preload="metadata" class="w-full rounded-xl" aria-label="${esc(im.caption || '설명 영상')}"></video>` : `<img src="/a/${a?.image_key || im.key}?t=${token}" alt="${a ? '의료진 필기가 포함된 설명 이미지' : esc(im.caption || '설명 이미지')}" class="w-full rounded-xl bg-slate-100 ${a ? 'patient-annotation' : ''}" loading="lazy">`}${a && video ? `<figcaption class="annotation-caption">${time} 장면에 필기한 설명</figcaption><img src="/a/${a.image_key}?t=${token}" alt="영상 장면에 필기한 설명" class="w-full rounded-xl patient-annotation" loading="lazy">` : a ? '<figcaption class="annotation-caption">의료진 필기 포함 · 원본은 변경되지 않았습니다</figcaption>' : ''}${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}${a && !video ? `<details class="media-supplement"><summary>원본 이미지 보기</summary><img src="/a/${im.key}?t=${token}" alt="필기 전 원본" class="w-full rounded-xl" loading="lazy"></details>` : ''}</figure>`;
+    return `<figure class="my-3">${video ? `<div class="pc-video"><video src="/a/${im.key}?t=${token}" ${im.poster_key ? `poster="/a/${im.poster_key}?t=${token}"` : ''} controls playsinline preload="metadata" class="w-full rounded-xl" aria-label="${esc(im.caption || '설명 영상')}"></video><div class="pc-speed" role="group" aria-label="재생 속도">${[1, 1.5, 2, 3].map((v) => `<button type="button" data-speed="${v}">${v}×</button>`).join('')}</div></div>` : `<img src="/a/${a?.image_key || im.key}?t=${token}" alt="${a ? '의료진 필기가 포함된 설명 이미지' : esc(im.caption || '설명 이미지')}" class="w-full rounded-xl bg-slate-100 ${a ? 'patient-annotation' : ''}" loading="lazy">`}${a && video ? `<figcaption class="annotation-caption">${time} 장면에 필기한 설명</figcaption><img src="/a/${a.image_key}?t=${token}" alt="영상 장면에 필기한 설명" class="w-full rounded-xl patient-annotation" loading="lazy">` : a ? '<figcaption class="annotation-caption">의료진 필기 포함 · 원본은 변경되지 않았습니다</figcaption>' : ''}${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}${a && !video ? `<details class="media-supplement"><summary>원본 이미지 보기</summary><img src="/a/${im.key}?t=${token}" alt="필기 전 원본" class="w-full rounded-xl" loading="lazy"></details>` : ''}</figure>`;
   };
 
   function materialHtml(x, i) {
@@ -83,6 +83,24 @@
       ${ctaHtml(h)}
     </div>`;
   }
+  // 【2026-09-20】영상 배속 공통: .pc-video 안의 <video> + .pc-speed 버튼. 선택값은 localStorage(pc_speed)에 기억, 새 영상에도 적용.
+  window.PCSpeed = (() => {
+    const KEY = 'pc_speed';
+    const get = () => { try { const v = parseFloat(localStorage.getItem(KEY)); return [1, 1.5, 2, 3].includes(v) ? v : 1; } catch { return 1; } };
+    const set = (v) => { try { localStorage.setItem(KEY, String(v)); } catch {} };
+    function paint(wrap, v) { wrap.querySelectorAll('[data-speed]').forEach((b) => b.setAttribute('aria-pressed', String(parseFloat(b.dataset.speed) === v))); }
+    function bind(root) {
+      (root || document).querySelectorAll('.pc-video').forEach((wrap) => {
+        if (wrap.dataset.speedBound) return; wrap.dataset.speedBound = '1';
+        const video = wrap.querySelector('video'); if (!video) return;
+        const apply = (v) => { video.playbackRate = v; video.defaultPlaybackRate = v; paint(wrap, v); };
+        apply(get());
+        video.addEventListener('loadedmetadata', () => { video.playbackRate = get(); });
+        wrap.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); const v = parseFloat(b.dataset.speed); set(v); apply(v); }));
+      });
+    }
+    return { bind, get };
+  })();
   window.PCGuide={render:guideHtml,materialHtml,guidanceHtml};
   if (!m) return;
 
@@ -93,6 +111,7 @@
     if (!r.ok) { app.innerHTML = '<div class="p-10 text-center text-slate-500">안내장을 찾을 수 없습니다.</div>'; return; }
     const h = j.hospital;
     app.innerHTML = guideHtml(j);
+    PCSpeed.bind(app);
     // 자료 단위 열람 기록 (화면에 들어올 때 1회)
     const seen = new Set();
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const i = Number(e.target.dataset.i); if (!seen.has(i)) { seen.add(i); fetch('/api/g/' + token + '/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: i }) }).catch(() => {}); } } }), { threshold: 0.4 });
