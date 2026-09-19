@@ -233,3 +233,7 @@
 .checkin-list button{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;font-size:.8rem;line-height:1.2}
 .checkin-list button.on{border-color:#0369a1;background:#e0f2fe}.checkin-list button:disabled{opacity:.45}
 .checkin-list button small{color:#94a3b8;font-size:.7rem}.ck-kind{font-size:.65rem;font-weight:800;padding:2px 6px;border-radius:999px}.ck-kind.new{background:#e6f4ff;color:#0b63b6}.ck-kind.returning{background:#e4f8ee;color:#127a45}
+
+/* 브랜드색에서 중립색 파생 (갈색이면 따뜻한 아이보리, 파랑이면 서늘한 안개) */
+@supports (color: color-mix(in srgb, red, blue)){.pc-guide{--ink:color-mix(in srgb,var(--pc-accent) 22%,#171512);--ink2:color-mix(in srgb,var(--pc-accent) 26%,#4b4744);--mute:color-mix(in srgb,var(--pc-accent) 16%,#8f8a86);--line:color-mix(in srgb,var(--pc-accent) 9%,#f1efec);--fog:color-mix(in srgb,var(--pc-accent) 4.5%,#faf9f7)}.pc-guide .pc-mat,.pc-guide .pc-selfsend,.pc-clinic,.pc-cost-total{background:color-mix(in srgb,var(--pc-accent) 1.5%,#fff)}.pc-cost-total{background:var(--fog)}}
+.pc-hero:before{background:linear-gradient(165deg,rgba(255,255,255,.18),rgba(0,0,0,0) 45%),linear-gradient(0deg,rgba(0,0,0,.4),rgba(0,0,0,.06))}
