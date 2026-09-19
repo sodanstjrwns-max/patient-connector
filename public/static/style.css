@@ -152,3 +152,17 @@
 .present.point-mode .stage .text > div{transition:opacity .2s,transform .2s;opacity:.28;cursor:pointer;padding:.15em .4em;border-radius:.4em}
 .present.point-mode .stage .text > div.pt-done{opacity:.55}
 .present.point-mode .stage .text > div.pt-on{opacity:1;background:#ffffff14;box-shadow:inset 4px 0 0 var(--pc-accent,#38bdf8);transform:translateX(4px)}
+
+/* ── 2026-09-19 체어사이드 QR ── */
+.pc-qr-overlay { position: fixed; inset: 0; z-index: 70; background: rgba(2, 6, 23, .86); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.pc-qr-card { background: #fff; color: #0f172a; border-radius: 1.5rem; padding: 2rem 1.75rem; width: 100%; max-width: min(92vw, 540px); text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.pc-qr-card svg { width: min(68vw, 360px); height: auto; margin: 1rem auto .5rem; display: block; }
+.pc-selfsend { margin-top: 1.5rem; border: 1px solid #e2e8f0; border-radius: 1rem; padding: 1rem; background: #fffdf2; }
+.pc-selfsend form { display: flex; gap: .5rem; margin-top: .75rem; }
+.pc-selfsend input { flex: 1; min-width: 0; border: 1px solid #cbd5e1; border-radius: .75rem; padding: .65rem .85rem; font-size: 1rem; }
+.pc-selfsend button { background: #fee500; color: #191600; font-weight: 800; border-radius: .75rem; padding: .65rem 1rem; white-space: nowrap; }
+.pc-selfsend button:disabled { opacity: .6; }
+.qr-print { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10mm; padding: 10mm; max-width: 210mm; margin: 0 auto; }
+.qr-card { border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 8mm 6mm; text-align: center; break-inside: avoid; page-break-inside: avoid; }
+.qr-card svg { width: 52mm; height: 52mm; margin: 3mm auto; display: block; }
+@media print { .no-print { display: none !important; } body { background: #fff; } .qr-print { padding: 0; gap: 8mm; } }

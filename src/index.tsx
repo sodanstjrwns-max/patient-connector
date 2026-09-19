@@ -22,7 +22,7 @@ app.route('/api/v1', psApi)
 app.route('/api', api)
 
 // ─── HTML 셸 ───
-const ASSET_VER = 'v20260919c'
+const ASSET_VER = 'v20260919d'
 const shell = (title: string, script: string, opts: { bodyClass?: string; noindex?: boolean; desc?: string } = {}) => `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -41,12 +41,14 @@ const shell = (title: string, script: string, opts: { bodyClass?: string; noinde
 <body class="${opts.bodyClass || 'bg-slate-50'} font-sans text-slate-800">
   <div id="app"></div>
   ${script === 'app.js' ? `<script src="/static/annotations.js?${ASSET_VER}"></script><script src="/static/guide.js?${ASSET_VER}"></script>` : ''}
+  ${script === 'app.js' || script === 'qrcards.js' ? `<script src="/static/qrcode.js?${ASSET_VER}"></script>` : ''}
   <script src="/static/${script}?${ASSET_VER}"></script>
 </body>
 </html>`
 
 app.get('/', (c) => c.html(landingPage()))
 app.get('/app', (c) => c.html(shell('병원 콘솔', 'app.js', { noindex: true })))
+app.get('/app/qr-cards/print', (c) => c.html(shell('QR 카드 인쇄', 'qrcards.js', { bodyClass: 'bg-white', noindex: true })))
 app.get('/g/:token', (c) => c.html(shell('진료 안내장', 'guide.js', { bodyClass: 'bg-white', noindex: true, desc: '병원에서 보내드린 진료 안내 자료입니다' })))
 app.get('/optout/:token', (c) => c.html(shell('수신거부', 'guide.js', { bodyClass: 'bg-white', noindex: true })))
 app.get('/privacy', (c) => c.html(legalShell('개인정보처리방침', privacyBody)))

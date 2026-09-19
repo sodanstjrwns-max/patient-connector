@@ -62,6 +62,10 @@
       </div></header>
       <div class="max-w-md mx-auto px-4 pb-28">
       ${j.materials.map(materialHtml).join('')}
+      ${j.self_send ? `<section class="pc-selfsend" id="selfsend"><h3 class="font-bold"><i class="fa-solid fa-comment text-yellow-500 mr-1"></i>이 안내장을 카카오톡으로도 받아두기</h3>
+        <p class="text-sm text-slate-600 mt-1">번호를 넣으시면 ${esc(h.name)} 이름으로 카카오톡 알림톡이 갑니다. 본인이 요청하실 때만 발송되며, 번호는 발송 후 7일 뒤 삭제됩니다.</p>
+        <form id="ss-form"><input id="ss-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" maxlength="13" required><button type="submit">카카오톡으로 받기</button></form>
+        <div id="ss-msg" class="text-sm mt-2" role="status"></div></section>` : ''}
       <footer class="mt-6 text-sm text-slate-600 bg-slate-50 rounded-2xl p-4">
         <div class="font-semibold">${esc(h.name)}</div>
         ${h.phone ? `<div class="text-xs text-slate-500 mt-1">전화 ${esc(h.phone)}</div>` : ''}
@@ -85,6 +89,19 @@
     const seen = new Set();
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const i = Number(e.target.dataset.i); if (!seen.has(i)) { seen.add(i); fetch('/api/g/' + token + '/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: i }) }).catch(() => {}); } } }), { threshold: 0.4 });
     app.querySelectorAll('[data-i]').forEach((el) => io.observe(el));
+    const ss = $('#ss-form');
+    if (ss) ss.onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = ss.querySelector('button'), msg = $('#ss-msg'); btn.disabled = true; msg.textContent = '보내는 중…';
+      try {
+        const r = await fetch('/api/g/' + token + '/send-self', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: $('#ss-phone').value }) });
+        const jj = await r.json().catch(() => ({}));
+        msg.textContent = jj.message || jj.error || (r.ok ? '보냈습니다' : '보내지 못했습니다');
+        msg.className = 'text-sm mt-2 ' + (jj.ok ? 'text-emerald-700 font-semibold' : 'text-rose-600');
+        if (jj.ok) { $('#ss-phone').value = ''; }
+      } catch (err) { msg.textContent = '네트워크 오류입니다. 잠시 후 다시 시도해 주세요'; msg.className = 'text-sm mt-2 text-rose-600'; }
+      finally { btn.disabled = false; }
+    };
   }
   function renderOptout() {
     app.innerHTML = `<div class="max-w-md mx-auto px-4 py-10 text-center">

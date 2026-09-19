@@ -269,7 +269,7 @@
     const list = todayList();
     main.innerHTML = `
       <div class="flex items-center gap-3 mb-4"><h2 class="text-lg font-bold">오늘의 설명 <span class="text-sm font-normal text-slate-500">${list.length}개</span></h2>
-        ${list.length ? `<button id="go" class="ml-auto px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-semibold"><i class="fa-solid fa-display mr-1"></i>큰 화면으로 설명</button><button id="clear" class="px-3 py-2 text-sm text-slate-500">비우기</button>` : ''}
+        ${list.length ? `<button id="go" class="ml-auto px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-semibold"><i class="fa-solid fa-display mr-1"></i>큰 화면으로 설명</button><button id="qr-list" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold" title="환자분이 찍으면 이 자료가 바로 열립니다"><i class="fa-solid fa-qrcode mr-1"></i>QR</button><button id="clear" class="px-3 py-2 text-sm text-slate-500">비우기</button>` : ''}
       </div>
       ${list.length ? `<ol class="space-y-2">${list.map((m, i) => `<li class="bg-white border rounded-xl px-4 py-3 flex items-center gap-3 fade-in">
           <span class="text-slate-400 w-5">${i + 1}</span>
@@ -283,6 +283,7 @@
         : `<div class="bg-white rounded-xl border p-10 text-center text-slate-500"><div class="text-3xl mb-2">🖥️</div><p class="font-semibold text-slate-700">오늘 설명할 자료를 자료함에서 담아 주세요</p><p class="text-sm mt-1">담은 순서대로 큰 화면에 넘겨 가며 보여줍니다.</p><button id="tolib" class="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">자료함으로</button></div>`}`;
     main.insertAdjacentHTML('afterbegin',setsHtml());bindSets(main);
     const go = $('#go'); if (go) go.onclick = () => startPresent(list);
+    const ql = $('#qr-list'); if (ql) ql.onclick = () => showQr(list, '');
     const cl = $('#clear'); if (cl) cl.onclick = () => { state.today = []; saveToday(); render(); };
     const tl = $('#tolib'); if (tl) tl.onclick = () => { state.tab = 'library'; render(); };
     main.querySelectorAll('[data-up]').forEach((b) => b.onclick = () => { const i = Number(b.dataset.up); [state.today[i - 1], state.today[i]] = [state.today[i], state.today[i - 1]]; saveToday(); render(); });
@@ -387,7 +388,7 @@
           <button id="pv" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i> 이전</button>
           <span class="text-slate-400 text-sm">${i + 1} / ${list.length}</span>
           <button id="nx" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === list.length - 1 ? 'disabled' : ''}>다음 <i class="fa-solid fa-chevron-right"></i></button>
-          <span class="present-tools">${m.images.some(im=>!isVideo(im))?`<button id="zoom" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" title="사진 확대 (핀치·휠)"><i class="fa-solid fa-magnifying-glass-plus"></i> 확대</button>`:''}${m.kind==='before_after'&&m.images.length===2?`<button id="ba-slider" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.baSlider}"><i class="fa-solid fa-sliders"></i> 전후 슬라이더</button>`:''}${/\S/.test(m.body||'')?`<button id="point" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.pointMode}" title="항목을 하나씩 짚어가며 보여줍니다 (↓·Space 다음, ↑ 이전)"><i class="fa-solid fa-hand-pointer"></i> 포인트</button>`:''}</span>
+          <span class="present-tools"><button id="qr" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" title="환자분 폰으로 이 안내장 열기 (QR)"><i class="fa-solid fa-qrcode"></i> QR</button>${m.images.some(im=>!isVideo(im))?`<button id="zoom" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" title="사진 확대 (핀치·휠)"><i class="fa-solid fa-magnifying-glass-plus"></i> 확대</button>`:''}${m.kind==='before_after'&&m.images.length===2?`<button id="ba-slider" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.baSlider}"><i class="fa-solid fa-sliders"></i> 전후 슬라이더</button>`:''}${/\S/.test(m.body||'')?`<button id="point" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.pointMode}" title="항목을 하나씩 짚어가며 보여줍니다 (↓·Space 다음, ↑ 이전)"><i class="fa-solid fa-hand-pointer"></i> 포인트</button>`:''}</span>
           <button id="fs" class="ml-auto px-3 py-2 rounded-lg bg-slate-800 text-sm"><i class="fa-solid fa-expand"></i></button>
           <button id="ex" class="px-4 py-2 rounded-lg bg-sky-600 text-sm font-semibold">설명 끝 · 보내기</button>
           <button id="cl" class="px-3 py-2 rounded-lg bg-slate-800 text-sm">닫기</button>
@@ -395,6 +396,7 @@
       if (state.baSlider && m.kind==='before_after' && m.images.length===2) { $('.stage', box).innerHTML = `<div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${baSliderHtml(m)}</div>`; bindBaSlider(box); annotationView = null; }
       else annotationView = window.PCAnnotations.mount(box, m, annotationApi);
       applyPointMode(box);
+      const qb = $('#qr', box); if (qb) qb.onclick = async () => { try { await annotationView?.flush(); } catch (e) { toast(e.message, false); return; } showQr(list, state.scope || '', box); };
       const zb = $('#zoom', box); if (zb) zb.onclick = () => { const srcs = m.images.filter(im => !isVideo(im)).map(im => imgUrl(im.key)); openLightbox(srcs, 0); };
       const bs = $('#ba-slider', box); if (bs) bs.onclick = async () => { try { await annotationView?.flush(); } catch (e) { toast(e.message, false); return; } state.baSlider = !state.baSlider; draw(); };
       const pb = $('#point', box); if (pb) pb.onclick = () => { state.pointMode = !state.pointMode; state.pointIdx = 0; draw(); };
@@ -410,7 +412,7 @@
       catch (e) { toast(e.message, false); }
       finally { navigating = false; }
     };
-    const key = e => { if (e.target.closest('.annotation-toolbar') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (document.querySelector('.pc-lightbox')) return; if (state.pointMode && (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'ArrowUp')) { e.preventDefault(); stepPoint(box, e.key === 'ArrowUp' ? -1 : 1); return; } if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); else if (e.key === 'Escape') close(); };
+    const key = e => { if (e.target.closest('.annotation-toolbar') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (document.querySelector('.pc-lightbox') || document.querySelector('.pc-qr-overlay')) return; if (state.pointMode && (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'ArrowUp')) { e.preventDefault(); stepPoint(box, e.key === 'ArrowUp' ? -1 : 1); return; } if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); else if (e.key === 'Escape') close(); };
     const close = async (send = false) => {
       if (navigating) return; navigating = true;
       try { await annotationView?.flush(); box.querySelectorAll('video').forEach(v => v.pause()); document.removeEventListener('keydown', key); if (document.fullscreenElement) await document.exitFullscreen(); box.remove(); if(!send){scrollTo(0,returnScroll);returnFocus?.focus({preventScroll:true});} if (send) { state.today = list.map(m => m.id); saveToday(); state.tab = 'send'; render(); } }
@@ -528,8 +530,54 @@
   }
 
   // ─── 설정 ───
+  // 【2026-09-19】체어사이드 QR: 자료 묶음 → 링크 안내장 → 큰 QR. 환자분이 찍으면 바로 열리고, 안내장 안에서 본인 번호로 카톡 받기 가능.
+  function qrSvg(url, cell) { const q = qrcode(0, 'M'); q.addData(url); q.make(); return q.createSvgTag({ cellSize: cell || 6, margin: 2, scalable: true }); }
+  async function showQr(list, scope, parent) {
+    let r;
+    try { r = await api('/dispatches/qr', { method: 'POST', body: JSON.stringify({ material_ids: list.map(m => m.id), scope: scope || '' }) }); }
+    catch (e) { toast(e.message, false); return; }
+    const hb = state.me.hospital;
+    const ov = document.createElement('div'); ov.className = 'pc-qr-overlay'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'QR 안내장');
+    ov.innerHTML = `<div class="pc-qr-card fade-in">
+      <div class="text-sm font-semibold text-slate-500">${esc(hb.name)}</div>
+      <h2 class="text-2xl font-extrabold mt-1">휴대폰 카메라로 찍어 주세요</h2>
+      <p class="text-slate-600 mt-1">오늘 설명드린 자료 ${list.length - (r.skipped || []).length}개가 바로 열립니다</p>
+      ${qrSvg(r.url, 8)}
+      <div class="text-xs text-slate-400 break-all">${esc(r.url)}</div>
+      <p class="text-sm text-slate-500 mt-3">열린 안내장 아래에서 환자분이 직접 번호를 넣으면 카카오톡으로도 받아둘 수 있습니다 · ${esc(String(r.expires_at).slice(0, 10))}까지</p>
+      ${(r.skipped || []).length ? `<p class="text-xs text-amber-700 mt-2">공유 조건이 안 된 자료는 빠졌습니다: ${esc(r.skipped.join(', '))}</p>` : ''}
+      <button id="qr-close" class="mt-4 px-6 py-2.5 rounded-xl bg-slate-900 text-white font-semibold">닫기</button>
+    </div>`;
+    (parent || document.body).appendChild(ov);
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    document.addEventListener('keydown', onKey, true);
+    $('#qr-close', ov).onclick = close; ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  }
+  function qrCardsHtml() {
+    const cards = state.qrCards || [];
+    const cats = categoryList();
+    return `<fieldset class="brand-editor"><legend>체어사이드 QR 카드 <span class="text-slate-400 font-normal">인쇄해 체어마다 두면 환자분이 찍어서 바로 봅니다 · 3년 유효</span></legend>
+      <div id="qc-list" class="mt-2 space-y-1.5 text-sm">${cards.length ? cards.map(k => `<div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2"><i class="fa-solid fa-qrcode text-slate-400"></i><span class="font-semibold">${esc(k.title)}</span><span class="text-xs text-slate-400 truncate flex-1">${esc(k.titles.join(', '))}</span><span class="text-xs text-slate-500 whitespace-nowrap">열람 ${k.open_count}${k.self_sends ? ' · 카톡요청 ' + k.self_sends : ''}</span><button data-qc-del="${k.id}" class="text-xs text-rose-600">삭제</button></div>`).join('') : '<p class="text-xs text-slate-400">아직 카드가 없습니다. 분류를 고르고 만들어 보세요.</p>'}</div>
+      <div class="grid grid-cols-[1fr_1fr_auto] gap-2 mt-3 items-center"><select id="qc-cat" class="border rounded-lg px-2 py-2">${cats.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select><input id="qc-title" maxlength="30" placeholder="카드 제목 (예: 스케일링 후 주의)" class="border rounded-lg px-3 py-2"><button id="qc-make" class="px-4 py-2 rounded-lg bg-slate-900 text-white font-semibold whitespace-nowrap">카드 만들기</button></div>
+      <p class="text-xs text-slate-400 mt-2">고른 분류의 공유 가능한 설명·질환·주의사항 자료가 담깁니다(비용·비포애프터 제외). 만든 뒤 <a href="/app/qr-cards/print" target="_blank" class="underline text-sky-700">QR 카드 인쇄 페이지</a>에서 A4로 뽑으세요.</p>
+    </fieldset>`;
+  }
+  function bindQrCards() {
+    const mk = $('#qc-make'); if (!mk) return;
+    mk.onclick = async () => {
+      const cat = $('#qc-cat').value, title = $('#qc-title').value.trim() || cat;
+      const ids = state.materials.filter(m => m.active !== false && categoryOf(m) === cat && ['explain', 'disease', 'notice'].includes(m.kind)).map(m => m.id);
+      if (!ids.length) { toast('이 분류에 담을 설명 자료가 없습니다', false); return; }
+      try { const r = await api('/qr-cards', { method: 'POST', body: JSON.stringify({ title, material_ids: ids }) }); state.qrCards = (await api('/qr-cards')).cards; toast('QR 카드를 만들었습니다' + (r.skipped?.length ? ' (제외 ' + r.skipped.length + '개)' : '')); render(); }
+      catch (e) { toast(e.message, false); }
+    };
+    document.querySelectorAll('[data-qc-del]').forEach(b => b.onclick = async () => { if (!confirm('이 QR 카드를 삭제할까요? 인쇄한 카드는 더 이상 열리지 않습니다.')) return; await api('/qr-cards/' + b.dataset.qcDel, { method: 'DELETE' }); state.qrCards = (await api('/qr-cards')).cards; render(); });
+  }
+
   function renderSettings(main) {
     const h = state.me.hospital;
+    if (!state.qrCards) { api('/qr-cards').then(r => { state.qrCards = r.cards; if (state.tab === 'settings') render(); }).catch(() => { state.qrCards = []; }); }
     main.innerHTML = `<div class="max-w-xl bg-white border rounded-xl p-5 space-y-4 text-sm">
       <h2 class="text-lg font-bold">설정</h2>
       <div><div class="text-slate-500 text-xs">병원명 (Patient Hub 정본 · 발송 메시지의 #{병원명})</div><div class="font-semibold mt-1">${esc(h.name)}</div></div>
@@ -546,6 +594,7 @@
         <div class="flex items-center gap-3 mt-3"><label class="flex items-center gap-2">대표색 <input id="st-color" type="color" value="${esc(/^#[0-9a-f]{6}$/i.test(h.primary_color||'')?h.primary_color:'#0ea5e9')}"></label><span class="text-xs text-slate-400">버튼·강조 표시에 쓰입니다</span></div>
         <label class="block mt-3">한 줄 소개 (선택)<input id="st-tagline" maxlength="60" value="${esc(h.tagline||'')}" placeholder="예: 천안 불당동 · 임플란트·교정 전문" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
       </fieldset>
+      ${qrCardsHtml()}
       <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">카카오 알림톡 상태: ${state.me.alimtalk_ready ? '<span class="text-emerald-700 font-semibold">사용 가능</span>' : '<span class="text-amber-700 font-semibold">설정 미완료</span>'} · 발송 채널은 페이션트퍼널의 'Patient Connect' 공용 채널이며 병원이 따로 개설할 것은 없습니다.</div>
       <div class="flex gap-2"><button id="st-save" class="px-5 py-2 rounded-lg bg-slate-900 text-white font-semibold">저장</button><button id="st-logout" class="ml-auto px-3 py-2 text-slate-500">로그아웃</button></div>
       <p class="text-xs text-slate-400"><a href="/legal-guide" target="_blank" class="underline">병원용 안내 문구</a> · <a href="/privacy" target="_blank" class="underline">개인정보처리방침</a></p>
@@ -554,6 +603,7 @@
     $('#st-logo').onchange = async () => { const f = $('#st-logo').files[0]; if (!f) return; const fd = new FormData(); fd.append('file', f); try { const r = await fetch('/api/settings/logo', { method: 'POST', body: fd }); const j = await r.json(); if (!r.ok) throw new Error(j.error || '업로드 실패'); await loadMe(); toast('로고를 올렸습니다'); render(); } catch (e) { toast(e.message, false); } };
     const ld = $('#st-logo-del'); if (ld) ld.onclick = async () => { await api('/settings/logo', { method: 'DELETE' }); await loadMe(); render(); };
     $('#st-logout').onclick = async () => { await api('/auth/logout', { method: 'POST' }); location.href = '/'; };
+    bindQrCards();
   }
 
   async function loadSets(){state.sets=(await api('/material-sets')).sets}

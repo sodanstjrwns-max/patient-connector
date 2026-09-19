@@ -113,7 +113,42 @@ api.get('/g/:token', async (c) => {
     hospital: { name: d.h_name, phone: d.h_phone, address: d.h_address, chat_url: d.chat_url, booking_url: d.booking_url, logo_key: d.logo_key, primary_color: d.primary_color, tagline: d.tagline },
     materials: parseJson<any[]>(d.materials_json, []),
     sent_at: d.sent_at || d.created_at, expires_at: d.expires_at, token: d.token,
+    // 【2026-09-19】QR·링크로 연 안내장은 환자가 직접 번호를 넣어 카카오톡으로 받아둘 수 있다 (본인 요청 발송)
+    self_send: d.channel === 'link' && alimtalkReady(c.env),
   })
+})
+// 환자 자가 요청 발송: QR/링크 안내장 → 같은 자료를 본인 번호로 알림톡. 병원 개입 없음, 원본 토큰당 하루 30건, 같은 번호는 하루 1번.
+api.post('/g/:token/send-self', async (c) => {
+  const src = await loadDispatchByToken(c, c.req.param('token'))
+  if (!src) return c.json({ ok: false, error: '안내장을 찾을 수 없습니다' }, 404)
+  if (new Date(String(src.expires_at).replace(' ', 'T') + 'Z').getTime() < Date.now()) return c.json({ ok: false, error: '열람 기간이 지난 안내장입니다' }, 410)
+  if (src.channel !== 'link') return c.json({ ok: false, error: '이미 카카오톡으로 받으신 안내장입니다' }, 400)
+  if (!alimtalkReady(c.env)) return c.json({ ok: false, error: '지금은 카카오톡 발송이 준비되지 않았습니다. 병원에 말씀해 주세요' }, 503)
+  const b = await c.req.json().catch(() => ({} as any))
+  const phone = normalizePhone(String(b?.phone || ''))
+  if (!phone) return c.json({ ok: false, error: '휴대전화번호를 확인해 주세요 (010으로 시작)' }, 400)
+  const hid = src.hospital_id
+  const pHash = await phoneHash(phone, hid)
+  if (await c.env.DB.prepare('SELECT 1 FROM optouts WHERE hospital_id = ? AND phone_hash = ?').bind(hid, pHash).first()) return c.json({ ok: false, error: '이 병원의 카카오톡 안내를 수신거부한 번호입니다' }, 409)
+  const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM dispatches WHERE source_token = ? AND created_at >= datetime('now','-1 day')`).bind(src.token).first<any>()
+  if (Number(cnt?.n || 0) >= 30) return c.json({ ok: false, error: '오늘 요청이 많아 잠시 받을 수 없습니다. 병원에 말씀해 주세요' }, 429)
+  const dup = await c.env.DB.prepare(`SELECT status FROM dispatches WHERE source_token = ? AND phone_hash = ? AND created_at >= datetime('now','-1 day') ORDER BY id DESC LIMIT 1`).bind(src.token, pHash).first<any>()
+  if (dup && ['accepted', 'sent', 'delivered'].includes(String(dup.status))) return c.json({ ok: true, status: 'already', message: '이미 이 번호로 보내드렸습니다. 카카오톡을 확인해 주세요' })
+  if (!c.env.PHONE_ENC_KEY) return c.json({ ok: false, error: '서버 설정 오류' }, 500)
+  const h = await c.env.DB.prepare('SELECT name, link_days FROM hospitals WHERE id = ?').bind(hid).first<any>()
+  const days = Math.max(7, Math.min(180, Number(h?.link_days) || 30))
+  const token = randomToken(16)
+  const requestKey = 'self-' + randomToken(12)
+  await c.env.DB.prepare(`INSERT INTO dispatches (hospital_id, token, label, phone_enc, phone_hash, phone_last4, materials_json, channel, status, expires_at, request_key, request_hash, source_token) VALUES (?,?,?,?,?,?,?,'alimtalk','created', datetime('now', '+${days} days'),?,?,?)`)
+    .bind(hid, token, `환자 요청 · ${String(src.label || 'QR').slice(0, 30)}`, await encPhone(phone, c.env.PHONE_ENC_KEY), pHash, phone.slice(-4), src.materials_json, requestKey, await digest({ self: true, source: src.token, phone: pHash }), src.token).run()
+  const url = `${baseUrl(c)}/g/${token}`
+  const res = await sendAlimtalk(c.env, phone, { '#{병원명}': h?.name || src.h_name, '#{안내장링크}': url.replace(/^https?:\/\//, '') })
+  if (res.ok) {
+    await c.env.DB.prepare(`UPDATE dispatches SET status = 'accepted', solapi_group_id = ?, sent_at = datetime('now') WHERE token = ?`).bind(res.groupId || null, token).run()
+    return c.json({ ok: true, status: 'accepted', message: '카카오톡으로 보냈습니다. 잠시 후 확인해 주세요' })
+  }
+  await c.env.DB.prepare(`UPDATE dispatches SET status = ?, error = ?, solapi_group_id = ? WHERE token = ?`).bind(res.uncertain ? 'unknown' : 'failed', String(res.error || '발송 실패').slice(0, 200), res.groupId || null, token).run()
+  return c.json({ ok: false, error: res.uncertain ? '발송 결과를 확인하지 못했습니다. 잠시 후 카카오톡을 확인해 주세요' : '카카오톡 발송에 실패했습니다. 병원에 말씀해 주세요' }, 502)
 })
 api.post('/g/:token/view', async (c) => {
   const d = await loadDispatchByToken(c, c.req.param('token'))
@@ -446,6 +481,67 @@ api.on('POST', ['/dispatches', '/dispatches/preview'], async (c) => {
   await c.env.DB.prepare(`UPDATE dispatches SET status = ?, error = ?, solapi_group_id = ? WHERE id = ?`).bind(status, String(res.error || '발송 실패').slice(0, 200), res.groupId || null, id).run()
   return c.json({ id, token, url, status, error: res.error })
 })
+// ─── 【2026-09-19】체어사이드 QR ───
+// 공유 가능한 자료만 스냅샷(부적합 자료는 건너뛰고 제목을 돌려준다). scope 가 있으면 그 설명 세션의 필기를 포함.
+async function linkSnapshot(c: any, hid: number, idsIn: unknown, scope: string): Promise<{ snapshot: any[]; skipped: string[]; error?: string }> {
+  const ids: number[] = Array.isArray(idsIn) ? [...new Set<number>((idsIn as any[]).map(Number).filter(Number.isInteger))].slice(0, 40) : []
+  if (!ids.length) return { snapshot: [], skipped: [], error: '자료를 하나 이상 고르세요' }
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = await (c.env.DB as D1Database).prepare(`SELECT * FROM materials WHERE hospital_id = ? AND active = 1 AND id IN (${placeholders})`).bind(hid, ...ids).all<MaterialRow>()
+  const byId = new Map<number, MaterialRow>((rows.results || []).map((m) => [m.id, m]))
+  const notes: any[] = scope ? ((await (c.env.DB as D1Database).prepare(`SELECT material_id, media_key, image_key, video_time FROM scoped_annotations WHERE hospital_id = ? AND material_id IN (${placeholders}) AND image_key IS NOT NULL AND scope = ? ORDER BY material_id, media_key`).bind(hid, ...ids, scope).all<any>()).results || []) : []
+  const skipped: string[] = []
+  const snapshot = ids.filter((id) => byId.has(id)).map((id) => materialOut(byId.get(id)!)).filter((m) => { const issue = shareIssue(m); if (issue) skipped.push(m.title); return !issue }).map((m) => {
+    const ann = notes.filter((a: any) => a.material_id === m.id && m.images.some((im) => im.key === a.media_key)).map((a: any) => ({ media_key: a.media_key, image_key: a.image_key, video_time: a.video_time }))
+    return { id: m.id, kind: m.kind, category: m.category, title: m.title, body: m.body, images: m.images, cost: m.cost, is_example: m.is_example, annotations: ann, guidance: publicGuidance(m.guidance) }
+  })
+  return { snapshot, skipped }
+}
+// 설명 화면 QR: 지금 보여주는 자료 묶음을 링크 안내장으로 만들어 QR 로 띄운다. 같은 자료·같은 세션·같은 날이면 같은 링크 재사용.
+api.post('/dispatches/qr', async (c) => {
+  const hid = c.get('hid')
+  const b = await c.req.json().catch(() => ({} as any))
+  const scope = typeof b?.scope === 'string' && /^[a-zA-Z0-9_-]{16,80}$/.test(b.scope) ? b.scope : ''
+  const { snapshot, skipped, error } = await linkSnapshot(c, hid, b?.material_ids, scope)
+  if (error) return c.json({ error }, 400)
+  if (!snapshot.length) return c.json({ error: '공유 조건을 갖춘 자료가 없습니다 (비용·비포애프터는 안내 조건을 채워야 합니다)' }, 400)
+  const h = await c.env.DB.prepare('SELECT link_days FROM hospitals WHERE id = ?').bind(hid).first<any>()
+  const days = Math.max(7, Math.min(180, Number(h?.link_days) || 30))
+  const dayKst = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)
+  const requestKey = 'qr-' + (await digest({ ids: snapshot.map((m) => m.id), notes: snapshot.map((m) => m.annotations.map((a: any) => a.image_key)), scope, day: dayKst })).slice(0, 40)
+  const prior = await c.env.DB.prepare('SELECT token, expires_at FROM dispatches WHERE hospital_id = ? AND request_key = ?').bind(hid, requestKey).first<any>()
+  if (prior && new Date(String(prior.expires_at).replace(' ', 'T') + 'Z').getTime() > Date.now() + 86400000) return c.json({ token: prior.token, url: `${baseUrl(c)}/g/${prior.token}`, expires_at: prior.expires_at, skipped, reused: true })
+  const token = randomToken(16)
+  await c.env.DB.prepare(`INSERT INTO dispatches (hospital_id, token, label, materials_json, channel, status, sent_at, expires_at, request_key, request_hash) VALUES (?,?,?,?,'link','link',datetime('now'),datetime('now','+${days} days'),?,?) ON CONFLICT(hospital_id,request_key) DO UPDATE SET token = excluded.token, materials_json = excluded.materials_json, expires_at = excluded.expires_at, sent_at = datetime('now')`)
+    .bind(hid, token, `QR 화면 · ${snapshot.length}개`, JSON.stringify(snapshot), requestKey, requestKey).run()
+  const row = await c.env.DB.prepare('SELECT token, expires_at FROM dispatches WHERE hospital_id = ? AND request_key = ?').bind(hid, requestKey).first<any>()
+  return c.json({ token: row.token, url: `${baseUrl(c)}/g/${row.token}`, expires_at: row.expires_at, skipped })
+})
+// 치료별 고정 QR 카드: 3년 유효 링크 안내장. 인쇄해 체어마다 둔다.
+api.get('/qr-cards', async (c) => {
+  const rows = await c.env.DB.prepare(`SELECT id, token, label, materials_json, open_count, created_at, expires_at, (SELECT COUNT(*) FROM dispatches s WHERE s.source_token = d.token) AS self_sends FROM dispatches d WHERE hospital_id = ? AND label LIKE 'QR카드 · %' AND expires_at > datetime('now') ORDER BY id DESC LIMIT 100`).bind(c.get('hid')).all<any>()
+  const base = baseUrl(c)
+  return c.json({ cards: (rows.results || []).map((d) => ({ id: d.id, token: d.token, url: `${base}/g/${d.token}`, title: String(d.label).slice('QR카드 · '.length), titles: parseJson<any[]>(d.materials_json, []).map((m) => m.title), open_count: d.open_count, self_sends: Number(d.self_sends || 0), created_at: d.created_at, expires_at: d.expires_at })) })
+})
+api.post('/qr-cards', async (c) => {
+  const hid = c.get('hid')
+  const b = await c.req.json().catch(() => ({} as any))
+  const title = String(b?.title || '').trim().slice(0, 30)
+  if (!title) return c.json({ error: '카드 제목을 넣어 주세요' }, 400)
+  const { snapshot, skipped, error } = await linkSnapshot(c, hid, b?.material_ids, '')
+  if (error) return c.json({ error }, 400)
+  if (!snapshot.length) return c.json({ error: '공유 조건을 갖춘 자료가 없습니다' }, 400)
+  const token = randomToken(16)
+  const requestKey = 'card-' + randomToken(12)
+  await c.env.DB.prepare(`INSERT INTO dispatches (hospital_id, token, label, materials_json, channel, status, sent_at, expires_at, request_key, request_hash) VALUES (?,?,?,?,'link','link',datetime('now'),datetime('now','+1095 days'),?,?)`)
+    .bind(hid, token, `QR카드 · ${title}`, JSON.stringify(snapshot), requestKey, requestKey).run()
+  return c.json({ token, url: `${baseUrl(c)}/g/${token}`, title, skipped })
+})
+api.delete('/qr-cards/:id', async (c) => {
+  await c.env.DB.prepare(`UPDATE dispatches SET expires_at = datetime('now','-1 minute') WHERE id = ? AND hospital_id = ? AND label LIKE 'QR카드 · %'`).bind(c.req.param('id'), c.get('hid')).run()
+  return c.json({ ok: true })
+})
+
 // Status checks never resend. Ambiguous network failures remain unknown to prevent duplicates.
 api.post('/dispatches/:id/status', async c => {
   const d = await c.env.DB.prepare('SELECT * FROM dispatches WHERE id=? AND hospital_id=?').bind(c.req.param('id'),c.get('hid')).first<any>()
@@ -516,7 +612,7 @@ api.get('/dispatches', async (c) => {
 })
 api.get('/stats', async (c) => {
   const hid = c.get('hid')
-  const q = async (days: number) => (await c.env.DB.prepare(`SELECT COUNT(*) AS sent, SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened FROM dispatches WHERE hospital_id = ? AND status IN ('sent','accepted','delivered','link') AND created_at >= datetime('now', '-${days} days')`).bind(hid).first<any>()) || {}
+  const q = async (days: number) => (await c.env.DB.prepare(`SELECT COUNT(*) AS sent, SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened FROM dispatches WHERE hospital_id = ? AND status IN ('sent','accepted','delivered','link') AND (label IS NULL OR label NOT LIKE 'QR%') AND created_at >= datetime('now', '-${days} days')`).bind(hid).first<any>()) || {}
   const s7 = await q(7), s30 = await q(30)
   return c.json({ d7: { sent: Number(s7.sent || 0), opened: Number(s7.opened || 0) }, d30: { sent: Number(s30.sent || 0), opened: Number(s30.opened || 0) } })
 })
