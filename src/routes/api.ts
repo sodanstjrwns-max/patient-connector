@@ -519,9 +519,9 @@ api.post('/dispatches/qr', async (c) => {
 })
 // 치료별 고정 QR 카드: 3년 유효 링크 안내장. 인쇄해 체어마다 둔다.
 api.get('/qr-cards', async (c) => {
-  const rows = await c.env.DB.prepare(`SELECT id, token, label, materials_json, open_count, created_at, expires_at, (SELECT COUNT(*) FROM dispatches s WHERE s.source_token = d.token) AS self_sends FROM dispatches d WHERE hospital_id = ? AND label LIKE 'QR카드 · %' AND expires_at > datetime('now') ORDER BY id DESC LIMIT 100`).bind(c.get('hid')).all<any>()
+  const rows = await c.env.DB.prepare(`SELECT id, token, label, materials_json, open_count, created_at, expires_at, (SELECT COUNT(*) FROM dispatches s WHERE s.source_token = d.token) AS self_sends, (SELECT COUNT(*) FROM views v WHERE v.dispatch_id = d.id AND v.material_index = -1) AS friend_clicks FROM dispatches d WHERE hospital_id = ? AND label LIKE 'QR카드 · %' AND expires_at > datetime('now') ORDER BY id DESC LIMIT 100`).bind(c.get('hid')).all<any>()
   const base = baseUrl(c)
-  return c.json({ cards: (rows.results || []).map((d) => ({ id: d.id, token: d.token, url: `${base}/g/${d.token}`, title: String(d.label).slice('QR카드 · '.length), titles: parseJson<any[]>(d.materials_json, []).map((m) => m.title), open_count: d.open_count, self_sends: Number(d.self_sends || 0), created_at: d.created_at, expires_at: d.expires_at })) })
+  return c.json({ cards: (rows.results || []).map((d) => ({ id: d.id, token: d.token, url: `${base}/g/${d.token}`, title: String(d.label).slice('QR카드 · '.length), titles: parseJson<any[]>(d.materials_json, []).map((m) => m.title), open_count: d.open_count, self_sends: Number(d.self_sends || 0), friend_clicks: Number(d.friend_clicks || 0), created_at: d.created_at, expires_at: d.expires_at })) })
 })
 api.post('/qr-cards', async (c) => {
   const hid = c.get('hid')

@@ -15,9 +15,9 @@
         ${h.logo_key ? `<img src="/a/${esc(h.logo_key)}" alt="" style="max-height:14mm;margin:0 auto 3mm;display:block">` : `<div style="font-weight:800;font-size:13pt">${esc(h.name)}</div>`}
         <div style="font-size:17pt;font-weight:900;line-height:1.25;margin-top:2mm">${esc(k.title)}</div>
         ${svg(k.url)}
-        <div style="font-size:11pt;font-weight:700">휴대폰 카메라로 찍으면<br>안내 자료가 바로 열립니다</div>
+        <div style="font-size:11pt;font-weight:700">카메라로 찍고 채널 친구추가하면<br>치료 안내를 카카오톡으로 받아요</div>
         <div style="font-size:8pt;color:#64748b;margin-top:3mm">${esc(k.titles.slice(0, 3).join(' · '))}${k.titles.length > 3 ? ` 외 ${k.titles.length - 3}` : ''}</div>
-        <div style="font-size:7pt;color:#94a3b8;margin-top:2mm">${esc(h.name)} · 열린 안내장에서 카카오톡으로도 받아둘 수 있습니다</div>
+        <div style="font-size:7pt;color:#94a3b8;margin-top:2mm">${esc(h.name)}${h.chat_url ? ' · 카카오톡 채널' : ''}</div>
       </div>`).join('')}</div>`;
     $('#pr').onclick = () => window.print();
   })();

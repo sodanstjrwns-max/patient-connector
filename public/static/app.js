@@ -557,10 +557,10 @@
   function qrCardsHtml() {
     const cards = state.qrCards || [];
     const cats = categoryList();
-    return `<fieldset class="brand-editor"><legend>체어사이드 QR 카드 <span class="text-slate-400 font-normal">인쇄해 체어마다 두면 환자분이 찍어서 바로 봅니다 · 3년 유효</span></legend>
-      <div id="qc-list" class="mt-2 space-y-1.5 text-sm">${cards.length ? cards.map(k => `<div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2"><i class="fa-solid fa-qrcode text-slate-400"></i><span class="font-semibold">${esc(k.title)}</span><span class="text-xs text-slate-400 truncate flex-1">${esc(k.titles.join(', '))}</span><span class="text-xs text-slate-500 whitespace-nowrap">열람 ${k.open_count}${k.self_sends ? ' · 카톡요청 ' + k.self_sends : ''}</span><button data-qc-del="${k.id}" class="text-xs text-rose-600">삭제</button></div>`).join('') : '<p class="text-xs text-slate-400">아직 카드가 없습니다. 분류를 고르고 만들어 보세요.</p>'}</div>
+    return `<fieldset class="brand-editor"><legend>체어사이드 QR 카드 <span class="text-slate-400 font-normal">환자분이 찍으면 자료가 열리고 맨 위에 병원 채널 친구추가 버튼이 뜹니다 · 3년 유효</span></legend>
+      <div id="qc-list" class="mt-2 space-y-1.5 text-sm">${cards.length ? cards.map(k => `<div class="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2"><i class="fa-solid fa-qrcode text-slate-400"></i><span class="font-semibold">${esc(k.title)}</span><span class="text-xs text-slate-400 truncate flex-1">${esc(k.titles.join(', '))}</span><span class="text-xs text-slate-500 whitespace-nowrap">열람 ${k.open_count} · 친구추가 클릭 ${k.friend_clicks || 0}${k.self_sends ? ' · 카톡요청 ' + k.self_sends : ''}</span><button data-qc-del="${k.id}" class="text-xs text-rose-600">삭제</button></div>`).join('') : '<p class="text-xs text-slate-400">아직 카드가 없습니다. 분류를 고르고 만들어 보세요.</p>'}</div>
       <div class="grid grid-cols-[1fr_1fr_auto] gap-2 mt-3 items-center"><select id="qc-cat" class="border rounded-lg px-2 py-2">${cats.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('')}</select><input id="qc-title" maxlength="30" placeholder="카드 제목 (예: 스케일링 후 주의)" class="border rounded-lg px-3 py-2"><button id="qc-make" class="px-4 py-2 rounded-lg bg-slate-900 text-white font-semibold whitespace-nowrap">카드 만들기</button></div>
-      <p class="text-xs text-slate-400 mt-2">고른 분류의 공유 가능한 설명·질환·주의사항 자료가 담깁니다(비용·비포애프터 제외). 만든 뒤 <a href="/app/qr-cards/print" target="_blank" class="underline text-sky-700">QR 카드 인쇄 페이지</a>에서 A4로 뽑으세요.</p>
+      <p class="text-xs text-slate-400 mt-2">친구추가 버튼은 위 '병원 카카오 상담 주소'(pf.kakao.com)를 씁니다. 고른 분류의 공유 가능한 설명·질환·주의사항 자료가 담깁니다(비용·비포애프터 제외). 만든 뒤 <a href="/app/qr-cards/print" target="_blank" class="underline text-sky-700">QR 카드 인쇄 페이지</a>에서 A4로 뽑으세요.</p>
     </fieldset>`;
   }
   function bindQrCards() {

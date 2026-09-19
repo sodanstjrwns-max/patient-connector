@@ -50,6 +50,9 @@
     const items=[tel,chat,book].filter(Boolean);
     return items.length?`<nav class="pc-cta-bar" aria-label="병원 연락">${items.join('')}</nav>`:'';
   }
+  // 병원 채널 친구추가 주소: pf.kakao.com/_id(/chat|/friend) → /_id/friend  【2026-09-19 QR = 친구 늘리기】
+  const friendUrl=h=>{const c=safeContact(h.chat_url,true);const m=c.match(/^https:\/\/pf\.kakao\.com\/(_[A-Za-z0-9]+)/);return m?`https://pf.kakao.com/${m[1]}/friend`:''};
+  function friendHtml(h){const u=friendUrl(h);return u?`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" class="pc-friend" data-friend><span class="pc-friend-ico"><i class="fa-solid fa-comment"></i></span><span><b>${esc(h.name)} 카카오톡 채널 친구추가</b><small>치료 안내와 병원 소식을 카카오톡으로 받아보세요</small></span><i class="fa-solid fa-chevron-right"></i></a>`:''}
   function guideHtml(j) {
     const h=j.hospital;
     const logo=h.logo_key?`<img src="/a/${esc(h.logo_key)}?t=${token}" alt="${esc(h.name)} 로고" class="pc-logo">`:'';
@@ -61,6 +64,7 @@
         <p class="text-xs text-slate-400 mt-2">${esc(j.sent_at.slice(0, 10))} 안내드린 자료입니다. 언제든 다시 읽어 보세요.</p>
       </div></header>
       <div class="max-w-md mx-auto px-4 pb-28">
+      ${j.self_send ? friendHtml(h) : ''}
       ${j.materials.map(materialHtml).join('')}
       ${j.self_send ? `<section class="pc-selfsend" id="selfsend"><h3 class="font-bold"><i class="fa-solid fa-comment text-yellow-500 mr-1"></i>이 안내장을 카카오톡으로도 받아두기</h3>
         <p class="text-sm text-slate-600 mt-1">번호를 넣으시면 ${esc(h.name)} 이름으로 카카오톡 알림톡이 갑니다. 본인이 요청하실 때만 발송되며, 번호는 발송 후 7일 뒤 삭제됩니다.</p>
@@ -89,6 +93,7 @@
     const seen = new Set();
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const i = Number(e.target.dataset.i); if (!seen.has(i)) { seen.add(i); fetch('/api/g/' + token + '/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: i }) }).catch(() => {}); } } }), { threshold: 0.4 });
     app.querySelectorAll('[data-i]').forEach((el) => io.observe(el));
+    const fr = $('[data-friend]'); if (fr) fr.addEventListener('click', () => { fetch('/api/g/' + token + '/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: -1 }) }).catch(() => {}); });
     const ss = $('#ss-form');
     if (ss) ss.onsubmit = async (e) => {
       e.preventDefault();
