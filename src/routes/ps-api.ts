@@ -69,6 +69,35 @@ psApi.get('/signals', async (c) => {
   })
 })
 
+// 【2026-09-21】GET /api/v1/funnel-stats?from=YYYY-MM-DD&to=YYYY-MM-DD (KST 날짜) — PFM 퍼널 6단계(설명) 보조 지표.
+// 비식별 집계만: 발송·열람·친구추가 수. QR 카드 링크(label 'QR…')는 발송이 아니므로 제외.
+psApi.get('/funnel-stats', async (c) => {
+  const hid = c.get('hid')
+  const ok = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s)
+  const from = String(c.req.query('from') || ''), to = String(c.req.query('to') || '')
+  if (!ok(from) || !ok(to) || from > to) return err(c, 400, 'invalid_range', 'from/to 는 YYYY-MM-DD (from ≤ to)')
+  const lo = `${from} 00:00:00`, hi = `${to} 23:59:59`   // KST → UTC 저장값 비교: -9시간
+  const row = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS sent,
+           SUM(CASE WHEN first_opened_at IS NOT NULL THEN 1 ELSE 0 END) AS opened,
+           SUM(CASE WHEN channel = 'alimtalk' THEN 1 ELSE 0 END) AS alimtalk
+    FROM dispatches
+    WHERE hospital_id = ? AND status IN ('sent','accepted','delivered','link')
+      AND (label IS NULL OR label NOT LIKE 'QR%')
+      AND created_at >= datetime(?, '-9 hours') AND created_at <= datetime(?, '-9 hours')`).bind(hid, lo, hi).first<any>().catch(() => null)
+  const fr = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS n FROM views v JOIN dispatches d ON d.id = v.dispatch_id
+    WHERE d.hospital_id = ? AND v.material_index = -1
+      AND v.at >= datetime(?, '-9 hours') AND v.at <= datetime(?, '-9 hours')`).bind(hid, lo, hi).first<any>().catch(() => null)
+  const sent = Number(row?.sent || 0), opened = Number(row?.opened || 0)
+  return c.json({
+    service: 'connector', from, to,
+    sent, opened, open_rate: sent ? Math.round((opened / sent) * 1000) / 10 : null,
+    alimtalk: Number(row?.alimtalk || 0), friend_clicks: Number(fr?.n || 0),
+    as_of: new Date().toISOString(),
+  })
+})
+
 // POST /api/v1/topic-links — 리치 리포트 '자세히 보기' 연결. body {names:["임플란트","크라운"]}
 // 이름과 분류·제목이 맞는 공개 가능 자료(설명·질환·주의사항)를 최대 4개 묶어 180일짜리 링크 안내장을 만들거나 재사용한다.
 psApi.post('/topic-links', async (c) => {
