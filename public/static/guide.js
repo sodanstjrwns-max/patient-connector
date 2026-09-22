@@ -32,7 +32,7 @@
     inner += guidanceHtml(x);
     return `<section class="pc-mat pc-mat-${esc(x.kind)}" data-i="${i}" id="mat-${i}">
       <div class="pc-mat-head"><span class="pc-mat-no">${String(i + 1).padStart(2, '0')}</span><span class="pc-kind-pill">${KIND[x.kind] || ''}</span>${x.category ? `<span class="pc-cat">${esc(x.category)}</span>` : ''}</div>
-      <h2 class="pc-mat-title">${esc(x.title)}</h2>${x.is_example ? '<p class="example-editor-notice mb-3">검토용 예시자료입니다. 실제 진료 안내는 담당 의료진에게 확인해 주세요.</p>' : ''}${inner}</section>`;
+      <h2 class="pc-mat-title">${esc(x.title)}</h2>${inner}</section>`;
   }
 
   function guidanceHtml(x) {

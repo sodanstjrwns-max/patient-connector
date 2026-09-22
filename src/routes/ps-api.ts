@@ -5,6 +5,7 @@ import { checkSolapiCredentials, alimtalkReady } from '../lib/solapi'
 import { timingSafeEqualStr, randomToken } from '../lib/util'
 import { guidanceOf, publicGuidance, digest } from '../lib/guidance'
 import { purgeOldPhones } from './api'
+import { propagateLibrary, LIBRARY_KEY_PREFIX, type LibraryItem } from '../lib/material-library'
 
 type Bindings = { DB: D1Database; PS_SERVICE_KEY?: string; PS_SSO_SECRET?: string; APP_BASE_URL?: string } & Record<string, any>
 type Vars = { hid: number }
@@ -34,6 +35,41 @@ psApi.post('/ops/purge', async (c) => {
     const purged = await purgeOldPhones(c.env.DB)
     return c.json({ ok: true, purged })
   } catch { return err(c, 500, 'purge_failed', '번호 파기 작업에 실패했습니다. 다시 확인해 주세요.') }
+})
+
+// 운영: 영상 라이브러리 동기화(tools/drive_library_sync.py 가 호출). 인증: Bearer PS_SERVICE_KEY, 병원 헤더 불필요.
+// body { items: LibraryItem[], remove_missing?: boolean } → library_materials upsert 후 전 병원 자료함에 반영.
+psApi.post('/ops/library-sync', async (c) => {
+  const key = c.env.PS_SERVICE_KEY
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+  if (!key || !token || !timingSafeEqualStr(token, key)) return err(c, 401, 'unauthorized', '유효하지 않은 서비스 키')
+  const body = (await c.req.json().catch(() => null)) as { items?: any[]; remove_missing?: boolean } | null
+  if (!body || !Array.isArray(body.items)) return err(c, 400, 'invalid_body', 'items 배열이 필요합니다')
+  const items: LibraryItem[] = []
+  for (const x of body.items) {
+    const keyOk = typeof x?.key === 'string' && x.key.startsWith(LIBRARY_KEY_PREFIX) && /^[A-Z]{3}-\d{3}$/.test(String(x.topic_id || ''))
+    const kindOk = ['explain', 'disease', 'notice'].includes(x?.kind)
+    const title = String(x?.title || '').trim().slice(0, 80)
+    let images: any[] = []
+    try { images = JSON.parse(String(x?.images_json || '[]')) } catch { images = [] }
+    const imagesOk = Array.isArray(images) && images.length <= 6 && images.every(im => typeof im?.key === 'string' && /^library\/[A-Z]{3}-\d{3}\/[0-9a-f]{8,16}\.(mp4|jpg)$/.test(im.key) && (!im.poster_key || /^library\/[A-Z]{3}-\d{3}\/[0-9a-f]{8,16}\.jpg$/.test(im.poster_key)))
+    if (!keyOk || !kindOk || !title || !imagesOk || typeof x?.rev !== 'string' || !x.rev) return err(c, 400, 'invalid_item', `잘못된 항목: ${String(x?.key || '?')}`)
+    items.push({ key: x.key, topic_id: x.topic_id, kind: x.kind, category: x.category ? String(x.category).slice(0, 30) : null, title, body: String(x.body || '').slice(0, 4000), images_json: JSON.stringify(images), rev: String(x.rev).slice(0, 40), source: x.source ? String(x.source).slice(0, 300) : null, sort: Number.isInteger(x.sort) ? x.sort : 0, active: x.active === 0 ? 0 : 1 })
+  }
+  const stmts = items.map(i => c.env.DB.prepare(`INSERT INTO library_materials (key, topic_id, kind, category, title, body, images_json, rev, source, sort, active, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET topic_id=excluded.topic_id, kind=excluded.kind, category=excluded.category, title=excluded.title, body=excluded.body, images_json=excluded.images_json, rev=excluded.rev, source=excluded.source, sort=excluded.sort, active=excluded.active, updated_at=datetime('now')`)
+    .bind(i.key, i.topic_id, i.kind, i.category, i.title, i.body, i.images_json, i.rev, i.source, i.sort, i.active))
+  for (let k = 0; k < stmts.length; k += 50) await c.env.DB.batch(stmts.slice(k, k + 50))
+  let removed = 0
+  if (body.remove_missing) {
+    const keep = items.map(i => i.key)
+    const r = await c.env.DB.prepare(`UPDATE library_materials SET active = 0, updated_at = datetime('now') WHERE active = 1${keep.length ? ` AND key NOT IN (${keep.map(() => '?').join(',')})` : ''}`).bind(...keep).run()
+    removed = Number(r.meta.changes || 0)
+  }
+  const propagated = await propagateLibrary(c.env.DB)
+  return c.json({ ok: true, upserted: items.length, removed, propagated })
 })
 
 psApi.use('/*', async (c, next) => {

@@ -1,0 +1,163 @@
+{
+ "topics": {
+  "drive:CAR-001": {
+   "rev": "2aaf8371a372",
+   "title": "충치가 깊어지는 과정",
+   "units": [
+    "CAR-001_충치가_깊어지는_과정 → CAR-001_충치진행_HD.mp4",
+    "v2_치수침범_근관감염_치근단병소 → CAR-001_v2_치수침범_치근단병소_HD.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:CAR-005": {
+   "rev": "19768933b6bf",
+   "title": "레진 충전 치료 과정",
+   "units": [
+    "최종 검토본_영상·전체에셋 → composite-restoration.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:CRK-001": {
+   "rev": "6919ea16aef0",
+   "title": "치아 미세금과 깊은 균열",
+   "units": [
+    "06_CRK-001_치아 미세금과 깊은 균열 → CRK-001_v2_수직치근파절추가_HD.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:CRN-001": {
+   "rev": "9c77f0d8242e",
+   "title": "자연치 크라운 치료 과정",
+   "units": [
+    "03_CRN-001_자연치 크라운 치료 과정 → CRN-001_자연치_크라운_치료과정_35초.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:END-001": {
+   "rev": "4d6f68676bce",
+   "title": "신경치료 전체 과정",
+   "units": [
+    "04_END-001_신경치료 전체 과정 → END-001_신경치료전체과정_38초_검토본.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:EXT-002": {
+   "rev": "95f54b7166fb",
+   "title": "매복 사랑니 발치 과정",
+   "units": [
+    "EXT-002_매복 사랑니 발치 과정 → wisdom-tooth-extraction.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:GUM-002": {
+   "rev": "916e77fb0275",
+   "title": "치주염이 진행하는 과정",
+   "units": [
+    "05_GUM-002_치주염 진행 과정 → GUM-002_v4_치아굽힘수정_HD.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:IMC-001": {
+   "rev": "01b60d2bc516",
+   "title": "임플란트 주변 점막염과 주위염",
+   "units": [
+    "IMC-001_임플란트_점막염·주위염_영상·전체에셋 → peri-implant-disease.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:IMC-011": {
+   "rev": "3c8c168bccf3",
+   "title": "임플란트 보철 후 볼과 혀를 씹는 이유",
+   "units": [
+    "v2_치아상실_빈자리로이동_보철후씹힘 → soft-tissue-biting.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:IMP-001": {
+   "rev": "a977ce6f0929",
+   "title": "임플란트 구성요소: 나사와 접착제",
+   "units": [
+    "01_승인 기준작_임플란트 구성요소 → IMP-001_임플란트_스크류와_시멘트_조립_v3.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:IMP-011": {
+   "rev": "762d39bfc9ee",
+   "title": "임플란트 레진홀의 구조와 역할",
+   "units": [
+    "IMP-011_임플란트_레진홀_입체구조·영상·전체에셋 → resin-access.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:PER-001": {
+   "rev": "5e23131331ff",
+   "title": "스케일링 과정",
+   "units": [
+    "PER-001_스케일링 과정_영상·전체에셋 → PER-001_스케일링_35초_HD.mp4",
+    "PER-001_v2_스케일링·블랙트라이앵글_영상·전체에셋 → PER-001_v2_치석제거와_블랙트라이앵글_HD.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:PUL-001": {
+   "rev": "08564279ea4d",
+   "title": "여러 자극과 치수염의 진행",
+   "units": [
+    "07_PUL-001_여러자극과치수염진행 → PUL-001_v4_충혈압박_치수조직손상_전체HD.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:SUR-001": {
+   "rev": "fc125dec9d48",
+   "title": "임플란트 치료 전체 과정",
+   "units": [
+    "SUR-001_임플란트_치료_전체_과정 → SUR-001_임플란트_치료과정_HD.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  },
+  "drive:SUR-008": {
+   "rev": "07e7964fd671",
+   "title": "임플란트 2차 수술: 커버 스크류와 힐링 어버트먼트",
+   "units": [
+    "SUR-008_임플란트_2차수술_커버스크류_힐링어버트먼트 → SUR-008_임플란트2차수술_HD.mp4"
+   ],
+   "at": "2026-09-22T10:45:45"
+  }
+ },
+ "uploaded": [
+  "library/CAR-001/2d5df3eb2012.jpg",
+  "library/CAR-001/364cb1dccbfd.mp4",
+  "library/CAR-001/5b69c48d3d4d.jpg",
+  "library/CAR-001/93ac3f20a070.mp4",
+  "library/CAR-005/97304b1da52c.jpg",
+  "library/CAR-005/b9fc14090c9a.mp4",
+  "library/CRK-001/1d1e4b09ea34.mp4",
+  "library/CRK-001/983d4e39d6e8.jpg",
+  "library/CRN-001/1b8524a7ec34.mp4",
+  "library/CRN-001/7fc4053d20fd.jpg",
+  "library/END-001/1a85ea598b45.mp4",
+  "library/END-001/dbd84859942a.jpg",
+  "library/EXT-002/130ab2612715.jpg",
+  "library/EXT-002/893b4b02ba97.mp4",
+  "library/GUM-002/4ba655b403e0.mp4",
+  "library/GUM-002/6321c61d6801.jpg",
+  "library/IMC-001/834a9b2cadd8.mp4",
+  "library/IMC-001/898dd5237823.jpg",
+  "library/IMC-011/4f9679f82157.jpg",
+  "library/IMC-011/7c8bd791aa16.mp4",
+  "library/IMP-001/08c8e315f50f.jpg",
+  "library/IMP-001/1af58115a368.mp4",
+  "library/IMP-011/c1830fdd7116.mp4",
+  "library/IMP-011/f296e20cb0eb.jpg",
+  "library/PER-001/0f124be42e75.mp4",
+  "library/PER-001/26e5982bedf5.jpg",
+  "library/PER-001/3c0f70316949.mp4",
+  "library/PER-001/b34c7f49a99a.jpg",
+  "library/PUL-001/bad25f933a19.mp4",
+  "library/PUL-001/d36793260e88.jpg",
+  "library/SUR-001/40ebf70cc5d9.mp4",
+  "library/SUR-001/df26295139ad.jpg",
+  "library/SUR-008/89ca57b1c964.jpg",
+  "library/SUR-008/bc6808fd96a5.mp4"
+ ],
+ "last_run": "2026-09-22T10:45:45"
+}

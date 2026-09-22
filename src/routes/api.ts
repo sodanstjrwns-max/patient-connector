@@ -5,8 +5,7 @@ import { signSession, verifySession, sessionCookie, clearCookie, getSessionToken
 import { verifyHubSsoToken } from '../lib/hub-sso'
 import { normalizePhone, phoneHash, encPhone, randomToken, maskPhone } from '../lib/util'
 import { sendAlimtalk, alimtalkReady } from '../lib/solapi'
-import { materialCategories, materialExamples, exampleNotice } from '../lib/material-library'
-import { starterMaterials } from '../lib/material-starter'
+import { materialCategories, libraryNotice, propagateLibrary, LIBRARY_KEY_PREFIX } from '../lib/material-library'
 import annotations from './annotations'
 import { guidanceOf, publicGuidance, shareIssue, safeLink, digest } from '../lib/guidance'
 import { formKeyFor, fetchFormCheckins } from '../lib/form-checkins'
@@ -84,6 +83,8 @@ api.get('/auth/hub/callback', async (c) => {
     if (!h) {
       const r = await c.env.DB.prepare('INSERT INTO hospitals (ps_hospital_id, name) VALUES (?, ?)').bind(claims.hid, claims.hname || '병원').run()
       h = { id: Number(r.meta.last_row_id), name: claims.hname || '병원' }
+      // 새 병원은 Patient Connect 영상 라이브러리를 바로 자료함에 넣어 시작한다
+      await propagateLibrary(c.env.DB, h.id).catch(() => undefined)
     } else if (claims.hname && claims.hname !== h.name) {
       await c.env.DB.prepare('UPDATE hospitals SET name = ? WHERE id = ?').bind(claims.hname, h.id).run()
     }
@@ -255,34 +256,19 @@ api.delete('/material-sets/:id', async c => {
 
 // ─── 자료함 ───
 api.get('/material-library', async (c) => {
-  const imported = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE ?')
-    .bind(c.get('hid'), 'dental-%').first<{ n: number }>()
-  const missing = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE 'dental-v1:%' AND active = 1 AND images_json = '[]'").bind(c.get('hid')).first<{ n: number }>()
-  return c.json({ missing_images: Number(missing?.n || 0), categories: materialCategories, example_notice: exampleNotice, examples: [...materialExamples.map(({ key, kind, category, title }) => ({ key, kind, category, title })), ...starterMaterials.map(({ key, kind, category, title }) => ({ key, kind, category, title }))], imported_count: Number(imported?.n || 0) })
+  const hid = c.get('hid')
+  const lib = await c.env.DB.prepare('SELECT COUNT(*) AS n, MAX(updated_at) AS at FROM library_materials WHERE active = 1').first<{ n: number; at: string | null }>()
+  const mine = await c.env.DB.prepare(`SELECT SUM(active) AS active_n, SUM(library_locked) AS locked_n, COUNT(*) AS n FROM materials WHERE hospital_id = ? AND example_key LIKE '${LIBRARY_KEY_PREFIX}%'`).bind(hid).first<{ active_n: number; locked_n: number; n: number }>()
+  return c.json({ categories: materialCategories, library_notice: libraryNotice, library_count: Number(lib?.n || 0), library_updated_at: lib?.at || null, imported_count: Number(mine?.active_n || 0), locked_count: Number(mine?.locked_n || 0) })
 })
-api.post('/materials/examples', async (c) => {
+// 라이브러리 다시 가져오기 — 빠진 자료 추가, 병원이 손대지 않은 사본은 최신으로(삭제한 것도 복구). 수정한 사본은 그대로.
+api.post('/materials/library-sync', async (c) => {
   const origin = c.req.header('Origin')
   if ((origin && origin !== new URL(c.req.url).origin) || c.req.header('Sec-Fetch-Site') === 'cross-site') return c.json({ error: '다른 사이트의 요청은 허용하지 않습니다' }, 403)
-  const b = await c.req.json().catch(() => null)
-  if (b?.confirmed !== true) return c.json({ error: '검토용 예시자료 추가를 확인해 주세요' }, 400)
   const hid = c.get('hid')
   const hospital = await c.env.DB.prepare('SELECT id FROM hospitals WHERE id = ?').bind(hid).first()
   if (!hospital) return c.json({ error: 'no_hospital' }, 401)
-  // Atomic D1 batch + unique (hospital_id, example_key): retries cannot duplicate or overwrite edits.
-  const results = await c.env.DB.batch(materialExamples.map(m => c.env.DB.prepare(`
-    INSERT INTO materials (hospital_id, kind, category, title, body, images_json, cost_json, sort, example_key)
-    VALUES (?, ?, ?, ?, ?, ?, '[]', (SELECT COALESCE(MAX(sort), 0) + 1 FROM materials WHERE hospital_id = ?), ?)
-    ON CONFLICT(hospital_id, example_key) DO NOTHING
-  `).bind(hid, m.kind, m.category, m.title, m.body, JSON.stringify([{ key: m.image, caption: '설명용 이미지 목업 · 실제 임상자료 아님', media_type: 'image' }]), hid, m.key)))
-  // 시작 세트(문안만, 이미지 없음) — 같은 멱등 규칙
-  const starterResults = await c.env.DB.batch(starterMaterials.map(m => c.env.DB.prepare(`
-    INSERT INTO materials (hospital_id, kind, category, title, body, images_json, cost_json, guidance_json, sort, example_key)
-    VALUES (?, ?, ?, ?, ?, '[]', ?, ?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM materials WHERE hospital_id = ?), ?)
-    ON CONFLICT(hospital_id, example_key) DO NOTHING
-  `).bind(hid, m.kind, m.category, m.title, m.body, JSON.stringify(m.cost || []), JSON.stringify(m.guidance || {}), hid, m.key)))
-  // Only fill empty active examples after an explicit request; never replace uploaded media or edited text.
-  const updates = await c.env.DB.batch(materialExamples.map(m => c.env.DB.prepare("UPDATE materials SET images_json = ?, updated_at = datetime('now') WHERE hospital_id = ? AND example_key = ? AND active = 1 AND images_json = '[]'").bind(JSON.stringify([{ key: m.image, caption: '설명용 이미지 목업 · 실제 임상자료 아님', media_type: 'image' }]), hid, m.key)))
-  return c.json({ added: results.reduce((n, r) => n + Number(r.meta.changes || 0), 0) + starterResults.reduce((n, r) => n + Number(r.meta.changes || 0), 0), updated: updates.reduce((n, r) => n + Number(r.meta.changes || 0), 0), total: materialExamples.length + starterMaterials.length })
+  return c.json(await propagateLibrary(c.env.DB, hid))
 })
 api.get('/materials', async (c) => {
   const all = c.req.query('all') === '1'
@@ -315,7 +301,7 @@ api.post('/materials', async (c) => {
 api.put('/materials/:id', async (c) => {
   const m = await readMaterialBody(c)
   if (!m) return c.json({ error: '제목을 입력하세요' }, 400)
-  const r = await c.env.DB.prepare(`UPDATE materials SET kind=?, category=?, title=?, body=?, cost_json=?, guidance_json=COALESCE(?,guidance_json), updated_at=datetime('now') WHERE id = ? AND hospital_id = ?`)
+  const r = await c.env.DB.prepare(`UPDATE materials SET kind=?, category=?, title=?, body=?, cost_json=?, guidance_json=COALESCE(?,guidance_json), library_locked=1, updated_at=datetime('now') WHERE id = ? AND hospital_id = ?`)
     .bind(m.kind, m.category, m.title, m.body, m.cost, m.guidance, c.req.param('id'), c.get('hid')).run()
   if (!r.meta.changes) return c.json({ error: 'not_found' }, 404)
   const row = await c.env.DB.prepare('SELECT * FROM materials WHERE id = ?').bind(c.req.param('id')).first<MaterialRow>()
@@ -361,7 +347,7 @@ api.post('/materials/:id/images', async (c) => {
     target.poster_key = posterKey
     const duration = Number(form?.get('duration_seconds'))
     if (Number.isFinite(duration) && duration > 0 && duration <= 86400) target.duration_seconds = duration
-    const saved = await c.env.DB.prepare("UPDATE materials SET images_json = ?, updated_at = datetime('now') WHERE id = ? AND images_json = ?").bind(JSON.stringify(images), row.id, row.images_json).run()
+    const saved = await c.env.DB.prepare("UPDATE materials SET images_json = ?, library_locked = 1, updated_at = datetime('now') WHERE id = ? AND images_json = ?").bind(JSON.stringify(images), row.id, row.images_json).run()
     if (!saved.meta.changes) return c.json({ error: '자료가 변경되었습니다. 새로고침 후 다시 시도해 주세요' }, 409)
     return c.json({ images })
   }
@@ -382,7 +368,7 @@ api.post('/materials/:id/images', async (c) => {
   }
   const duration = Number(form?.get('duration_seconds'))
   images.push({ key, ...(caption ? { caption } : {}), media_type: video ? 'video' : 'image', ...(posterKey ? { poster_key: posterKey } : {}), ...(video && Number.isFinite(duration) && duration > 0 && duration <= 86400 ? { duration_seconds: duration } : {}) })
-  await c.env.DB.prepare(`UPDATE materials SET images_json = ?, guidance_json = json_set(guidance_json, '$.external_allowed', json('false'), '$.deidentified', json('false')), updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
+  await c.env.DB.prepare(`UPDATE materials SET images_json = ?, guidance_json = json_set(guidance_json, '$.external_allowed', json('false'), '$.deidentified', json('false')), library_locked=1, updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
   return c.json({ images })
 })
 api.delete('/materials/:id/images', async (c) => {
@@ -393,7 +379,7 @@ api.delete('/materials/:id/images', async (c) => {
   const existing = parseJson<ImageRef[]>(row.images_json, [])
   if (!key || !existing.some(i => i.key === key)) return c.json({error:'이미지를 찾을 수 없습니다.'},404)
   const images = existing.filter((i) => i.key !== key)
-  await c.env.DB.prepare(`UPDATE materials SET images_json = ?, guidance_json = json_set(guidance_json, '$.external_allowed', json('false'), '$.deidentified', json('false')), updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
+  await c.env.DB.prepare(`UPDATE materials SET images_json = ?, guidance_json = json_set(guidance_json, '$.external_allowed', json('false'), '$.deidentified', json('false')), library_locked=1, updated_at=datetime('now') WHERE id = ?`).bind(JSON.stringify(images), row.id).run()
   // 발송된 안내장 스냅샷이 같은 키를 참조할 수 있으므로 R2 객체는 지우지 않는다(보관).
   return c.json({ images })
 })

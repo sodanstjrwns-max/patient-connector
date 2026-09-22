@@ -1,4 +1,4 @@
-// Dental navigation and editable educational examples, not clinician-approved content.
+// 진료 분류 프리셋(자료 편집 화면의 선택지). 예시 문안·목업은 없음 — 설명자료는 Patient Connect 영상 라이브러리(library_materials, 구글 드라이브 동기화)에서 온다.
 const treatmentCategories = ['임플란트', '치아교정', '보철치료', '충치치료', '신경치료', '잇몸치료', '사랑니·발치', '소아치과', '예방·검진', '턱관절치료']
 export const materialCategories: Record<string, string[]> = {
   explain: treatmentCategories,
@@ -6,24 +6,42 @@ export const materialCategories: Record<string, string[]> = {
   cost: treatmentCategories,
   before_after: ['임플란트', '치아교정', '보철치료', '충치치료', '잇몸치료', '심미치료'],
 }
-export const exampleNotice = '검토용 예시입니다. 환자에게 제공하기 전에 의료진이 병원의 진료 기준과 환자 상태에 맞게 내용을 확인·수정해 주세요.'
-type Example = { key: string; kind: 'explain' | 'disease'; category: string; title: string; body: string; image: string }
-const example = (key: string, kind: Example['kind'], category: string, title: string, body: string): Example => ({ key: `dental-v1:${key}`, image: `examples/${key}.png`, kind, category, title: `[예시] ${title}`, body: `${exampleNotice}\n\n${body}\n\n개인의 상태에 따라 필요한 검사와 치료 방법이 달라질 수 있습니다. 정확한 진단과 치료 계획은 담당 의료진에게 확인해 주세요.` })
-export const materialExamples: Example[] = [
-  example('implant', 'explain', '임플란트', '임플란트 치료 과정 이해하기',
-    '임플란트는 상실된 치아의 기능을 회복하는 치료 방법 중 하나입니다.\n- 구강 검사와 필요한 영상 검사를 통해 잇몸, 뼈, 주변 치아의 상태를 확인합니다.\n- 전신질환과 복용 약물을 확인하고 다른 치료 선택지와 함께 계획을 상담합니다.\n- 필요한 경우 잇몸치료나 뼈이식 등 추가 처치를 먼저 또는 함께 진행할 수 있습니다.\n- 임플란트 식립 후 회복 상태를 확인하고, 상태에 맞춰 보철물을 연결합니다.\n- 치료 후에도 칫솔질과 정기검진으로 임플란트 주변을 관리합니다.\n상담할 내용: 추가 처치 여부, 예상 기간, 치료비에 포함된 항목, 치료 후 관리 방법.'),
-  example('orthodontics', 'explain', '치아교정', '치아교정은 어떤 순서로 진행되나요?',
-    '치아교정은 치아 배열과 맞물림을 평가하고, 필요에 따라 개선하는 치료입니다.\n- 치아·잇몸 상태, 얼굴과 턱의 관계, 필요한 영상 자료를 확인합니다.\n- 치료 목표와 장치 선택, 발치 여부, 예상 기간과 한계를 상담합니다.\n- 선택한 장치로 치아의 이동을 유도하며 주기적으로 경과를 확인합니다.\n- 장치 종류에 따라 착용 방법과 위생관리 지침이 다르므로 개별 안내를 따릅니다.\n- 치료 후에는 치아 위치를 유지하기 위한 유지장치와 경과 관찰이 필요할 수 있습니다.\n모든 부정교합이 같은 장치나 방법으로 치료되는 것은 아닙니다.'),
-  example('prosthetics', 'explain', '보철치료', '크라운·브릿지·틀니 알아보기',
-    '보철치료는 손상되거나 상실된 치아의 형태와 기능을 회복하기 위한 치료입니다.\n- 크라운은 남아 있는 치아의 상태를 평가한 뒤 치아를 덮는 형태로 제작합니다.\n- 브릿지는 상실 부위 주변 치아 등을 지지대로 이용하는 방법입니다. 지지 치아의 상태를 확인해야 합니다.\n- 틀니는 여러 치아가 상실된 경우 고려할 수 있는 탈착식 보철물입니다.\n- 선택 시 남은 치아와 잇몸 상태, 관리 가능성, 비용과 치료 부담을 함께 살핍니다.\n- 제작과 조정 후에도 보철물 주변 위생관리와 정기점검이 필요합니다.\n어떤 방법이 적합한지는 진단 후 결정하며 특정 방법이 모든 환자에게 우수한 것은 아닙니다.'),
-  example('endodontics', 'explain', '신경치료', '신경치료와 치료 후 관리',
-    '신경치료는 치아 내부 치수와 근관에 문제가 있을 때 치아를 보존하기 위해 고려하는 치료입니다.\n- 검사로 통증의 원인과 치아 보존 가능성을 평가합니다.\n- 필요한 경우 마취 후 치아 내부의 감염되거나 손상된 조직을 제거하고 근관을 세척합니다.\n- 상태에 맞춰 근관을 충전하고 치아 바깥쪽을 수복합니다.\n- 치료 횟수와 최종 수복 방법은 치아 위치와 남은 치질, 감염 상태에 따라 달라집니다.\n- 임시 수복물이 있는 동안 씹는 방법과 관리 지침은 병원 안내를 따릅니다.\n붓기나 통증이 심해지거나 임시 수복물이 빠졌다면 병원에 연락해 확인하세요.'),
-  example('caries', 'disease', '충치', '충치는 어떻게 진행되나요?',
-    '충치는 치아 표면의 세균막과 당 섭취 등 여러 요인이 관여하여 치아의 무기질이 손실되는 질환입니다.\n- 초기에는 특별한 증상이 없거나 치아 표면에 변화가 보일 수 있습니다.\n- 진행하면 치아가 패이거나 시림·통증이 생길 수 있지만, 증상만으로 깊이를 판단할 수는 없습니다.\n- 초기 병소는 상태에 따라 위생관리·불소 적용·식습관 조절과 관찰을 고려합니다.\n- 치아 구조가 손상된 경우 충전·보철치료 등이 필요할 수 있고, 치수까지 문제가 생기면 신경치료 등을 검토합니다.\n- 진단과 치료 여부는 구강 검사와 필요한 영상 검사로 결정합니다.\n통증이 없더라도 정기검진을 통해 상태를 확인하는 것이 좋습니다.'),
-  example('periodontal', 'disease', '잇몸질환', '치은염과 치주염의 차이',
-    '잇몸질환은 치아 주변 조직에 염증이 생기는 상태를 말합니다.\n- 치은염은 염증이 잇몸에 국한된 상태로, 붓거나 양치할 때 피가 날 수 있습니다.\n- 치주염은 치아를 지지하는 조직과 뼈의 손상을 동반할 수 있습니다.\n- 불편감이 적어도 진행할 수 있어 잇몸 검사와 필요한 영상 검사가 중요합니다.\n- 치료에는 치태·치석 제거, 위생관리 교육, 상태에 따른 추가 잇몸치료가 포함될 수 있습니다.\n- 흡연, 당뇨 등 관련 요인도 함께 확인하며 치료 후 유지관리가 필요합니다.\n피가 난다는 이유로 양치를 중단하기보다 적절한 관리 방법을 의료진에게 안내받으세요.'),
-  example('pulp', 'disease', '치수·치근단 질환', '치아 속 염증과 뿌리 끝 염증',
-    '치아 내부의 치수나 뿌리 끝 주변 조직에 염증이 생기면 여러 증상이 나타날 수 있습니다.\n- 찬 것·뜨거운 것에 민감하거나 가만히 있어도 아플 수 있습니다.\n- 씹을 때 불편하거나 잇몸이 붓는 경우도 있으며 증상이 뚜렷하지 않을 수도 있습니다.\n- 충치, 외상, 균열 등 가능한 원인을 검사로 구분합니다.\n- 치수의 회복 가능성과 감염 상태에 따라 수복·신경치료·추가 처치 등을 결정합니다.\n- 진통제나 항생제만으로 원인 치료를 대신할 수 있는 것은 아닙니다.\n붓기가 퍼지거나 발열이 있고 삼키거나 숨쉬기 어렵다면 신속히 응급 진료를 받으세요.'),
-  example('cracked-tooth', 'disease', '치아균열·파절', '씹을 때 아프다면 치아균열도 확인해요',
-    '치아에 생긴 금이나 깨짐은 범위와 위치에 따라 증상과 치료 방법이 달라집니다.\n- 씹거나 씹던 힘을 뺄 때 통증이 느껴지거나 온도에 민감할 수 있습니다.\n- 이런 증상은 다른 질환에서도 나타나므로 증상만으로 균열을 확진할 수 없습니다.\n- 구강 검사, 맞물림 검사, 필요한 영상 검사 등을 종합해 평가합니다.\n- 균열 범위와 치수·잇몸 상태에 따라 수복, 보철치료, 신경치료 또는 다른 처치를 검토합니다.\n- 단단한 물체를 씹는 습관이나 이갈이 등 관련 요인이 있는지도 확인합니다.\n반복되는 통증이 있다면 아픈 부위와 유발 상황을 기록해 진료 시 알려주세요.'),
-]
+export const LIBRARY_KEY_PREFIX = 'drive:'
+export const libraryNotice = 'Patient Connect 영상 라이브러리 자료입니다. 제목·본문·영상을 수정하면 이후 라이브러리 자동 갱신에서 제외됩니다.'
+
+export type LibraryItem = { key: string; topic_id: string; kind: 'explain' | 'disease' | 'notice'; category: string | null; title: string; body: string; images_json: string; rev: string; source?: string | null; sort: number; active: number }
+type LibraryRow = LibraryItem & { updated_at: string }
+type HospitalCopy = { id: number; hospital_id: number; example_key: string; library_rev: string | null; library_locked: number; active: number }
+
+/** 라이브러리 → 병원 자료함 반영. 없는 자료는 추가, 병원이 손대지 않은 사본(library_locked=0)은 최신 rev 로 갱신·복구, 라이브러리에서 빠진 자료는 비활성. */
+export async function propagateLibrary(db: D1Database, hospitalId?: number) {
+  const lib = (await db.prepare('SELECT * FROM library_materials ORDER BY sort, key').all<LibraryRow>()).results || []
+  const hospitals = hospitalId ? [{ id: hospitalId }] : ((await db.prepare('SELECT id FROM hospitals').all<{ id: number }>()).results || [])
+  const copies = (await db.prepare(`SELECT id, hospital_id, example_key, library_rev, library_locked, active FROM materials WHERE example_key LIKE '${LIBRARY_KEY_PREFIX}%'${hospitalId ? ' AND hospital_id = ?' : ''}`).bind(...(hospitalId ? [hospitalId] : [])).all<HospitalCopy>()).results || []
+  const stmts: D1PreparedStatement[] = []
+  const counts = { inserted: 0, updated: 0, deactivated: 0, locked: 0 }
+  for (const h of hospitals) {
+    for (const item of lib) {
+      const copy = copies.find(c => c.hospital_id === h.id && c.example_key === item.key)
+      if (!copy) {
+        if (!item.active) continue
+        counts.inserted++
+        stmts.push(db.prepare(`INSERT INTO materials (hospital_id, kind, category, title, body, images_json, cost_json, guidance_json, sort, example_key, library_rev)
+          VALUES (?, ?, ?, ?, ?, ?, '[]', '{}', (SELECT COALESCE(MAX(sort), 0) + 1 FROM materials WHERE hospital_id = ?), ?, ?)
+          ON CONFLICT(hospital_id, example_key) DO NOTHING`).bind(h.id, item.kind, item.category, item.title, item.body, item.images_json, h.id, item.key, item.rev))
+        continue
+      }
+      if (copy.library_locked) { counts.locked++; continue }
+      if (!item.active) {
+        if (copy.active) { counts.deactivated++; stmts.push(db.prepare("UPDATE materials SET active = 0, updated_at = datetime('now') WHERE id = ?").bind(copy.id)) }
+        continue
+      }
+      if (copy.library_rev !== item.rev || !copy.active) {
+        counts.updated++
+        stmts.push(db.prepare("UPDATE materials SET kind = ?, category = ?, title = ?, body = ?, images_json = ?, library_rev = ?, active = 1, updated_at = datetime('now') WHERE id = ? AND library_locked = 0").bind(item.kind, item.category, item.title, item.body, item.images_json, item.rev, copy.id))
+      }
+    }
+  }
+  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
+  return { ...counts, hospitals: hospitals.length, library: lib.filter(x => x.active).length }
+}

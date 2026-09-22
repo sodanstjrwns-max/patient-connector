@@ -4,7 +4,6 @@ import api, { type Bindings } from './routes/api'
 import psApi from './routes/ps-api'
 import { legalShell, privacyBody, termsBody, legalGuideBody, landingPage } from './pages/legal'
 import { verifySession, getSessionToken } from './lib/auth'
-import { materialExamples } from './lib/material-library'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
@@ -58,13 +57,13 @@ app.get('/legal-guide', (c) => c.html(legalShell('병원용 안내 문구', lega
 // ─── 이미지(R2) ── 병원 세션(자기 병원 키) 또는 유효한 안내장 토큰(스냅샷에 포함된 키)만 열람
 app.get('/a/*', async (c) => {
   const key = decodeURIComponent(new URL(c.req.url).pathname.slice(3))
-  // Bundled example images are intentionally public; arbitrary keys never bypass ownership checks.
-  if (materialExamples.some(m => m.image === key)) return c.redirect('/static/mockups/' + key.slice('examples/'.length))
-  if (!/^h\d+\/(m\d+|brand)\/[0-9a-z-]+\.(jpg|png|webp|mp4|webm)$/.test(key)) return c.text('not found', 404)
+  // 플랫폼 영상 라이브러리(library/…)는 로그인한 병원 누구나, 환자는 자기 안내장 스냅샷에 든 키만 볼 수 있다. 병원 업로드(h{id}/…)는 소유 병원만.
+  const isLibrary = /^library\/[A-Z]{3}-\d{3}\/[0-9a-f]{8,16}\.(mp4|jpg)$/.test(key)
+  if (!isLibrary && !/^h\d+\/(m\d+|brand)\/[0-9a-z-]+\.(jpg|png|webp|mp4|webm)$/.test(key)) return c.text('not found', 404)
   const isBrand = /^h\d+\/brand\//.test(key)
   let allowed = false
   const sid = await verifySession(getSessionToken(c.req.header('Cookie')), c.env.SESSION_SECRET)
-  if (sid && key.startsWith(`h${sid}/`)) allowed = true
+  if (sid && (isLibrary || key.startsWith(`h${sid}/`))) allowed = true
   if (!allowed) {
     const t = c.req.query('t') || ''
     if (/^[0-9a-f]{32}$/.test(t)) {
@@ -73,7 +72,7 @@ app.get('/a/*', async (c) => {
     }
   }
   if (!allowed) return c.text('forbidden', 403)
-  const headers: Record<string, string> = { 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex', 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff' }
+  const headers: Record<string, string> = { 'Cache-Control': isLibrary ? 'private, max-age=86400' : 'private, no-store', 'X-Robots-Tag': 'noindex', 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff' }
   const requested = c.req.header('Range')
   if (requested) {
     const meta = await c.env.MEDIA.head(key)
