@@ -311,6 +311,15 @@ api.delete('/materials/:id', async (c) => {
   await c.env.DB.prepare(`UPDATE materials SET active = 0, updated_at=datetime('now') WHERE id = ? AND hospital_id = ?`).bind(c.req.param('id'), c.get('hid')).run()
   return c.json({ ok: true })
 })
+// 보이기/숨기기 — 병원별 선택. 라이브러리 기본 자료도 이 병원 자료함에서만 숨겨지며, 동기화가 되돌리지 않는다.
+api.post('/materials/:id/visibility', async (c) => {
+  const b = await c.req.json().catch(() => ({} as any))
+  const visible = b.visible === true
+  const r = await c.env.DB.prepare(`UPDATE materials SET active = ?, updated_at=datetime('now') WHERE id = ? AND hospital_id = ?`).bind(visible ? 1 : 0, c.req.param('id'), c.get('hid')).run()
+  if (!r.meta.changes) return c.json({ error: 'not_found' }, 404)
+  const row = await c.env.DB.prepare('SELECT * FROM materials WHERE id = ?').bind(c.req.param('id')).first<MaterialRow>()
+  return c.json({ material: materialOut(row!) })
+})
 api.post('/materials/reorder', async (c) => {
   const b = await c.req.json().catch(() => ({} as any))
   const ids: number[] = Array.isArray(b.ids) ? b.ids.map(Number).filter(Number.isInteger) : []

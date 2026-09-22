@@ -8,7 +8,7 @@
   const groupKind = (kind) => kind === 'notice' ? 'explain' : kind;
   const KIND_COLOR = { explain: 'bg-sky-100 text-sky-800', disease: 'bg-emerald-100 text-emerald-800', before_after: 'bg-violet-100 text-violet-800', cost: 'bg-amber-100 text-amber-800', notice: 'bg-rose-100 text-rose-800' };
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
-  const state = { me: null, materials: [], today: [], tab: 'library', dispatches: [], stats: null, library: { categories: {}, library_count: 0, imported_count: 0, locked_count: 0, library_notice: '' }, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null, sets: [], scope: '', overview: true };
+  const state = { me: null, materials: [], hidden: [], today: [], tab: 'library', dispatches: [], stats: null, library: { categories: {}, library_count: 0, imported_count: 0, locked_count: 0, library_notice: '' }, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null, sets: [], scope: '', overview: true };
   const app = $('#app');
 
   async function api(path, opt) {
@@ -92,7 +92,7 @@
     return `<div class="material-card bg-white rounded-xl border shadow-sm flex flex-col fade-in">
       ${img}
       <div class="p-3 flex-1">
-        <div class="flex flex-wrap items-center gap-2 text-xs"><span class="px-1.5 py-0.5 rounded ${KIND_COLOR[m.kind]}">${label}</span>${m.is_example ? '<span class="example-badge">영상 라이브러리</span>' : ''}${m.kind==='before_after'?`<span class="example-badge">${m.guidance?.external_allowed?'외부 전송 확인됨':'병원 내 설명용'}</span>`:''}<span class="text-slate-500">${esc(categoryOf(m))}</span></div>
+        <div class="flex flex-wrap items-center gap-2 text-xs"><span class="px-1.5 py-0.5 rounded ${KIND_COLOR[m.kind]}">${label}</span>${m.is_example ? '<span class="example-badge">기본 자료</span>' : ''}${m.active===false ? '<span class="example-badge">숨김</span>' : ''}${m.kind==='before_after'?`<span class="example-badge">${m.guidance?.external_allowed?'외부 전송 확인됨':'병원 내 설명용'}</span>`:''}<span class="text-slate-500">${esc(categoryOf(m))}</span></div>
         <div class="font-bold mt-1.5 leading-snug">${esc(m.title)}</div>
         <div class="text-xs text-slate-500 mt-1 line-clamp-2">${esc((m.body || '').replace(/\n/g, ' '))}${m.kind === 'cost' && m.cost.length ? ' · 항목 ' + m.cost.length + '개' : ''}</div>
       </div>
@@ -117,8 +117,9 @@
       <nav class="material-kind-tabs" aria-label="자료 유형">${[['','전체'],...LIBRARY_KINDS.map(k=>[k,k==='notice'?'관리·주의사항':KIND[k]])].map(([k,label])=>`<button data-kind-filter="${k}" aria-pressed="${state.kindFilter===k}">${label}<span>${countKind(k)}</span></button>`).join('')}</nav>
       <div class="material-category-filters" aria-label="진료 카테고리"><button data-cat="" aria-pressed="${!state.categoryFilter}">전체 카테고리</button>${cats.map(c=>`<button data-cat="${esc(c)}" aria-pressed="${state.categoryFilter===c}">${esc(c)}<small>${state.materials.filter(m=>kindMatches(m,state.kindFilter)&&categoryOf(m)===c).length}</small></button>`).join('')}</div>
       <p id="material-result-count" class="text-xs text-slate-500 mb-4" aria-live="polite">${state.kindFilter==='notice'?'관리·주의사항':state.kindFilter?KIND[state.kindFilter]:'전체 자료'} · ${list.length}개${state.kindFilter==='explain'?' · 관리·주의사항 포함':''}</p>
-      ${list.length?`<div id="material-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(m=>materialCard(m,`<button data-add="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg ${state.today.includes(m.id)?'bg-sky-100 text-sky-800':'bg-slate-100 hover:bg-slate-200'}">${state.today.includes(m.id)?'✓ 오늘 설명에 담김':'+ 오늘 설명에 담기'}</button><button data-edit="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200" aria-label="${esc(m.title)} 수정"><i class="fa-solid fa-pen"></i></button>`)).join('')}</div>`:`<div class="library-empty"><p>선택한 조건에 맞는 자료가 없습니다</p><button id="reset-filters">필터 초기화</button></div>`}`}
-      <details class="library-bundles"><summary>자주 쓰는 설명 묶음 <span>${state.sets.length}개</span></summary>${setsHtml()}</details>`;
+      ${list.length?`<div id="material-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(m=>materialCard(m,`<button data-add="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg ${state.today.includes(m.id)?'bg-sky-100 text-sky-800':'bg-slate-100 hover:bg-slate-200'}">${state.today.includes(m.id)?'✓ 오늘 설명에 담김':'+ 오늘 설명에 담기'}</button><button data-edit="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200" aria-label="${esc(m.title)} 수정"><i class="fa-solid fa-pen"></i></button><button data-hide="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200" title="이 병원 자료함에서 숨기기" aria-label="${esc(m.title)} 숨기기"><i class="fa-regular fa-eye-slash"></i></button>`)).join('')}</div>`:`<div class="library-empty"><p>선택한 조건에 맞는 자료가 없습니다</p><button id="reset-filters">필터 초기화</button></div>`}`}
+      <details class="library-bundles"><summary>자주 쓰는 설명 묶음 <span>${state.sets.length}개</span></summary>${setsHtml()}</details>
+      <details class="library-bundles" ${state.showHidden?'open':''}><summary>숨긴 자료 <span>${state.hidden.length}개</span></summary>${state.hidden.length?`<p class="text-xs text-slate-500 mb-3">숨긴 자료는 설명하기·보내기·안내장에 나오지 않습니다. 다시 보이게 하면 원래 자리로 돌아옵니다.</p><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${state.hidden.map(m=>materialCard(m,`<button data-show="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200"><i class="fa-regular fa-eye"></i> 다시 보이기</button>`)).join('')}</div>`:'<p class="text-xs text-slate-500">숨긴 자료가 없습니다. 자료 카드의 <i class="fa-regular fa-eye-slash"></i> 로 이 병원에서 안 쓰는 자료를 숨길 수 있습니다.</p>'}</details>`;
     bindSets(main);
     $('#q').oninput=e=>{state.filter=e.target.value;renderLibrary(main);$('#q').focus();$('#q').setSelectionRange(state.filter.length,state.filter.length)};
     const back=$('#library-back');if(back)back.onclick=()=>{state.overview=true;state.filter='';state.kindFilter='';state.categoryFilter='';renderLibrary(main);scrollTo(0,0)};
@@ -131,6 +132,8 @@
     main.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const id=Number(b.dataset.add);state.today=state.today.includes(id)?state.today.filter(x=>x!==id):[...state.today,id];saveToday();render()});
     main.querySelectorAll('[data-preview]').forEach(b=>b.onclick=()=>startPresent([state.materials.find(m=>m.id===Number(b.dataset.preview))]));
     main.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEditor(state.materials.find(m=>m.id===Number(b.dataset.edit))));
+    main.querySelectorAll('[data-hide]').forEach(b=>b.onclick=()=>setVisible(Number(b.dataset.hide),false,main));
+    main.querySelectorAll('[data-show]').forEach(b=>b.onclick=()=>setVisible(Number(b.dataset.show),true,main));
   }
 
   async function videoPoster(file) {
@@ -145,6 +148,13 @@
     }finally{video.pause();video.removeAttribute('src');video.load();URL.revokeObjectURL(url)}
   }
 
+  async function setVisible(id, visible, main) {
+    try {
+      await api('/materials/' + id + '/visibility', { method: 'POST', body: JSON.stringify({ visible }) });
+      state.showHidden = !visible; await loadMaterials(); renderLibrary(main);
+      toast(visible ? '자료를 다시 보이게 했습니다.' : '자료를 숨겼습니다. 아래 "숨긴 자료"에서 되돌릴 수 있습니다.');
+    } catch (e) { toast(e.message); }
+  }
   async function refreshLibrary() {
     const btn = $('#library-refresh'); if (btn) btn.disabled = true;
     try {
@@ -202,7 +212,7 @@
           </div>
         </div>
         <div class="px-5 py-4 border-t flex gap-2">
-          ${m.id ? `<button id="ed-del" class="text-rose-600 text-sm">삭제</button>` : ''}
+          ${m.id ? `<button id="ed-del" class="text-rose-600 text-sm">${m.is_example ? '이 병원에서 숨기기' : '삭제'}</button>` : ''}
           <button id="ed-save" class="ml-auto px-5 py-2 rounded-lg bg-slate-900 text-white font-semibold text-sm">${m.id ? '저장' : '등록'}</button>
         </div>
       </div></div>`;
@@ -224,7 +234,7 @@
         render();
       } catch (e) { toast(e.message, false); }
     };
-    const del = $('#ed-del'); if (del) del.onclick = async () => { if (!confirm('이 자료를 자료함에서 뺄까요? (이미 보낸 안내장에는 영향 없음)')) return; await api('/materials/' + m.id, { method: 'DELETE' }); state.today = state.today.filter((x) => x !== m.id); saveToday(); await loadMaterials(); box.remove(); state.editing = null; render(); };
+    const del = $('#ed-del'); if (del) del.onclick = async () => { if (!confirm(m.is_example ? '이 자료를 이 병원 자료함에서 숨길까요? "숨긴 자료"에서 다시 보이게 할 수 있습니다. (이미 보낸 안내장에는 영향 없음)' : '이 자료를 자료함에서 뺄까요? (이미 보낸 안내장에는 영향 없음)')) return; await api('/materials/' + m.id, { method: 'DELETE' }); state.today = state.today.filter((x) => x !== m.id); saveToday(); await loadMaterials(); box.remove(); state.editing = null; render(); };
     const f = $('#ed-file'); if (f) f.onchange = async () => {
       const file = f.files[0]; if (!file) return;
       const fd = new FormData(); fd.append('file', file);
@@ -606,7 +616,7 @@
   async function loadSets(){state.sets=(await api('/material-sets')).sets}
   async function loadMe() { state.me = await api('/me'); }
   async function loadLibrary() { state.library = await api('/material-library'); }
-  async function loadMaterials() { state.materials = (await api('/materials')).materials; state.today = state.today.filter((id) => state.materials.some((m) => m.id === id)); }
+  async function loadMaterials() { const all = (await api('/materials?all=1')).materials; state.materials = all.filter(m => m.active !== false); state.hidden = all.filter(m => m.active === false); state.today = state.today.filter((id) => state.materials.some((m) => m.id === id)); }
   (async () => {
     try { await loadMe(); try{state.today=JSON.parse(sessionStorage.getItem('pc_today_'+state.me.hospital.id)||'[]');state.scope=sessionStorage.getItem('pc_scope_'+state.me.hospital.id)||''}catch{state.today=[]} await Promise.all([loadMaterials(), loadLibrary(), loadSets()]); await loadHistory(); render(); }
     catch (e) { if (e.message !== 'auth') app.innerHTML = `<div class="p-10 text-center text-rose-600">${esc(e.message)}</div>`; }

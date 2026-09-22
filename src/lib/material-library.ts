@@ -7,13 +7,14 @@ export const materialCategories: Record<string, string[]> = {
   before_after: ['임플란트', '치아교정', '보철치료', '충치치료', '잇몸치료', '심미치료'],
 }
 export const LIBRARY_KEY_PREFIX = 'drive:'
-export const libraryNotice = 'Patient Connect 영상 라이브러리 자료입니다. 제목·본문·영상을 수정하면 이후 라이브러리 자동 갱신에서 제외됩니다.'
+export const libraryNotice = 'Patient Connect가 모든 병원에 기본으로 제공하는 영상 자료입니다. 이 병원 자료함에서 숨기거나 다시 보이게 할 수 있습니다. 제목·본문·영상을 직접 수정하면 이후 자동 갱신에서 제외됩니다.'
 
 export type LibraryItem = { key: string; topic_id: string; kind: 'explain' | 'disease' | 'notice'; category: string | null; title: string; body: string; images_json: string; rev: string; source?: string | null; sort: number; active: number }
 type LibraryRow = LibraryItem & { updated_at: string }
 type HospitalCopy = { id: number; hospital_id: number; example_key: string; library_rev: string | null; library_locked: number; active: number }
 
-/** 라이브러리 → 병원 자료함 반영. 없는 자료는 추가, 병원이 손대지 않은 사본(library_locked=0)은 최신 rev 로 갱신·복구, 라이브러리에서 빠진 자료는 비활성. */
+/** 라이브러리 → 병원 자료함 반영. 없는 자료는 추가, 병원이 손대지 않은 사본(library_locked=0)은 최신 rev 로 갱신, 라이브러리에서 빠진 자료는 비활성.
+ *  병원이 숨긴 자료(active=0)는 그대로 둔다 — 보이기/숨기기는 병원의 선택이며 동기화가 되돌리지 않는다. */
 export async function propagateLibrary(db: D1Database, hospitalId?: number) {
   const lib = (await db.prepare('SELECT * FROM library_materials ORDER BY sort, key').all<LibraryRow>()).results || []
   const hospitals = hospitalId ? [{ id: hospitalId }] : ((await db.prepare('SELECT id FROM hospitals').all<{ id: number }>()).results || [])
@@ -36,9 +37,9 @@ export async function propagateLibrary(db: D1Database, hospitalId?: number) {
         if (copy.active) { counts.deactivated++; stmts.push(db.prepare("UPDATE materials SET active = 0, updated_at = datetime('now') WHERE id = ?").bind(copy.id)) }
         continue
       }
-      if (copy.library_rev !== item.rev || !copy.active) {
+      if (copy.library_rev !== item.rev) {
         counts.updated++
-        stmts.push(db.prepare("UPDATE materials SET kind = ?, category = ?, title = ?, body = ?, images_json = ?, library_rev = ?, active = 1, updated_at = datetime('now') WHERE id = ? AND library_locked = 0").bind(item.kind, item.category, item.title, item.body, item.images_json, item.rev, copy.id))
+        stmts.push(db.prepare("UPDATE materials SET kind = ?, category = ?, title = ?, body = ?, images_json = ?, library_rev = ?, updated_at = datetime('now') WHERE id = ? AND library_locked = 0").bind(item.kind, item.category, item.title, item.body, item.images_json, item.rev, copy.id))
       }
     }
   }
