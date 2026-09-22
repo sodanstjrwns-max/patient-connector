@@ -6,6 +6,7 @@ import { verifyHubSsoToken } from '../lib/hub-sso'
 import { normalizePhone, phoneHash, encPhone, randomToken, maskPhone } from '../lib/util'
 import { sendAlimtalk, alimtalkReady } from '../lib/solapi'
 import { materialCategories, libraryNotice, propagateLibrary, LIBRARY_KEY_PREFIX } from '../lib/material-library'
+import { fetchHospitalProfile } from '../lib/hub-profile'
 import annotations from './annotations'
 import { guidanceOf, publicGuidance, shareIssue, safeLink, digest } from '../lib/guidance'
 import { formKeyFor, fetchFormCheckins } from '../lib/form-checkins'
@@ -83,11 +84,16 @@ api.get('/auth/hub/callback', async (c) => {
     if (!h) {
       const r = await c.env.DB.prepare('INSERT INTO hospitals (ps_hospital_id, name) VALUES (?, ?)').bind(claims.hid, claims.hname || '병원').run()
       h = { id: Number(r.meta.last_row_id), name: claims.hname || '병원' }
-      // 새 병원은 Patient Connect 영상 라이브러리를 바로 자료함에 넣어 시작한다
-      await propagateLibrary(c.env.DB, h.id).catch(() => undefined)
     } else if (claims.hname && claims.hname !== h.name) {
       await c.env.DB.prepare('UPDATE hospitals SET name = ? WHERE id = ?').bind(claims.hname, h.id).run()
     }
+    // 진료과는 허브 프로필이 정본 — 로그인마다 사본 갱신(30분 캐시), 라이브러리는 진료과에 맞는 자료만 들어간다
+    try {
+      const profile = await fetchHospitalProfile(c.env, claims.hid)
+      const ct = profile?.basic?.clinic_type ? String(profile.basic.clinic_type).trim().slice(0, 60) : null
+      if (ct) await c.env.DB.prepare('UPDATE hospitals SET clinic_type = ? WHERE id = ? AND (clinic_type IS NULL OR clinic_type <> ?)').bind(ct, h.id, ct).run()
+    } catch {}
+    await propagateLibrary(c.env, h.id).catch(() => undefined)
     const token = await signSession(h.id, c.env.SESSION_SECRET)
     c.header('Set-Cookie', sessionCookie(token))
     return c.redirect('/app')
@@ -268,7 +274,7 @@ api.post('/materials/library-sync', async (c) => {
   const hid = c.get('hid')
   const hospital = await c.env.DB.prepare('SELECT id FROM hospitals WHERE id = ?').bind(hid).first()
   if (!hospital) return c.json({ error: 'no_hospital' }, 401)
-  return c.json(await propagateLibrary(c.env.DB, hid))
+  return c.json(await propagateLibrary(c.env, hid))
 })
 api.get('/materials', async (c) => {
   const all = c.req.query('all') === '1'

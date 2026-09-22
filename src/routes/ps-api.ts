@@ -55,12 +55,12 @@ psApi.post('/ops/library-sync', async (c) => {
     try { images = JSON.parse(String(x?.images_json || '[]')) } catch { images = [] }
     const imagesOk = Array.isArray(images) && images.length <= 6 && images.every(im => typeof im?.key === 'string' && /^library\/[A-Z]{3}-\d{3}\/[0-9a-f]{8,16}\.(mp4|jpg)$/.test(im.key) && (!im.poster_key || /^library\/[A-Z]{3}-\d{3}\/[0-9a-f]{8,16}\.jpg$/.test(im.poster_key)))
     if (!keyOk || !kindOk || !title || !imagesOk || typeof x?.rev !== 'string' || !x.rev) return err(c, 400, 'invalid_item', `잘못된 항목: ${String(x?.key || '?')}`)
-    items.push({ key: x.key, topic_id: x.topic_id, kind: x.kind, category: x.category ? String(x.category).slice(0, 30) : null, title, body: String(x.body || '').slice(0, 4000), images_json: JSON.stringify(images), rev: String(x.rev).slice(0, 40), source: x.source ? String(x.source).slice(0, 300) : null, sort: Number.isInteger(x.sort) ? x.sort : 0, active: x.active === 0 ? 0 : 1 })
+    items.push({ key: x.key, topic_id: x.topic_id, kind: x.kind, category: x.category ? String(x.category).slice(0, 30) : null, title, body: String(x.body || '').slice(0, 4000), images_json: JSON.stringify(images), rev: String(x.rev).slice(0, 40), source: x.source ? String(x.source).slice(0, 300) : null, sort: Number.isInteger(x.sort) ? x.sort : 0, active: x.active === 0 ? 0 : 1, specialty: x.specialty ? String(x.specialty).trim().slice(0, 30) : '치과' })
   }
-  const stmts = items.map(i => c.env.DB.prepare(`INSERT INTO library_materials (key, topic_id, kind, category, title, body, images_json, rev, source, sort, active, updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
-    ON CONFLICT(key) DO UPDATE SET topic_id=excluded.topic_id, kind=excluded.kind, category=excluded.category, title=excluded.title, body=excluded.body, images_json=excluded.images_json, rev=excluded.rev, source=excluded.source, sort=excluded.sort, active=excluded.active, updated_at=datetime('now')`)
-    .bind(i.key, i.topic_id, i.kind, i.category, i.title, i.body, i.images_json, i.rev, i.source, i.sort, i.active))
+  const stmts = items.map(i => c.env.DB.prepare(`INSERT INTO library_materials (key, topic_id, kind, category, title, body, images_json, rev, source, sort, active, specialty, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET topic_id=excluded.topic_id, kind=excluded.kind, category=excluded.category, title=excluded.title, body=excluded.body, images_json=excluded.images_json, rev=excluded.rev, source=excluded.source, sort=excluded.sort, active=excluded.active, specialty=excluded.specialty, updated_at=datetime('now')`)
+    .bind(i.key, i.topic_id, i.kind, i.category, i.title, i.body, i.images_json, i.rev, i.source, i.sort, i.active, i.specialty))
   for (let k = 0; k < stmts.length; k += 50) await c.env.DB.batch(stmts.slice(k, k + 50))
   let removed = 0
   if (body.remove_missing) {
@@ -68,7 +68,7 @@ psApi.post('/ops/library-sync', async (c) => {
     const r = await c.env.DB.prepare(`UPDATE library_materials SET active = 0, updated_at = datetime('now') WHERE active = 1${keep.length ? ` AND key NOT IN (${keep.map(() => '?').join(',')})` : ''}`).bind(...keep).run()
     removed = Number(r.meta.changes || 0)
   }
-  const propagated = await propagateLibrary(c.env.DB)
+  const propagated = await propagateLibrary(c.env)
   return c.json({ ok: true, upserted: items.length, removed, propagated })
 })
 

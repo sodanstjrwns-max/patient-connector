@@ -20,6 +20,7 @@ STATE = os.path.join(REPO, 'tools', 'library-state.json')
 CATALOG = os.path.join(REPO, 'tools', 'library-catalog.csv')
 OVERRIDES = os.path.join(REPO, 'tools', 'library-overrides.json')
 REPORT = os.path.expanduser('~/pflive/patient-experience-2026/runtime/connect-library-sync-report.md')
+SPECIALTY = '치과'  # 이 드라이브 폴더의 진료과. 다른 진료과 폴더가 생기면 ROOT 별 상수로 확장
 BUCKET = 'patient-connect-assets'
 API = os.environ.get('CONNECT_API_URL', 'https://connect.patientfunnel.kr') + '/api/v1/ops/library-sync'
 KEY_FILE = os.path.expanduser('~/.ps-keys/connect.key')
@@ -71,6 +72,20 @@ def duration_of(path):
         return round(d, 2) if d > 0 else None
     except Exception:
         return None
+
+def frame_poster(video_cached):
+    """미리보기 jpg 가 없으면 영상 1초 지점 프레임을 1280px JPG 로 뽑아 포스터로 쓴다(512KB 이하)."""
+    out = video_cached + '.poster.jpg'
+    if os.path.exists(out) and os.path.getsize(out) > 0:
+        return out
+    for q in (4, 7, 12):
+        try:
+            subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', '1', '-i', video_cached, '-frames:v', '1', '-vf', 'scale=1280:-2', '-q:v', str(q), out], capture_output=True, timeout=120)
+            if os.path.exists(out) and 0 < os.path.getsize(out) <= 512 * 1024:
+                return out
+        except Exception:
+            return None
+    return out if os.path.exists(out) and os.path.getsize(out) > 0 else None
 
 def parse_srt(path):
     text = open(path, encoding='utf-8', errors='ignore').read().replace('\r', '')
@@ -244,9 +259,12 @@ def build(units, cat, ov):
             d = duration_of(v)
             if d:
                 im['duration_seconds'] = d
-            if u['poster']:
-                p = cached(u['poster']); ps = sha256(p)
+            p = cached(u['poster']) if u['poster'] else frame_poster(v)
+            if p:
+                ps = sha256(p)
                 im['poster_key'] = f"library/{topic}/{ps[:12]}.jpg"; im['_poster_src'] = p; im['_poster_ct'] = 'image/jpeg'
+                if not u['poster']:
+                    notes.append(f"{topic}: 미리보기 이미지 없음 → 영상 프레임으로 대체({u['label']})")
             else:
                 notes.append(f"{topic}: 미리보기 이미지 없음({u['label']})")
             images.append(im)
@@ -256,8 +274,8 @@ def build(units, cat, ov):
         except ValueError:
             sort = 500 + len(items)
         pub = [{k: v for k, v in im.items() if not k.startswith('_')} for im in images]
-        rev = hashlib.sha256(json.dumps({'t': title, 'b': body, 'c': category, 'k': kind, 'i': pub}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
-        items.append({'key': f'drive:{topic}', 'topic_id': topic, 'kind': kind, 'category': category, 'title': title[:80], 'body': body[:4000], 'images_json': json.dumps(pub, ensure_ascii=False), 'rev': rev, 'sort': sort, 'active': 1,
+        rev = hashlib.sha256(json.dumps({'t': title, 'b': body, 'c': category, 'k': kind, 'i': pub, 's': SPECIALTY}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
+        items.append({'key': f'drive:{topic}', 'topic_id': topic, 'kind': kind, 'category': category, 'title': title[:80], 'body': body[:4000], 'images_json': json.dumps(pub, ensure_ascii=False), 'rev': rev, 'sort': sort, 'active': 1, 'specialty': SPECIALTY,
                       'source': nfc(os.path.relpath(chosen[-1]['dir'], ROOT)), '_media': images, '_units': [u['label'] + ' → ' + u['video_name'] for u in chosen]})
     return items, notes
 

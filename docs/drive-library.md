@@ -15,6 +15,10 @@
 - 자동: launchd `kr.patientfunnel.connect-library-sync` 가 3시간마다 `tools/library-sync.sh` 실행. 로그 `~/Library/Logs/connect-library-sync.log`, 보고서 `~/pflive/patient-experience-2026/runtime/connect-library-sync-report.md`, 상태 `tools/library-state.json`(커밋).
 - 새 주제 폴더가 올라오면 다음 실행에서 자동 추가된다. 판별이 이상하면 overrides 에 `title/kind/category/body/mode/skip` 을 넣는다. 진행본만 있는 주제는 `skip: true`(SUR-005).
 
+## 진료과 매칭
+- 라이브러리 자료마다 `specialty`(현재 폴더는 모두 `치과`)가 있고, 병원 진료과는 허브 프로필 `basic.clinic_type`('치과'·'한의원'·'한의과'…)을 `hospitals.clinic_type`에 복사해 쓴다(SSO 로그인마다 갱신, 없으면 동기화 때 조회).
+- `specialtyMatches()`: 치과 자료는 진료과에 '치과'/'치의'가 들어간 병원에만 들어간다. 진료과를 모르는 병원은 통과(카운트 `unknown_specialty`). 진료과가 다른 병원의 기존 사본은 내려두되 `library_rev='specialty-mismatch'`로 표시해 병원이 직접 숨긴 것과 구분하고, 나중에 진료과가 맞으면 다시 올린다.
+
 ## 주의
 - 드라이브 마운트의 한글 파일명은 NFD 로 올 수 있어 스크립트가 NFC 로 정규화해 매칭한다.
 - 안내장 스냅샷은 R2 키를 그대로 담으므로 라이브러리 객체는 지우지 않는다(내용이 바뀌면 새 키가 생김).
