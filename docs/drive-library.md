@@ -12,7 +12,7 @@
 
 ## 실행
 - 계획만: `npm run library:plan` · 실제 반영: `npm run library:sync` · 전부 다시: `python3 tools/drive_library_sync.py --force`
-- 자동: launchd `kr.patientfunnel.connect-library-sync` 가 3시간마다 `tools/library-sync.sh` 실행. 로그 `~/Library/Logs/connect-library-sync.log`, 보고서 `~/pflive/patient-experience-2026/runtime/connect-library-sync-report.md`, 상태 `tools/library-state.json`(커밋).
+- 자동: Claude 데스크톱 앱 예약작업 `connect-library-sync`(매일 09·13·17·21시)가 `tools/library-sync.sh` 를 실행하고 결과를 보고한다. launchd 는 `~/Library/CloudStorage` TCC 때문에 무인 접근이 막혀(PermissionError) 9/23 에 제거했다. 앱이 꺼져 있으면 다음 실행 때 돈다. 보고서 `~/pflive/patient-experience-2026/runtime/connect-library-sync-report.md`, 상태 `tools/library-state.json`(커밋).
 - 새 주제 폴더가 올라오면 다음 실행에서 자동 추가된다. 판별이 이상하면 overrides 에 `title/kind/category/body/mode/skip` 을 넣는다. 진행본만 있는 주제는 `skip: true`(SUR-005).
 
 ## 진료과 매칭
