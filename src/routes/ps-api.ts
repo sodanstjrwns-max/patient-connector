@@ -72,6 +72,21 @@ psApi.post('/ops/library-sync', async (c) => {
   return c.json({ ok: true, upserted: items.length, removed, propagated })
 })
 
+// 운영: 파일 반입함. 브라우저 세션에서 가져온 자료를 R2 inbox/ 에 넣는다(Bearer PS_SERVICE_KEY). 운영자가 wrangler 로 꺼내 쓴다.
+psApi.post('/ops/inbox', async (c) => {
+  const key = c.env.PS_SERVICE_KEY
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+  if (!key || !token || !timingSafeEqualStr(token, key)) return err(c, 401, 'unauthorized', '유효하지 않은 서비스 키')
+  const name = (c.req.query('name') || '').replace(/[^A-Za-z0-9._\-가-힣ㆍ() ]/g, '_').slice(0, 120)
+  if (!name) return err(c, 400, 'invalid_name', 'name 이 필요합니다')
+  const body = await c.req.arrayBuffer()
+  if (!body.byteLength || body.byteLength > 60 * 1024 * 1024) return err(c, 400, 'invalid_size', '1B~60MB')
+  const r2key = `inbox/${Date.now()}-${name}`
+  await (c.env as any).MEDIA.put(r2key, body, { httpMetadata: { contentType: c.req.header('Content-Type') || 'application/octet-stream' } })
+  return c.json({ ok: true, key: r2key, bytes: body.byteLength })
+})
+
 psApi.use('/*', async (c, next) => {
   const key = c.env.PS_SERVICE_KEY
   if (!key) return err(c, 500, 'not_configured', 'PS_SERVICE_KEY가 설정되지 않았습니다')
