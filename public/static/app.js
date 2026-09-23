@@ -2,11 +2,13 @@
 (function () {
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const KIND = { explain: '진료설명', disease: '질환설명', cost: '비용설명', before_after: '비포애프터', notice: '주의사항' };
-  const LIBRARY_KINDS = ['explain', 'disease', 'notice', 'cost', 'before_after'];
-  // Legacy precautions remain visible under treatment explanations without rewriting stored snapshots.
-  const groupKind = (kind) => kind === 'notice' ? 'explain' : kind;
-  const KIND_COLOR = { explain: 'bg-sky-100 text-sky-800', disease: 'bg-emerald-100 text-emerald-800', before_after: 'bg-violet-100 text-violet-800', cost: 'bg-amber-100 text-amber-800', notice: 'bg-rose-100 text-rose-800' };
+  // 【2026-09-23 원장】자료 종류는 넷: 설명자료(진료·질환 설명 모두) · 주의사항 · 비포애프터 · 비용설명. 저장된 kind(explain/disease)는 그대로 두고 화면에서만 묶는다.
+  const KIND = { explain: '설명자료', disease: '설명자료', cost: '비용설명', before_after: '비포애프터', notice: '주의사항' };
+  const KIND_DESC = { explain: '치료 과정·질환 이해를 돕는 영상·이미지·글', notice: '치료 전후 관리와 생활 주의사항', before_after: '우리 병원 치료 전·후 사진 (병원 내 설명용, 외부 전송은 확인 후)', cost: '치료 항목별 비용 안내표' };
+  const LIBRARY_KINDS = ['explain', 'notice', 'before_after', 'cost'];
+  const groupKind = (kind) => kind === 'disease' ? 'explain' : kind;
+  const KIND_COLOR = { explain: 'bg-sky-100 text-sky-800', disease: 'bg-sky-100 text-sky-800', before_after: 'bg-violet-100 text-violet-800', cost: 'bg-amber-100 text-amber-800', notice: 'bg-rose-100 text-rose-800' };
+  const KIND_ICON = { explain: 'fa-circle-play', notice: 'fa-triangle-exclamation', before_after: 'fa-images', cost: 'fa-won-sign' };
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
   const state = { me: null, patient: null, materials: [], hidden: [], today: [], tab: 'library', dispatches: [], stats: null, library: { categories: {}, library_count: 0, imported_count: 0, locked_count: 0, library_notice: '' }, filter: '', kindFilter: '', mediaFilter: '', categoryFilter: '', editing: null, present: null, sets: [], scope: '', overview: true };
   const app = $('#app');
@@ -117,7 +119,7 @@
   const categoryAliases = { '보철치료':'보철·틀니', '치아상실':'보철·틀니', '충치치료':'충치·신경치료', '충치':'충치·신경치료', '신경치료':'충치·신경치료', '치수·치근단 질환':'충치·신경치료', '치아균열·파절':'충치·신경치료', '잇몸질환':'잇몸치료', '부정교합':'치아교정', '사랑니·매복치':'사랑니·발치', '턱관절치료':'턱관절', '턱관절질환':'턱관절', '구강점막질환':'구강점막', '치아변색':'심미치료', '예방·검진':'예방·구강관리' };
   const categoryOf = m => categoryAliases[m.category] || m.category || '기타 자료';
   const categoryList = () => [...clinicalCategories.map(([name])=>name), ...new Set(state.materials.map(categoryOf).filter(name=>!clinicalCategories.some(([n])=>n===name)))];
-  const kindMatches = (m, k) => !k || (k==='notice' ? m.kind==='notice' : groupKind(m.kind)===k);
+  const kindMatches = (m, k) => !k || groupKind(m.kind)===k;
   const secondsLabel = n => {const seconds=Math.round(n);return Number.isFinite(seconds)&&seconds>0?`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`:'영상'};
   const coverHtml = (im, title) => isVideo(im)
     ? `${im.poster_key ? `<img src="${imgUrl(im.poster_key)}" alt="${esc(title)} 영상 장면" loading="lazy" class="video-poster">` : `<video src="${imgUrl(im.key)}#t=0.1" muted playsinline preload="metadata" aria-hidden="true" tabindex="-1"></video>`}<span class="video-play-badge" aria-hidden="true"><i class="fa-solid fa-play"></i></span><span class="video-duration">${secondsLabel(im.duration_seconds)}</span>`
@@ -125,7 +127,7 @@
   function materialCard(m, extra) {
     const im=m.images[0];
     const img = im ? `<button class="media-card-cover" data-preview="${m.id}" aria-label="${esc(m.title)} 크게 보기">${coverHtml(im,m.title)}${!isVideo(im)?'<span class="media-cover-label">이미지 <i class="fa-solid fa-expand"></i></span>':''}</button>` : `<button data-preview="${m.id}" class="empty-media-cover" aria-label="${esc(m.title)} 설명 보기"><i class="fa-regular fa-file-lines"></i><span>글·비용 안내</span></button>`;
-    const label=m.kind==='notice'?'관리·주의사항':m.kind==='disease'?'질환 이해':KIND[m.kind];
+    const label=KIND[m.kind];
     return `<div class="material-card bg-white rounded-xl border shadow-sm flex flex-col fade-in">
       ${img}
       <div class="p-3 flex-1">
@@ -148,17 +150,18 @@
     main.innerHTML=`
       <div class="library-heading">${home?'<a class="library-back" href="https://hub.patientfunnel.kr/">← 허브로</a>':'<button id="library-back" class="library-back">← 카테고리로</button>'}<h2>${home?'진료별 설명자료':esc(state.categoryFilter||'전체 설명자료')} <span>${home?state.materials.length:list.length}개</span></h2></div>
       <div class="library-toolbar"><input id="q" value="${esc(state.filter)}" aria-label="자료 검색" placeholder="제목·진료 항목·내용 검색"><button id="new" class="primary-action"><i class="fa-solid fa-plus"></i> 자료 등록</button><button id="library-refresh" title="Patient Connect 영상 라이브러리에서 빠진 자료를 채우고, 수정하지 않은 자료를 최신으로 맞춥니다"><i class="fa-solid fa-rotate"></i> 라이브러리 새로고침</button></div>
-      ${home?`<div class="category-intro"><p>설명할 진료를 먼저 고르세요.</p><button id="browse-all">전체 자료 보기 →</button></div><div class="clinical-category-grid">${groups.map(g=>{
+      ${home?`<div class="kind-grid">${LIBRARY_KINDS.map(k=>{const n=state.materials.filter(m=>kindMatches(m,k)).length;return `<div class="kind-card"><button class="kind-open" data-kind-open="${k}"><i class="fa-solid ${KIND_ICON[k]}"></i><strong>${KIND[k]} <span>${n}개</span></strong><small>${esc(KIND_DESC[k])}</small></button><button class="kind-add" data-kind-add="${k}" title="${KIND[k]} 등록"><i class="fa-solid fa-plus"></i> 등록</button></div>`}).join('')}</div>
+      <div class="category-intro"><p>설명할 진료를 먼저 고르세요.</p><button id="browse-all">전체 자료 보기 →</button></div><div class="clinical-category-grid">${groups.map(g=>{
         const cover=g.items.find(m=>m.images.some(im=>im.poster_key)) || g.items.find(m=>m.images.length);
         const im=cover?.images.find(im=>im.poster_key)||cover?.images[0];
         const videos=g.items.filter(m=>m.images.some(isVideo)).length, imgs=g.items.filter(m=>m.images.length&&!m.images.some(isVideo)).length, texts=g.items.length-videos-imgs;
         return `<button class="clinical-category-card" data-category-open="${esc(g.name)}"><span class="category-cover">${im?coverHtml(im,g.name):'<i class="fa-regular fa-file-lines"></i>'}<span class="category-count">${g.items.length}개</span></span><span class="category-copy"><strong>${esc(g.name)} <i class="fa-solid fa-arrow-right"></i></strong><span>${esc(g.description)}</span><small>${[videos?`영상 ${videos}`:'',imgs?`이미지 ${imgs}`:'',texts?`글 ${texts}`:''].filter(Boolean).join(' · ')||'설명자료'}</small></span></button>`;
       }).join('')}</div>`:`
       <nav class="material-kind-tabs" aria-label="자료 형식">${[['','전체 형식','fa-layer-group'],['video','영상','fa-play'],['image','이미지','fa-image']].map(([t,label,icon])=>`<button data-media-filter="${t}" aria-pressed="${state.mediaFilter===t}"><i class="fa-solid ${icon} mr-1"></i>${label}<span>${countMedia(t)}</span></button>`).join('')}</nav>
-      <nav class="material-kind-tabs" aria-label="자료 유형">${[['','전체'],...LIBRARY_KINDS.map(k=>[k,k==='notice'?'관리·주의사항':KIND[k]])].map(([k,label])=>`<button data-kind-filter="${k}" aria-pressed="${state.kindFilter===k}">${label}<span>${countKind(k)}</span></button>`).join('')}</nav>
+      <nav class="material-kind-tabs" aria-label="자료 종류">${[['','전체'],...LIBRARY_KINDS.map(k=>[k,KIND[k]])].map(([k,label])=>`<button data-kind-filter="${k}" aria-pressed="${state.kindFilter===k}">${label}<span>${countKind(k)}</span></button>`).join('')}</nav>
       <div class="material-category-filters" aria-label="진료 카테고리"><button data-cat="" aria-pressed="${!state.categoryFilter}">전체 카테고리</button>${cats.map(c=>`<button data-cat="${esc(c)}" aria-pressed="${state.categoryFilter===c}">${esc(c)}<small>${state.materials.filter(m=>kindMatches(m,state.kindFilter)&&categoryOf(m)===c).length}</small></button>`).join('')}</div>
-      <p id="material-result-count" class="text-xs text-slate-500 mb-4" aria-live="polite">${state.mediaFilter?MEDIA[state.mediaFilter]+' · ':''}${state.kindFilter==='notice'?'관리·주의사항':state.kindFilter?KIND[state.kindFilter]:'전체 자료'} · ${list.length}개${state.kindFilter==='explain'?' · 관리·주의사항 포함':''}</p>
-      ${list.length?`<div id="material-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(m=>materialCard(m,`<button data-add="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg ${state.today.includes(m.id)?'bg-sky-100 text-sky-800':'bg-slate-100 hover:bg-slate-200'}">${state.today.includes(m.id)?'✓ 오늘 설명에 담김':'+ 오늘 설명에 담기'}</button><button data-edit="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200" aria-label="${esc(m.title)} 수정"><i class="fa-solid fa-pen"></i></button><button data-hide="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200" title="이 병원 자료함에서 숨기기" aria-label="${esc(m.title)} 숨기기"><i class="fa-regular fa-eye-slash"></i></button>`)).join('')}</div>`:`<div class="library-empty"><p>선택한 조건에 맞는 자료가 없습니다</p><button id="reset-filters">필터 초기화</button></div>`}`}
+      <p id="material-result-count" class="text-xs text-slate-500 mb-4" aria-live="polite">${state.mediaFilter?MEDIA[state.mediaFilter]+' · ':''}${state.kindFilter?KIND[state.kindFilter]:'전체 자료'} · ${list.length}개</p>
+      ${list.length?`<div id="material-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(m=>materialCard(m,`<button data-add="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg ${state.today.includes(m.id)?'bg-sky-100 text-sky-800':'bg-slate-100 hover:bg-slate-200'}">${state.today.includes(m.id)?'✓ 오늘 설명에 담김':'+ 오늘 설명에 담기'}</button><button data-edit="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200" aria-label="${esc(m.title)} 수정"><i class="fa-solid fa-pen"></i></button><button data-hide="${m.id}" class="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200" title="이 병원 자료함에서 숨기기" aria-label="${esc(m.title)} 숨기기"><i class="fa-regular fa-eye-slash"></i></button>`)).join('')}</div>`:`<div class="library-empty">${state.kindFilter&&!q&&!state.mediaFilter&&!state.categoryFilter?`<p><b>${KIND[state.kindFilter]}</b> 자료가 아직 없습니다. ${esc(KIND_DESC[state.kindFilter])}${state.kindFilter==='explain'?'':' — 우리 병원 자료를 직접 등록하세요.'}</p><button id="empty-add" class="primary-action"><i class="fa-solid fa-plus"></i> ${KIND[state.kindFilter]} 등록</button>`:'<p>선택한 조건에 맞는 자료가 없습니다</p>'}<button id="reset-filters">필터 초기화</button></div>`}`}
       <details class="library-bundles"><summary>자주 쓰는 설명 묶음 <span>${state.sets.length}개</span></summary>${setsHtml()}</details>
       <details class="library-bundles" ${state.showHidden?'open':''}><summary>숨긴 자료 <span>${state.hidden.length}개</span></summary>${state.hidden.length?`<p class="text-xs text-slate-500 mb-3">숨긴 자료는 설명하기·보내기·안내장에 나오지 않습니다. 다시 보이게 하면 원래 자리로 돌아옵니다.</p><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${state.hidden.map(m=>materialCard(m,`<button data-show="${m.id}" class="flex-1 px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200"><i class="fa-regular fa-eye"></i> 다시 보이기</button>`)).join('')}</div>`:'<p class="text-xs text-slate-500">숨긴 자료가 없습니다. 자료 카드의 <i class="fa-regular fa-eye-slash"></i> 로 이 병원에서 안 쓰는 자료를 숨길 수 있습니다.</p>'}</details>`;
     bindSets(main);
@@ -166,6 +169,9 @@
     const back=$('#library-back');if(back)back.onclick=()=>{state.overview=true;state.filter='';state.kindFilter='';state.mediaFilter='';state.categoryFilter='';renderLibrary(main);scrollTo(0,0)};
     const all=$('#browse-all');if(all)all.onclick=()=>{state.overview=false;renderLibrary(main);scrollTo(0,0)};
     main.querySelectorAll('[data-category-open]').forEach(b=>b.onclick=()=>{state.categoryFilter=b.dataset.categoryOpen;state.kindFilter='';state.overview=false;renderLibrary(main);scrollTo(0,0)});
+    main.querySelectorAll('[data-kind-open]').forEach(b=>b.onclick=()=>{state.kindFilter=b.dataset.kindOpen;state.categoryFilter='';state.mediaFilter='';state.overview=false;renderLibrary(main);scrollTo(0,0)});
+    main.querySelectorAll('[data-kind-add]').forEach(b=>b.onclick=()=>openEditor({kind:b.dataset.kindAdd,category:'',title:'',body:'',images:[],cost:[]}));
+    const ea=$('#empty-add');if(ea)ea.onclick=()=>openEditor({kind:state.kindFilter,category:state.categoryFilter||'',title:'',body:'',images:[],cost:[]});
     main.querySelectorAll('[data-kind-filter]').forEach(b=>b.onclick=()=>{state.kindFilter=b.dataset.kindFilter;renderLibrary(main)});
     main.querySelectorAll('[data-media-filter]').forEach(b=>b.onclick=()=>{state.mediaFilter=b.dataset.mediaFilter;renderLibrary(main)});
     main.querySelectorAll('[data-cat]').forEach(b=>b.onclick=()=>{state.categoryFilter=b.dataset.cat;renderLibrary(main)});
