@@ -7,7 +7,7 @@
     "CAR-001_충치가_깊어지는_과정 → CAR-001_충치진행_HD.mp4",
     "v2_치수침범_근관감염_치근단병소 → CAR-001_v2_치수침범_치근단병소_HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:CAR-005": {
    "rev": "8363c218e22d",
@@ -15,7 +15,7 @@
    "units": [
     "최종 검토본_영상·전체에셋 → composite-restoration.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:CRK-001": {
    "rev": "2b72f6012b8f",
@@ -23,7 +23,7 @@
    "units": [
     "06_CRK-001_치아 미세금과 깊은 균열 → CRK-001_v2_수직치근파절추가_HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:CRN-001": {
    "rev": "5085adbc73bd",
@@ -31,7 +31,7 @@
    "units": [
     "03_CRN-001_자연치 크라운 치료 과정 → CRN-001_자연치_크라운_치료과정_35초.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:END-001": {
    "rev": "17a778c9cda6",
@@ -39,7 +39,7 @@
    "units": [
     "04_END-001_신경치료 전체 과정 → END-001_신경치료전체과정_38초_검토본.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:EXT-002": {
    "rev": "9f5cdac0d011",
@@ -47,7 +47,7 @@
    "units": [
     "EXT-002_매복 사랑니 발치 과정 → wisdom-tooth-extraction.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:GUM-002": {
    "rev": "3bee9cf6f6ac",
@@ -55,7 +55,7 @@
    "units": [
     "05_GUM-002_치주염 진행 과정 → GUM-002_v4_치아굽힘수정_HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:IMC-001": {
    "rev": "4de2de32a11b",
@@ -63,7 +63,7 @@
    "units": [
     "IMC-001_임플란트_점막염·주위염_영상·전체에셋 → peri-implant-disease.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:IMC-011": {
    "rev": "aa137f6a03ce",
@@ -71,7 +71,7 @@
    "units": [
     "v2_치아상실_빈자리로이동_보철후씹힘 → soft-tissue-biting.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:IMP-001": {
    "rev": "b877a2aef280",
@@ -79,7 +79,7 @@
    "units": [
     "01_승인 기준작_임플란트 구성요소 → IMP-001_임플란트_스크류와_시멘트_조립_v3.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:IMP-011": {
    "rev": "9dc65d2107ce",
@@ -87,16 +87,15 @@
    "units": [
     "IMP-011_임플란트_레진홀_입체구조·영상·전체에셋 → resin-access.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:PER-001": {
-   "rev": "8af130dbac27",
+   "rev": "344025c68414",
    "title": "스케일링 과정",
    "units": [
-    "PER-001_스케일링 과정_영상·전체에셋 → PER-001_스케일링_35초_HD.mp4",
-    "PER-001_v2_스케일링·블랙트라이앵글_영상·전체에셋 → PER-001_v2_치석제거와_블랙트라이앵글_HD.mp4"
+    "PER-001_v3_스케일링_치석제거와블랙트라이앵글 → PER-001_v3_스케일링_치석조각과블랙트라이앵글_HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:PUL-001": {
    "rev": "8f939b5782ad",
@@ -104,7 +103,7 @@
    "units": [
     "07_PUL-001_여러자극과치수염진행 → PUL-001_v4_충혈압박_치수조직손상_전체HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:SUR-001": {
    "rev": "43f2b220202a",
@@ -112,7 +111,7 @@
    "units": [
     "SUR-001_임플란트_치료_전체_과정 → SUR-001_임플란트_치료과정_HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:SUR-008": {
    "rev": "f35dc5401a90",
@@ -120,23 +119,55 @@
    "units": [
     "SUR-008_임플란트_2차수술_커버스크류_힐링어버트먼트 → SUR-008_임플란트2차수술_HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:SUR-006": {
-   "rev": "b3f193cd28a1",
+   "rev": "e9371c698a41",
    "title": "상악동 거상술: 측방 접근(라테랄)",
    "units": [
-    "SUR-006_라테랄_상악동거상술 → SUR-006_상악동거상술_라테랄_사람위턱수정본_HD.mp4"
+    "v5_라테랄_외형과_내부절개뷰 → SUR-006_v5_라테랄_외형과내부절개뷰_HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
   },
   "drive:SUR-011": {
-   "rev": "5516b8850e26",
+   "rev": "aac2f906a97c",
    "title": "상악동 거상술: 치조정 접근(뼈이식재 없이)",
    "units": [
-    "SUR-011_크레스탈_뼈이식재없음 → SUR-011_상악동거상술_크레스탈_무이식_HD.mp4"
+    "v2_낮은잔존골과_거상하는이유 → SUR-011_크레스탈_왜거상할까요_v2_HD.mp4"
    ],
-   "at": "2026-09-22T11:25:13"
+   "at": "2026-09-23T10:58:09"
+  },
+  "drive:CRN-008": {
+   "rev": "5919768817eb",
+   "title": "보철 장착 후 확인할 3가지",
+   "units": [
+    "CRN-008 보철 장착 후 확인할 3가지 · 2026-09-23 → CRN-008_prosthesis-checks.mp4"
+   ],
+   "at": "2026-09-23T10:58:09"
+  },
+  "drive:CRN-009": {
+   "rev": "6e6d32166bf7",
+   "title": "브릿지가 빈자리를 잇는 구조",
+   "units": [
+    "v2_양옆치아삭제부터_최신검토본 → CRN-009_v2_브릿지_양옆치아삭제부터_HD.mp4"
+   ],
+   "at": "2026-09-23T10:58:09"
+  },
+  "drive:IMC-003": {
+   "rev": "c592015054fd",
+   "title": "임플란트 나사 풀림과 재체결",
+   "units": [
+    "IMC-003 임플란트 나사 풀림과 재체결 · 2026-09-23 → IMC-003_screw-loosening.mp4"
+   ],
+   "at": "2026-09-23T10:58:09"
+  },
+  "drive:IMC-012": {
+   "rev": "70ba8f9fd558",
+   "title": "풀린 임플란트를 계속 쓰면 생기는 손상과 재수술",
+   "units": [
+    "IMC-012 풀린 임플란트 계속 사용 시 손상과 재수술 · 2026-09-23 → loose-implant-damage.mp4"
+   ],
+   "at": "2026-09-23T10:58:09"
   }
  },
  "uploaded": [
@@ -150,6 +181,12 @@
   "library/CRK-001/983d4e39d6e8.jpg",
   "library/CRN-001/1b8524a7ec34.mp4",
   "library/CRN-001/7fc4053d20fd.jpg",
+  "library/CRN-008/94b94e0fa5c7.mp4",
+  "library/CRN-008/9a6a94ae4773.jpg",
+  "library/CRN-009/123dcde83534.jpg",
+  "library/CRN-009/24cae4b2113d.mp4",
+  "library/DEN-001/1fb232fd98e4.jpg",
+  "library/DEN-001/f77f6e3b4f69.mp4",
   "library/END-001/1a85ea598b45.mp4",
   "library/END-001/dbd84859942a.jpg",
   "library/EXT-002/130ab2612715.jpg",
@@ -158,8 +195,12 @@
   "library/GUM-002/6321c61d6801.jpg",
   "library/IMC-001/834a9b2cadd8.mp4",
   "library/IMC-001/898dd5237823.jpg",
+  "library/IMC-003/e3bf68a020b5.jpg",
+  "library/IMC-003/e815f33f71ac.mp4",
   "library/IMC-011/4f9679f82157.jpg",
   "library/IMC-011/7c8bd791aa16.mp4",
+  "library/IMC-012/c363e3257c0e.jpg",
+  "library/IMC-012/f745295a7c2b.mp4",
   "library/IMP-001/08c8e315f50f.jpg",
   "library/IMP-001/1af58115a368.mp4",
   "library/IMP-011/c1830fdd7116.mp4",
@@ -167,17 +208,23 @@
   "library/PER-001/0f124be42e75.mp4",
   "library/PER-001/26e5982bedf5.jpg",
   "library/PER-001/3c0f70316949.mp4",
+  "library/PER-001/4bf68d619055.jpg",
   "library/PER-001/b34c7f49a99a.jpg",
+  "library/PER-001/ba1053104dbd.mp4",
   "library/PUL-001/bad25f933a19.mp4",
   "library/PUL-001/d36793260e88.jpg",
   "library/SUR-001/40ebf70cc5d9.mp4",
   "library/SUR-001/df26295139ad.jpg",
   "library/SUR-006/3e6be85cba18.mp4",
   "library/SUR-006/7208f3a7e580.jpg",
+  "library/SUR-006/9c6b0199ae7e.mp4",
+  "library/SUR-006/c11e778c463e.jpg",
   "library/SUR-008/89ca57b1c964.jpg",
   "library/SUR-008/bc6808fd96a5.mp4",
+  "library/SUR-011/1c3957786191.mp4",
+  "library/SUR-011/1ee582c613b2.jpg",
   "library/SUR-011/1f0e63bacd81.jpg",
   "library/SUR-011/3aefc2f907ae.mp4"
  ],
- "last_run": "2026-09-22T11:25:13"
+ "last_run": "2026-09-23T10:58:09"
 }

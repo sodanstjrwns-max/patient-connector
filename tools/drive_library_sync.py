@@ -26,7 +26,7 @@ API = os.environ.get('CONNECT_API_URL', 'https://connect.patientfunnel.kr') + '/
 KEY_FILE = os.path.expanduser('~/.ps-keys/connect.key')
 ID_RE = re.compile(r'([A-Z]{3}-\d{3})')
 EXCLUDE_VIDEO = re.compile(r'4K|4k|미채택|초안|개별검토|강조본|수술과정만|surgery-only|진행본|봉합미포함|partial|WIP|candidate|rejected|preview', re.I)
-SKIP_UNIT = re.compile(r'진행본|WIP|제작중|미채택|구버전|pilot|원본과 작업기록', re.I)
+SKIP_UNIT = re.compile(r'진행본|WIP|제작중|미채택|구버전|pilot|원본과 작업기록|사용 ?제외|탈락|사용 ?중단|인포그래픽', re.I)
 SKIP_SUBDIR = {'images', 'videos', 'requests', 'qa', 'renders', 'archives-final', 'restored', 'captions', 'mattes', 'stage-01', 'stage-02', 'stage-03', 'stage-04'}
 POSTER_RE = re.compile(r'미리보기|preview|썸네일|대표이미지', re.I)
 FIELD_CATEGORY = {'기초 해부': '예방·구강관리', '검사·진단': '진료 전·후 안내', '충치·수복': '충치·신경치료', '크라운·브릿지': '보철·틀니', '신경치료': '충치·신경치료', '균열·외상': '충치·신경치료', '잇몸질환': '잇몸치료', '잇몸치료': '잇몸치료', '임플란트 구조·보철': '임플란트', '임플란트 수술': '임플란트', '임플란트 유지관리': '임플란트', '발치·구강외과': '사랑니·발치', '틀니': '보철·틀니', '교정': '치아교정', '소아치과': '소아치과', '예방·생활 관리': '예방·구강관리', '턱관절·치아 마모': '턱관절', '심미치료': '심미치료', '구강질환·진료 안내': '구강점막'}
@@ -97,6 +97,13 @@ def parse_srt(path):
             cues.append(lines)
     return cues
 
+def folder_title(name):
+    """주제 폴더명 → 제목 후보: 앞 번호·[표시]·ID·날짜·버전·'영상·전체에셋' 제거."""
+    t = nfc(name)
+    for pat in (r'^\[[^\]]*\]\s*', r'^\d+_', r'[A-Z]{3}-\d{3}[_ ]?', r'\s*·\s*\d{4}-\d{2}-\d{2}\s*$', r'_\d{4}-\d{2}-\d{2}$', r'(^|_)v\d+_?', r'_?영상·전체에셋', r'·전체에셋', r'_영상$'):
+        t = re.sub(pat, '', t)
+    return t.replace('_', ' ').strip(' ·') or nfc(name)
+
 def unit_label(label):
     """폴더명 → 사람이 읽는 짧은 라벨: 번호·ID·버전·'영상·전체에셋' 제거."""
     t = label
@@ -112,7 +119,8 @@ def cues_to_lines(cues):
             continue
         prev = lines
         first = lines[0]
-        if len(lines) >= 2 and not re.search(r'[.!?。]$', first):
+        fragment = re.search(r'[.!?。]$', first) or (len(lines) == 2 and (len(first) > 16 or re.search(r'(을|를|이|가|은|는|에|와|과|고|아|어|면|서|도|로|의)$', first)))
+        if len(lines) >= 2 and not fragment:
             out.append(f"- {first}: {' '.join(lines[1:])}")
         else:
             out.append(f"- {' '.join(lines)}")
@@ -172,7 +180,7 @@ def unit_from_dir(d, topic_hint=None):
         topic = topic_hint
     elif ids:
         topic = sorted(ids)[0]
-    return {'dir': d, 'label': base, 'topic': topic, 'video': vpath, 'video_name': vname, 'mtime': os.stat(vpath).st_mtime,
+    return {'dir': d, 'label': base, 'top': nfc(os.path.basename(os.path.relpath(d, ROOT).split(os.sep)[0])), 'topic': topic, 'video': vpath, 'video_name': vname, 'mtime': os.stat(vpath).st_mtime,
             'poster': poster, 'srt': srt, 'script': script, 'entry': entry, 'final': '최종' in base}
 
 def scan():
@@ -229,7 +237,7 @@ def build(units, cat, ov):
                     entry = json.load(open(u['entry'], encoding='utf-8')); break
                 except Exception:
                     pass
-        title = o.get('title') or entry.get('title') or row.get('title') or re.sub(r'^\d+_|_영상.*$|·전체에셋|_\d{4}-\d{2}-\d{2}$', '', chosen[-1]['label']).replace('_', ' ').strip()
+        title = o.get('title') or entry.get('title') or row.get('title') or folder_title(chosen[-1]['top'])
         field = row.get('field') or entry.get('category') or ''
         category = o.get('category') or FIELD_CATEGORY.get(field) or PREFIX_CATEGORY.get(topic[:3], '기타 자료')
         typ = row.get('type') or entry.get('purpose') or ''

@@ -418,7 +418,7 @@
           <button id="pv" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i> 이전</button>
           <span class="text-slate-400 text-sm">${i + 1} / ${list.length}</span>
           <button id="nx" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === list.length - 1 ? 'disabled' : ''}>다음 <i class="fa-solid fa-chevron-right"></i></button>
-          <span class="present-tools"><button id="qr" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" title="환자분 폰으로 이 안내장 열기 (QR)"><i class="fa-solid fa-qrcode"></i> QR</button>${m.images.some(im=>!isVideo(im))?`<button id="zoom" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" title="사진 확대 (핀치·휠)"><i class="fa-solid fa-magnifying-glass-plus"></i> 확대</button>`:''}${m.kind==='before_after'&&m.images.length===2?`<button id="ba-slider" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.baSlider}"><i class="fa-solid fa-sliders"></i> 전후 슬라이더</button>`:''}${/\S/.test(m.body||'')?`<button id="point" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.pointMode}" title="항목을 하나씩 짚어가며 보여줍니다 (↓·Space 다음, ↑ 이전)"><i class="fa-solid fa-hand-pointer"></i> 포인트</button>`:''}</span>
+          <span class="present-tools"><button id="kt" class="px-3 py-2 rounded-lg text-sm font-semibold" style="background:#facc15;color:#0f172a" title="지금 설명한 자료를 환자분 카카오톡으로 보내기"><i class="fa-solid fa-comment"></i> 카카오톡 보내기</button><button id="qr" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" title="환자분 폰으로 이 안내장 열기 (QR)"><i class="fa-solid fa-qrcode"></i> QR</button>${m.images.some(im=>!isVideo(im))?`<button id="zoom" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" title="사진 확대 (핀치·휠)"><i class="fa-solid fa-magnifying-glass-plus"></i> 확대</button>`:''}${m.kind==='before_after'&&m.images.length===2?`<button id="ba-slider" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.baSlider}"><i class="fa-solid fa-sliders"></i> 전후 슬라이더</button>`:''}${/\S/.test(m.body||'')?`<button id="point" class="px-3 py-2 rounded-lg bg-slate-800 text-sm" aria-pressed="${!!state.pointMode}" title="항목을 하나씩 짚어가며 보여줍니다 (↓·Space 다음, ↑ 이전)"><i class="fa-solid fa-hand-pointer"></i> 포인트</button>`:''}</span>
           <button id="fs" class="ml-auto px-3 py-2 rounded-lg bg-slate-800 text-sm"><i class="fa-solid fa-expand"></i></button>
           <button id="ex" class="px-4 py-2 rounded-lg bg-sky-600 text-sm font-semibold">설명 끝 · 보내기</button>
           <button id="cl" class="px-3 py-2 rounded-lg bg-slate-800 text-sm">닫기</button>
@@ -427,6 +427,7 @@
       if (state.baSlider && m.kind==='before_after' && m.images.length===2) { $('.stage', box).innerHTML = `<div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${baSliderHtml(m)}</div>`; bindBaSlider(box); annotationView = null; }
       else annotationView = window.PCAnnotations.mount(box, m, annotationApi);
       applyPointMode(box);
+      const kb = $('#kt', box); if (kb) kb.onclick = () => { box.querySelectorAll('video').forEach(v => v.pause()); presentSend(list, box, async () => { await annotationView?.flush(); }); };
       const qb = $('#qr', box); if (qb) qb.onclick = async () => { try { await annotationView?.flush(); } catch (e) { toast(e.message, false); return; } showQr(list, state.scope || '', box); };
       const zb = $('#zoom', box); if (zb) zb.onclick = () => { const srcs = m.images.filter(im => !isVideo(im)).map(im => imgUrl(im.key)); openLightbox(srcs, 0); };
       const bs = $('#ba-slider', box); if (bs) bs.onclick = async () => { try { await annotationView?.flush(); } catch (e) { toast(e.message, false); return; } state.baSlider = !state.baSlider; draw(); };
@@ -443,7 +444,7 @@
       catch (e) { toast(e.message, false); }
       finally { navigating = false; }
     };
-    const key = e => { if (e.target.closest('.annotation-toolbar') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (document.querySelector('.pc-lightbox') || document.querySelector('.pc-qr-overlay')) return; if (state.pointMode && (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'ArrowUp')) { e.preventDefault(); stepPoint(box, e.key === 'ArrowUp' ? -1 : 1); return; } if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); else if (e.key === 'Escape') close(); };
+    const key = e => { if (e.target.closest('.annotation-toolbar') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (document.querySelector('.pc-lightbox') || document.querySelector('.pc-qr-overlay') || document.querySelector('#present-send') || document.querySelector('#dispatch-preview')) return; if (state.pointMode && (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'ArrowUp')) { e.preventDefault(); stepPoint(box, e.key === 'ArrowUp' ? -1 : 1); return; } if (e.key === 'ArrowRight') move(1); else if (e.key === 'ArrowLeft') move(-1); else if (e.key === 'Escape') close(); };
     const close = async (send = false) => {
       if (navigating) return; navigating = true;
       try { await annotationView?.flush(); box.querySelectorAll('video').forEach(v => v.pause()); document.removeEventListener('keydown', key); if (document.fullscreenElement) await document.exitFullscreen(); box.remove(); if(!send){scrollTo(0,returnScroll);returnFocus?.focus({preventScroll:true});} if (send) { state.today = list.map(m => m.id); saveToday(); state.tab = 'send'; render(); } }
@@ -451,6 +452,73 @@
       finally { navigating = false; }
     };
     document.addEventListener('keydown', key); draw();
+  }
+
+  // ─── 발송 공통 흐름 ── 미리보기 → 최종 확인 → 발송. 보내기 탭과 설명 화면이 같이 쓴다. 취소하면 null, 성공하면 결과.
+  // opts: {ids, channel:'alimtalk'|'link', includeAnnotations, phone, checkin:{id,name,last4}|null, label}
+  async function dispatchFlow(opts){
+    const {ids,channel,includeAnnotations,phone,checkin,label}=opts;
+    if(includeAnnotations&&!state.scope)throw new Error('설명하기에서 이번 설명을 시작한 뒤 필기를 선택하세요.');
+    if(includeAnnotations)await PCAnnotations.flush(ids);
+    const payload={material_ids:ids,phone:checkin?'':(phone||''),checkin_id:checkin?checkin.id:undefined,label:label||'',channel,include_annotations:!!includeAnnotations,annotation_scope:state.scope};
+    const preview=await api('/dispatches/preview',{method:'POST',body:JSON.stringify(payload)});
+    payload.preview_hash=preview.preview_hash;payload.request_key=crypto.randomUUID();payload.confirmed=true;
+    return new Promise(resolve=>{
+      const dialog=document.createElement('dialog');dialog.id='dispatch-preview';dialog.className='safety-dialog handout-preview';
+      dialog.innerHTML=`<header><h2>환자에게 전달될 안내장</h2><p>${channel==='link'?'링크 직접 전달':'카카오 수신번호: '+(checkin?esc(checkin.name)+'님 (접수 번호 ****-'+esc(checkin.last4)+')':esc(payload.phone))} · ${includeAnnotations?'현재 설명 필기 포함':'원본 자료만'}</p><p>아직 발행·발송되지 않았습니다. 자료·순서·비용·필기와 수신번호를 확인하세요.</p></header><div class="preview-content">${PCGuide.render(preview)}</div><footer><label><input id="preview-confirmed" type="checkbox">내용·수신 대상·전송 권한을 확인했고, 필기에 다른 환자의 개인정보가 없습니다.</label><p id="preview-error" role="status"></p><button id="preview-cancel">돌아가서 수정</button><button id="preview-send" class="primary-action">${channel==='link'?'확인 · 링크 만들기':'확인 · 카카오톡 발송'}</button></footer>`;
+      document.body.append(dialog);dialog.showModal();let sending=false,ambiguous=false,result=null;
+      dialog.addEventListener('cancel',e=>{if(sending||ambiguous)e.preventDefault()});
+      dialog.addEventListener('close',()=>{dialog.remove();resolve(result)});
+      $('#preview-cancel',dialog).onclick=()=>{if(!sending&&!ambiguous)dialog.close()};
+      $('#preview-send',dialog).onclick=async()=>{
+        if(sending)return;if(!$('#preview-confirmed',dialog).checked){$('#preview-error',dialog).textContent='최종 확인란을 체크해 주세요.';return}
+        sending=true;$('#preview-send',dialog).disabled=true;$('#preview-cancel',dialog).disabled=true;
+        try{
+          result=await api('/dispatches',{method:'POST',body:JSON.stringify(payload)});
+          ambiguous=false;dialog.close();
+        }catch(e){
+          ambiguous=!e.status||e.status>=500;
+          $('#preview-error',dialog).textContent=e.message+(ambiguous?' 같은 요청으로 결과를 다시 확인하세요. 새 발송은 만들지 않습니다.':'');
+          $('#preview-send',dialog).textContent=ambiguous?'같은 요청 결과 다시 확인':'확인 후 다시 시도';
+        }finally{sending=false;if(dialog.isConnected){$('#preview-send',dialog).disabled=false;$('#preview-cancel',dialog).disabled=ambiguous}}
+      };
+    });
+  }
+  // 【2026-09-23】설명 화면에서 바로 카카오톡 보내기 — 지금 환자가 있으면 그 분께, 없으면 이름·번호 입력. 설명 목록 전체를 보낸다.
+  function presentSend(list, box, flushAnnotations){
+    if(document.querySelector('#present-send'))return;
+    if(!state.me.alimtalk_ready){toast('카카오 알림톡 설정이 아직 완료되지 않았습니다. 보내기 탭에서 링크로 전달하세요.',false);return}
+    const p=state.patient;
+    const dialog=document.createElement('dialog');dialog.id='present-send';dialog.className='safety-dialog';
+    dialog.innerHTML=`<h2><i class="fa-solid fa-comment text-yellow-500"></i> 지금 설명한 자료를 카카오톡으로</h2>
+      <p>${list.length}개 자료가 안내장 하나로 묶여 환자분 카카오톡에 <b>[${esc(state.me.hospital.name)} 진료 안내]</b>로 도착합니다.</p>
+      <ol class="text-sm text-slate-600 my-3 space-y-1">${list.map((m,i)=>`<li>${i+1}. ${esc(m.title)}</li>`).join('')}</ol>
+      ${p?`<div class="pc-patient on"><i class="fa-solid fa-user-check"></i><div class="flex-1 min-w-0"><b>${esc(p.name)}님</b><span class="text-slate-500 text-xs ml-2">${p.checkin_id?'오늘 접수 · ':'직접 입력 · '}${p.last4?'****-'+esc(p.last4):'번호 없음'}</span></div><button type="button" id="ps-change" class="text-xs text-sky-700 font-semibold">다른 환자</button></div>`
+        :`<div class="flex flex-wrap gap-2"><input id="ps-name" maxlength="20" placeholder="환자 이름" class="border rounded-lg px-3 py-2 text-sm w-32"><input id="ps-phone" inputmode="numeric" placeholder="010-0000-0000" class="border rounded-lg px-3 py-2 text-sm flex-1 tracking-wider"></div><p class="text-xs text-slate-500 mt-1">환자분께 번호 수집·발송 동의를 받으셨는지 확인하세요.</p>`}
+      <label class="annotation-send-option mt-3"><input id="ps-ann" type="checkbox">이번 설명의 필기 포함</label>
+      <p id="ps-error" role="status" class="text-rose-600 text-sm"></p>
+      <button id="ps-go" class="primary-action" style="background:#facc15;color:#0f172a"><i class="fa-solid fa-comment mr-1"></i>카카오톡 발송 전 확인</button><button id="ps-cancel">계속 설명하기</button>`;
+    document.body.append(dialog);dialog.showModal();dialog.addEventListener('close',()=>dialog.remove());
+    $('#ps-cancel',dialog).onclick=()=>dialog.close();
+    const ch=$('#ps-change',dialog);if(ch)ch.onclick=()=>{state.patient=null;savePatient();dialog.close();presentSend(list,box,flushAnnotations)};
+    let busy=false;
+    $('#ps-go',dialog).onclick=async()=>{
+      if(busy)return;busy=true;$('#ps-go',dialog).disabled=true;
+      try{
+        let checkin=null,phone='',label='';
+        if(state.patient){checkin=state.patient.checkin_id?{id:state.patient.checkin_id,name:state.patient.name,last4:state.patient.last4}:null;phone=state.patient.phone||'';label=state.patient.name+'님'}
+        else{const name=($('#ps-name',dialog).value||'').trim();const digits=($('#ps-phone',dialog).value||'').replace(/\D/g,'');if(!/^01\d{8,9}$/.test(digits))throw new Error('휴대전화 번호를 확인하세요');phone=digits;label=name?name+'님':'';if(name){state.patient={name,phone:digits,last4:digits.slice(-4)};savePatient()}}
+        try{await flushAnnotations()}catch(e){throw new Error('필기 저장 실패: '+e.message)}
+        const r=await dispatchFlow({ids:list.map(m=>m.id),channel:'alimtalk',includeAnnotations:$('#ps-ann',dialog).checked,phone,checkin,label});
+        if(!r)return;
+        dialog.close();
+        const ok=['sent','accepted','delivered'].includes(r.status);
+        if(ok){state.patient=null;savePatient();const h=box.querySelector('.present-patient');if(h)h.remove();}
+        toast(ok?(r.status==='delivered'?'환자에게 전달 완료가 확인되었습니다.':'카카오톡 발송 요청이 접수되었습니다. 전달 여부는 발송내역에서 확인하세요.'):'발송 실패: '+(r.error||'발송내역에서 확인하세요'),ok);
+        loadHistory();
+      }catch(e){$('#ps-error',dialog).textContent=e.message}
+      finally{busy=false;if(dialog.isConnected)$('#ps-go',dialog).disabled=false}
+    };
   }
 
   // ─── 보내기 ───
@@ -499,30 +567,10 @@
       $('#s-send').disabled=true;$('#s-link').disabled=true;
       try{
         const includeAnnotations=$('#s-annotations').checked;
-        if(includeAnnotations&&!state.scope)throw new Error('설명하기에서 이번 설명을 시작한 뒤 필기를 선택하세요.');
-        if(includeAnnotations)await PCAnnotations.flush(ids);
-        const payload={material_ids:ids,phone:picked?'':(($('#s-phone').value||'').trim()||(state.patient&&state.patient.phone)||''),checkin_id:picked?picked.id:undefined,label:$('#s-label').value,channel,include_annotations:includeAnnotations,annotation_scope:state.scope};
-        const preview=await api('/dispatches/preview',{method:'POST',body:JSON.stringify(payload)});
-        payload.preview_hash=preview.preview_hash;payload.request_key=crypto.randomUUID();payload.confirmed=true;
-        const dialog=document.createElement('dialog');dialog.id='dispatch-preview';dialog.className='safety-dialog handout-preview';
-        dialog.innerHTML=`<header><h2>환자에게 전달될 안내장</h2><p>${channel==='link'?'링크 직접 전달':'카카오 수신번호: '+(picked?esc(picked.name)+'님 (접수 번호 ****-'+esc(picked.last4)+')':esc(payload.phone))} · ${includeAnnotations?'현재 설명 필기 포함':'원본 자료만'}</p><p>아직 발행·발송되지 않았습니다. 자료·순서·비용·필기와 수신번호를 확인하세요.</p></header><div class="preview-content">${PCGuide.render(preview)}</div><footer><label><input id="preview-confirmed" type="checkbox">내용·수신 대상·전송 권한을 확인했고, 필기에 다른 환자의 개인정보가 없습니다.</label><p id="preview-error" role="status"></p><button id="preview-cancel">돌아가서 수정</button><button id="preview-send" class="primary-action">${channel==='link'?'확인 · 링크 만들기':'확인 · 카카오톡 발송'}</button></footer>`;
-        document.body.append(dialog);dialog.showModal();let sending=false,ambiguous=false;
-        dialog.addEventListener('cancel',e=>{if(sending||ambiguous)e.preventDefault()});
-        dialog.addEventListener('close',()=>dialog.remove());
-        $('#preview-cancel').onclick=()=>{if(!sending&&!ambiguous)dialog.close()};
-        $('#preview-send').onclick=async()=>{
-          if(sending)return;if(!$('#preview-confirmed').checked){$('#preview-error').textContent='최종 확인란을 체크해 주세요.';return}
-          sending=true;$('#preview-send').disabled=true;$('#preview-cancel').disabled=true;
-          try{
-            const r=await api('/dispatches',{method:'POST',body:JSON.stringify(payload)});
-            ambiguous=false;dialog.close();showResult(r);
-            if(['sent','accepted','delivered'].includes(r.status)){$('#s-phone').value='';$('#s-label').value='';state.patient=null;savePatient();$('#s-phone-wrap').hidden=false;$('#s-phone').disabled=!ready;$('#s-phone').placeholder='010-0000-0000'}
-          }catch(e){
-            ambiguous=!e.status||e.status>=500;
-            $('#preview-error').textContent=e.message+(ambiguous?' 같은 요청으로 결과를 다시 확인하세요. 새 발송은 만들지 않습니다.':'');
-            $('#preview-send').textContent=ambiguous?'같은 요청 결과 다시 확인':'확인 후 다시 시도';
-          }finally{sending=false;if(dialog.isConnected){$('#preview-send').disabled=false;$('#preview-cancel').disabled=ambiguous}}
-        };
+        const r=await dispatchFlow({ids,channel,includeAnnotations,phone:picked?'':(($('#s-phone').value||'').trim()||(state.patient&&state.patient.phone)||''),checkin:picked,label:$('#s-label').value});
+        if(!r)return;
+        showResult(r);
+        if(['sent','accepted','delivered'].includes(r.status)){$('#s-phone').value='';$('#s-label').value='';state.patient=null;savePatient();$('#s-phone-wrap').hidden=false;$('#s-phone').disabled=!ready;$('#s-phone').placeholder='010-0000-0000'}
       }catch(e){toast(e.message,false)}finally{previewBusy=false;$('#s-send').disabled=!ready||!list.length;$('#s-link').disabled=!list.length}
     };
     $('#s-send').onclick = () => send('alimtalk'); $('#s-link').onclick = () => send('link');
