@@ -21,7 +21,7 @@ app.route('/api/v1', psApi)
 app.route('/api', api)
 
 // ─── HTML 셸 ───
-const ASSET_VER = 'v20260923b'
+const ASSET_VER = 'v20260923c'
 const shell = (title: string, script: string, opts: { bodyClass?: string; noindex?: boolean; desc?: string } = {}) => `<!DOCTYPE html>
 <html lang="ko">
 <head>

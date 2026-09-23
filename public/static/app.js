@@ -298,7 +298,7 @@
     const list = todayList();
     main.innerHTML = `
       <div class="flex items-center gap-3 mb-4"><h2 class="text-lg font-bold">오늘의 설명 <span class="text-sm font-normal text-slate-500">${list.length}개</span></h2>
-        ${list.length ? `<button id="go" class="ml-auto px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-semibold"><i class="fa-solid fa-display mr-1"></i>큰 화면으로 설명</button><button id="qr-list" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold" title="환자분이 찍으면 이 자료가 바로 열립니다"><i class="fa-solid fa-qrcode mr-1"></i>QR</button><button id="clear" class="px-3 py-2 text-sm text-slate-500">비우기</button>` : ''}
+        ${list.length ? `<button id="go" class="ml-auto px-4 py-2 rounded-lg bg-sky-600 text-white text-sm font-semibold"><i class="fa-solid fa-display mr-1"></i>큰 화면으로 설명</button><button id="kt-list" class="px-4 py-2 rounded-lg text-sm font-semibold" style="background:#facc15;color:#0f172a" title="이 목록 전체를 안내장 하나로 묶어 환자분 카카오톡으로 보냅니다"><i class="fa-solid fa-comment mr-1"></i>전체 카톡 전송</button><button id="qr-list" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold" title="환자분이 찍으면 이 자료가 바로 열립니다"><i class="fa-solid fa-qrcode mr-1"></i>QR</button><button id="clear" class="px-3 py-2 text-sm text-slate-500">비우기</button>` : ''}
       </div>
       ${list.length ? `<ol class="space-y-2">${list.map((m, i) => `<li class="bg-white border rounded-xl px-4 py-3 flex items-center gap-3 fade-in">
           <span class="text-slate-400 w-5">${i + 1}</span>
@@ -308,12 +308,14 @@
           <button data-down="${i}" class="text-slate-400 hover:text-slate-800 px-1" ${i === list.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-down"></i></button>
           <button data-rm="${m.id}" class="text-slate-400 hover:text-rose-600 px-1"><i class="fa-solid fa-xmark"></i></button>
         </li>`).join('')}</ol>
-        <p class="text-xs text-slate-400 mt-3">설명이 끝나면 [보내기]에서 이 목록을 그대로 안내장으로 보낼 수 있습니다.</p>`
+        <p class="text-xs text-slate-400 mt-3">[전체 카톡 전송]을 누르면 이 목록이 순서 그대로 안내장 하나로 묶여 환자분 카카오톡에 갑니다. 링크로 전달하려면 [보내기] 탭을 쓰세요.</p>`
         : `<div class="bg-white rounded-xl border p-10 text-center text-slate-500"><div class="text-3xl mb-2">🖥️</div><p class="font-semibold text-slate-700">오늘 설명할 자료를 자료함에서 담아 주세요</p><p class="text-sm mt-1">담은 순서대로 큰 화면에 넘겨 가며 보여줍니다.</p><button id="tolib" class="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">자료함으로</button></div>`}`;
     main.insertAdjacentHTML('afterbegin',setsHtml());bindSets(main);
     main.insertAdjacentHTML('afterbegin', patientBarHtml()); bindPatientBar(main);
     const go = $('#go'); if (go) go.onclick = () => startPresent(list);
     const ql = $('#qr-list'); if (ql) ql.onclick = () => showQr(list, '');
+    // 【2026-09-23】오늘의 설명 전체를 한 번에 카카오톡으로 (설명 화면의 버튼과 같은 흐름)
+    const kl = $('#kt-list'); if (kl) kl.onclick = () => presentSend(list, main, async () => { await PCAnnotations.flush(list.map(m => m.id)); }, () => render());
     const cl = $('#clear'); if (cl) cl.onclick = () => { state.today = []; saveToday(); render(); };
     const tl = $('#tolib'); if (tl) tl.onclick = () => { state.tab = 'library'; render(); };
     main.querySelectorAll('[data-up]').forEach((b) => b.onclick = () => { const i = Number(b.dataset.up); [state.today[i - 1], state.today[i]] = [state.today[i], state.today[i - 1]]; saveToday(); render(); });
@@ -485,7 +487,7 @@
     });
   }
   // 【2026-09-23】설명 화면에서 바로 카카오톡 보내기 — 지금 환자가 있으면 그 분께, 없으면 이름·번호 입력. 설명 목록 전체를 보낸다.
-  function presentSend(list, box, flushAnnotations){
+  function presentSend(list, box, flushAnnotations, onDone){
     if(document.querySelector('#present-send'))return;
     if(!state.me.alimtalk_ready){toast('카카오 알림톡 설정이 아직 완료되지 않았습니다. 보내기 탭에서 링크로 전달하세요.',false);return}
     const p=state.patient;
@@ -500,7 +502,7 @@
       <button id="ps-go" class="primary-action" style="background:#facc15;color:#0f172a"><i class="fa-solid fa-comment mr-1"></i>카카오톡 발송 전 확인</button><button id="ps-cancel">계속 설명하기</button>`;
     document.body.append(dialog);dialog.showModal();dialog.addEventListener('close',()=>dialog.remove());
     $('#ps-cancel',dialog).onclick=()=>dialog.close();
-    const ch=$('#ps-change',dialog);if(ch)ch.onclick=()=>{state.patient=null;savePatient();dialog.close();presentSend(list,box,flushAnnotations)};
+    const ch=$('#ps-change',dialog);if(ch)ch.onclick=()=>{state.patient=null;savePatient();dialog.close();presentSend(list,box,flushAnnotations,onDone)};
     let busy=false;
     $('#ps-go',dialog).onclick=async()=>{
       if(busy)return;busy=true;$('#ps-go',dialog).disabled=true;
@@ -515,7 +517,7 @@
         const ok=['sent','accepted','delivered'].includes(r.status);
         if(ok){state.patient=null;savePatient();const h=box.querySelector('.present-patient');if(h)h.remove();}
         toast(ok?(r.status==='delivered'?'환자에게 전달 완료가 확인되었습니다.':'카카오톡 발송 요청이 접수되었습니다. 전달 여부는 발송내역에서 확인하세요.'):'발송 실패: '+(r.error||'발송내역에서 확인하세요'),ok);
-        loadHistory();
+        loadHistory();if(onDone)onDone();
       }catch(e){$('#ps-error',dialog).textContent=e.message}
       finally{busy=false;if(dialog.isConnected)$('#ps-go',dialog).disabled=false}
     };
