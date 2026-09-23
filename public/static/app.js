@@ -8,7 +8,7 @@
   const groupKind = (kind) => kind === 'notice' ? 'explain' : kind;
   const KIND_COLOR = { explain: 'bg-sky-100 text-sky-800', disease: 'bg-emerald-100 text-emerald-800', before_after: 'bg-violet-100 text-violet-800', cost: 'bg-amber-100 text-amber-800', notice: 'bg-rose-100 text-rose-800' };
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
-  const state = { me: null, materials: [], hidden: [], today: [], tab: 'library', dispatches: [], stats: null, library: { categories: {}, library_count: 0, imported_count: 0, locked_count: 0, library_notice: '' }, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null, sets: [], scope: '', overview: true };
+  const state = { me: null, patient: null, materials: [], hidden: [], today: [], tab: 'library', dispatches: [], stats: null, library: { categories: {}, library_count: 0, imported_count: 0, locked_count: 0, library_notice: '' }, filter: '', kindFilter: '', categoryFilter: '', editing: null, present: null, sets: [], scope: '', overview: true };
   const app = $('#app');
 
   async function api(path, opt) {
@@ -33,6 +33,43 @@
   }
   // The selection and current scope are restored only after the clinic identity is known.
   function saveToday() { sessionStorage.setItem('pc_today_' + state.me.hospital.id, JSON.stringify(state.today)); }
+  // 【2026-09-23】지금 환자 — 설명 시작 때 고르고, 보내기까지 따라간다. {checkin_id?, name, last4, phone?} (브라우저 세션에만 저장)
+  function savePatient() { const k = 'pc_patient_' + state.me.hospital.id; if (state.patient) sessionStorage.setItem(k, JSON.stringify(state.patient)); else sessionStorage.removeItem(k); }
+  function loadPatient() { try { state.patient = JSON.parse(sessionStorage.getItem('pc_patient_' + state.me.hospital.id) || 'null'); } catch { state.patient = null; } }
+  function patientBarHtml() {
+    const p = state.patient;
+    if (p) return `<div class="pc-patient on" id="pc-patient"><i class="fa-solid fa-user-check"></i><div class="flex-1 min-w-0"><b>${esc(p.name)}</b><span class="text-slate-500 text-xs ml-2">${p.checkin_id ? '오늘 접수 · ' : '직접 입력 · '}${p.last4 ? '****-' + esc(p.last4) : '번호 없음'}</span></div><button type="button" id="pc-pt-change" class="text-xs text-sky-700 font-semibold">바꾸기</button><button type="button" id="pc-pt-clear" class="text-xs text-slate-400 ml-2">해제</button></div>`;
+    return `<div class="pc-patient" id="pc-patient"><div class="flex items-center gap-2 mb-2"><i class="fa-solid fa-user-plus text-sky-600"></i><b>지금 환자</b><span class="text-xs text-slate-500">설명이 끝나면 이 분께 알림톡을 보냅니다</span><button type="button" id="pc-ck-refresh" class="ml-auto text-xs text-slate-500"><i class="fa-solid fa-rotate"></i></button></div>
+      <div id="pc-ck-list" class="text-xs text-slate-400">오늘 접수 목록 불러오는 중…</div>
+      <details class="mt-2" id="pc-manual"><summary class="text-xs text-sky-700 cursor-pointer font-semibold">목록에 없으면 이름·휴대전화 직접 입력</summary>
+        <div class="flex flex-wrap gap-2 mt-2"><input id="pc-m-name" maxlength="20" placeholder="이름" class="border rounded-lg px-3 py-2 text-sm w-28"><input id="pc-m-phone" inputmode="numeric" placeholder="010-0000-0000" class="border rounded-lg px-3 py-2 text-sm w-40 tracking-wider"><button type="button" id="pc-m-ok" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold">이 환자로</button></div></details></div>`;
+  }
+  function bindPatientBar(root, onChange) {
+    const el = $('#pc-patient', root); if (!el) return;
+    const done = () => { savePatient(); if (onChange) onChange(); else render(); };
+    const ch = $('#pc-pt-change', el); if (ch) ch.onclick = () => { state.patient = null; done(); };
+    const cl = $('#pc-pt-clear', el); if (cl) cl.onclick = () => { state.patient = null; done(); };
+    const list = $('#pc-ck-list', el);
+    const load = async () => {
+      if (!list) return;
+      try {
+        const d = await api('/checkins');
+        if (!d || !d.enabled) { list.innerHTML = '<span class="text-slate-400">페이션트 폼 접수와 연결되면 오늘 접수 환자가 여기 뜹니다.</span>'; const m = $('#pc-manual', el); if (m) m.open = true; return; }
+        if (!d.items.length) { list.innerHTML = '<span class="text-slate-400">오늘 접수된 환자가 아직 없습니다.</span>'; const m = $('#pc-manual', el); if (m) m.open = true; return; }
+        list.innerHTML = `<div class="checkin-list">${d.items.map(it => `<button type="button" data-ck="${esc(it.id)}" data-name="${esc(it.name)}" data-last4="${esc(it.last4 || '')}" ${it.has_phone ? '' : 'disabled title="휴대폰 번호가 없는 접수"'}><span class="px-1 rounded text-[10px] ${it.kind === 'new' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}">${it.kind === 'new' ? '신환' : '재진'}</span>${esc(it.name)}${it.last4 ? `<span class="text-slate-400">****-${esc(it.last4)}</span>` : ''}</button>`).join('')}</div>`;
+        list.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => { state.patient = { checkin_id: b.dataset.ck, name: b.dataset.name, last4: b.dataset.last4 }; done(); });
+      } catch (e) { list.innerHTML = `<span class="text-rose-600">오늘 접수 목록: ${esc(e.message)}</span>`; }
+    };
+    const rf = $('#pc-ck-refresh', el); if (rf) rf.onclick = load;
+    const ok = $('#pc-m-ok', el);
+    if (ok) ok.onclick = () => {
+      const name = ($('#pc-m-name', el).value || '').trim(); const digits = ($('#pc-m-phone', el).value || '').replace(/\D/g, '');
+      if (!name) { toast('이름을 입력하세요', false); return; }
+      if (!/^01\d{8,9}$/.test(digits)) { toast('휴대전화 번호를 확인하세요', false); return; }
+      state.patient = { name, phone: digits, last4: digits.slice(-4) }; done();
+    };
+    if (list) load();
+  }
 
   // ─── 레이아웃 ───
   function render() {
@@ -274,6 +311,7 @@
         <p class="text-xs text-slate-400 mt-3">설명이 끝나면 [보내기]에서 이 목록을 그대로 안내장으로 보낼 수 있습니다.</p>`
         : `<div class="bg-white rounded-xl border p-10 text-center text-slate-500"><div class="text-3xl mb-2">🖥️</div><p class="font-semibold text-slate-700">오늘 설명할 자료를 자료함에서 담아 주세요</p><p class="text-sm mt-1">담은 순서대로 큰 화면에 넘겨 가며 보여줍니다.</p><button id="tolib" class="mt-4 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">자료함으로</button></div>`}`;
     main.insertAdjacentHTML('afterbegin',setsHtml());bindSets(main);
+    main.insertAdjacentHTML('afterbegin', patientBarHtml()); bindPatientBar(main);
     const go = $('#go'); if (go) go.onclick = () => startPresent(list);
     const ql = $('#qr-list'); if (ql) ql.onclick = () => showQr(list, '');
     const cl = $('#clear'); if (cl) cl.onclick = () => { state.today = []; saveToday(); render(); };
@@ -375,7 +413,7 @@
       const m = list[i];
       const hb = state.me.hospital, accent = /^#[0-9a-f]{6}$/i.test(hb.primary_color||'') ? hb.primary_color : '#38bdf8';
       box.style.setProperty('--pc-accent', accent);
-      box.innerHTML = `<header class="presentation-header"><button id="present-back">← 뒤로 · ${state.tab==='library'?'자료함':'선택 목록'}</button><span class="present-brand">${hb.logo_key?`<img src="/a/${esc(hb.logo_key)}" alt="">`:''}<b>${esc(hb.name)}</b></span><span>${esc(categoryOf(m))}</span></header><div class="stage fade-in"><div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${slideHtml(m)}${PCGuide.guidanceHtml(m)}</div></div>
+      box.innerHTML = `<header class="presentation-header"><button id="present-back">← 뒤로 · ${state.tab==='library'?'자료함':'선택 목록'}</button><span class="present-brand">${state.patient?`<span class="present-patient"><i class="fa-solid fa-user"></i> ${esc(state.patient.name)}님</span>`:''}${hb.logo_key?`<img src="/a/${esc(hb.logo_key)}" alt="">`:''}<b>${esc(hb.name)}</b></span><span>${esc(categoryOf(m))}</span></header><div class="stage fade-in"><div class="text-sky-300 text-sm font-semibold mb-2">${KIND[m.kind]}${m.category ? ' · ' + esc(m.category) : ''}</div><h1>${esc(m.title)}</h1><div class="mt-6">${slideHtml(m)}${PCGuide.guidanceHtml(m)}</div></div>
         <div class="flex items-center gap-3 px-6 py-4 border-t border-slate-800 bg-slate-950/60">
           <button id="pv" class="px-4 py-2 rounded-lg bg-slate-800 disabled:opacity-30" ${i === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i> 이전</button>
           <span class="text-slate-400 text-sm">${i + 1} / ${list.length}</span>
@@ -428,8 +466,8 @@
         </section>
         <section class="lg:col-span-2">
           <div class="bg-white border rounded-xl p-5 space-y-4 text-sm">
-            <div id="s-checkins"></div>
-            <label class="block">환자 휴대전화<input id="s-phone" inputmode="numeric" placeholder="010-0000-0000" class="mt-1 w-full border rounded-lg px-3 py-2.5 text-lg tracking-wider" ${ready ? '' : 'disabled'}></label>
+            ${patientBarHtml()}
+            <label class="block" id="s-phone-wrap" ${state.patient ? 'hidden' : ''}>환자 휴대전화<input id="s-phone" inputmode="numeric" placeholder="010-0000-0000" class="mt-1 w-full border rounded-lg px-3 py-2.5 text-lg tracking-wider" ${ready ? '' : 'disabled'}></label>
             <label class="block">내부 메모 <span class="text-slate-400">(환자에게 안 보임)</span><input id="s-label" maxlength="40" placeholder="예: 3시 임플란트 상담" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
             <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 leading-relaxed">카카오톡에 <b>[${esc(state.me.hospital.name)} 진료 안내]</b>로 도착하며, 마지막 줄에 "${esc(state.me.hospital.name)}의 요청으로 'Patient Connect'가 발송합니다"가 표시됩니다.<br>환자분께 번호 수집·발송 동의를 받으셨는지 확인하세요 (<a href="/legal-guide" target="_blank" class="underline">안내 문구</a>).</div>
             <label class="annotation-send-option"><input id="s-annotations" type="checkbox" >현재 설명의 필기 포함</label><p class="text-xs text-slate-500">이미지는 필기한 화면을, 영상은 원본과 필기한 장면 캡처를 함께 보냅니다. 이번 설명에서 저장한 필기만 포함합니다. 개인정보가 적혀 있지 않은지 미리보기에서 확인하세요.</p>
@@ -439,20 +477,12 @@
           </div>
         </section>
       </div>`;
-    // 【2026-09-19】오늘 접수 환자(폼 신환+재진)에서 한 번 탭으로 수신자 선택 — 번호는 서버가 checkin_id 로 다시 읽는다
-    let picked = null;
-    const renderPicker = (d) => {
-      const box = $('#s-checkins'); if (!box) return;
-      if (!d || !d.enabled) { box.innerHTML = ''; return; }
-      box.innerHTML = `<div class="checkin-picker"><div class="flex items-center gap-2 mb-2"><b class="text-sm">오늘 접수 환자</b><span class="text-xs text-slate-400">${d.items.length}명 · 탭하면 수신자로</span><button id="s-ck-refresh" class="ml-auto text-xs text-slate-500"><i class="fa-solid fa-rotate"></i></button></div>
-        ${d.items.length ? `<div class="checkin-list">${d.items.map(it => `<button type="button" data-ck="${esc(it.id)}" data-name="${esc(it.name)}" data-last4="${esc(it.last4 || '')}" ${it.has_phone ? '' : 'disabled title="휴대폰 번호가 없는 접수"'} class="${picked && picked.id === it.id ? 'on' : ''}"><span class="ck-kind ${it.kind}">${it.kind === 'new' ? '신환' : '재진'}</span><b>${esc(it.name)}</b><small>${it.last4 ? '****-' + esc(it.last4) : '번호 없음'} · ${new Date(it.checked_in_at).toTimeString().slice(0, 5)}</small></button>`).join('')}</div>` : '<p class="text-xs text-slate-400">아직 접수한 환자분이 없습니다. 접수 태블릿에서 체크인하면 여기 뜹니다.</p>'}
-        ${picked ? `<p class="text-xs mt-2 text-emerald-700 font-semibold"><i class="fa-solid fa-check mr-1"></i>${esc(picked.name)}님(****-${esc(picked.last4)})에게 보냅니다 <button type="button" id="s-ck-clear" class="ml-2 text-slate-500 underline">해제</button></p>` : ''}</div>`;
-      box.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => { picked = { id: b.dataset.ck, name: b.dataset.name, last4: b.dataset.last4 }; $('#s-phone').value = ''; $('#s-phone').placeholder = picked.name + '님 · 접수 번호로 발송'; $('#s-phone').disabled = true; if (!$('#s-label').value) $('#s-label').value = picked.name; renderPicker(d); });
-      const cl = $('#s-ck-clear'); if (cl) cl.onclick = () => { picked = null; $('#s-phone').disabled = !ready; $('#s-phone').placeholder = '010-0000-0000'; renderPicker(d); };
-      const rf = $('#s-ck-refresh'); if (rf) rf.onclick = loadPicker;
-    };
-    const loadPicker = async () => { try { renderPicker(await api('/checkins')); } catch (e) { const box = $('#s-checkins'); if (box) box.innerHTML = `<p class="text-xs text-rose-600">오늘 접수 목록: ${esc(e.message)}</p>`; } };
-    loadPicker();
+    // 【2026-09-23】수신자 = 지금 환자 (설명 시작 때 고른 분). 접수면 checkin_id, 직접 입력이면 번호.
+    const picked = state.patient && state.patient.checkin_id ? { id: state.patient.checkin_id, name: state.patient.name, last4: state.patient.last4 } : null;
+    if (state.patient && !picked && state.patient.phone) { $('#s-phone').value = state.patient.phone; }
+    if (state.patient && !$('#s-label').value) $('#s-label').value = state.patient.name + '님';
+    bindPatientBar(main, () => render());
+    const loadPicker = () => {};
     $('#send-order').onclick=()=>{const order={disease:0,explain:1,notice:1,before_after:2,cost:3};state.today=[...list].sort((a,b)=>(order[a.kind]??4)-(order[b.kind]??4)).map(m=>m.id);saveToday();render()};
     const ids = list.map((m) => m.id);
     const showResult = (r) => {
@@ -471,7 +501,7 @@
         const includeAnnotations=$('#s-annotations').checked;
         if(includeAnnotations&&!state.scope)throw new Error('설명하기에서 이번 설명을 시작한 뒤 필기를 선택하세요.');
         if(includeAnnotations)await PCAnnotations.flush(ids);
-        const payload={material_ids:ids,phone:picked?'':$('#s-phone').value,checkin_id:picked?picked.id:undefined,label:$('#s-label').value,channel,include_annotations:includeAnnotations,annotation_scope:state.scope};
+        const payload={material_ids:ids,phone:picked?'':(($('#s-phone').value||'').trim()||(state.patient&&state.patient.phone)||''),checkin_id:picked?picked.id:undefined,label:$('#s-label').value,channel,include_annotations:includeAnnotations,annotation_scope:state.scope};
         const preview=await api('/dispatches/preview',{method:'POST',body:JSON.stringify(payload)});
         payload.preview_hash=preview.preview_hash;payload.request_key=crypto.randomUUID();payload.confirmed=true;
         const dialog=document.createElement('dialog');dialog.id='dispatch-preview';dialog.className='safety-dialog handout-preview';
@@ -486,7 +516,7 @@
           try{
             const r=await api('/dispatches',{method:'POST',body:JSON.stringify(payload)});
             ambiguous=false;dialog.close();showResult(r);
-            if(['sent','accepted','delivered'].includes(r.status)){$('#s-phone').value='';$('#s-label').value='';picked=null;$('#s-phone').disabled=!ready;$('#s-phone').placeholder='010-0000-0000';loadPicker()}
+            if(['sent','accepted','delivered'].includes(r.status)){$('#s-phone').value='';$('#s-label').value='';state.patient=null;savePatient();$('#s-phone-wrap').hidden=false;$('#s-phone').disabled=!ready;$('#s-phone').placeholder='010-0000-0000'}
           }catch(e){
             ambiguous=!e.status||e.status>=500;
             $('#preview-error').textContent=e.message+(ambiguous?' 같은 요청으로 결과를 다시 확인하세요. 새 발송은 만들지 않습니다.':'');
@@ -618,7 +648,7 @@
   async function loadLibrary() { state.library = await api('/material-library'); }
   async function loadMaterials() { const all = (await api('/materials?all=1')).materials; state.materials = all.filter(m => m.active !== false); state.hidden = all.filter(m => m.active === false); state.today = state.today.filter((id) => state.materials.some((m) => m.id === id)); }
   (async () => {
-    try { await loadMe(); try{state.today=JSON.parse(sessionStorage.getItem('pc_today_'+state.me.hospital.id)||'[]');state.scope=sessionStorage.getItem('pc_scope_'+state.me.hospital.id)||''}catch{state.today=[]} await Promise.all([loadMaterials(), loadLibrary(), loadSets()]); await loadHistory(); render(); }
+    try { await loadMe(); loadPatient();try{state.today=JSON.parse(sessionStorage.getItem('pc_today_'+state.me.hospital.id)||'[]');state.scope=sessionStorage.getItem('pc_scope_'+state.me.hospital.id)||''}catch{state.today=[]} await Promise.all([loadMaterials(), loadLibrary(), loadSets()]); await loadHistory(); render(); }
     catch (e) { if (e.message !== 'auth') app.innerHTML = `<div class="p-10 text-center text-rose-600">${esc(e.message)}</div>`; }
   })();
 })();
