@@ -29,6 +29,9 @@ EXCLUDE_VIDEO = re.compile(r'4K|4k|미채택|초안|개별검토|강조본|수�
 SKIP_UNIT = re.compile(r'진행본|WIP|제작중|미채택|구버전|pilot|원본과 작업기록|사용 ?제외|탈락|사용 ?중단|인포그래픽', re.I)
 SKIP_SUBDIR = {'images', 'videos', 'requests', 'qa', 'renders', 'archives-final', 'restored', 'captions', 'mattes', 'stage-01', 'stage-02', 'stage-03', 'stage-04'}
 POSTER_RE = re.compile(r'미리보기|preview|썸네일|대표이미지', re.I)
+INFOGRAPHIC_RE = re.compile(r'인포그래픽|infographic', re.I)
+INFOGRAPHIC_EXCLUDE = re.compile(r'제외|사용중단|사용 중단|폐기|이전본|모음에서제외|포스터', re.I)
+INFOGRAPHIC_DIR_RE = re.compile(r'인포그래픽', re.I)
 FIELD_CATEGORY = {'기초 해부': '예방·구강관리', '검사·진단': '진료 전·후 안내', '충치·수복': '충치·신경치료', '크라운·브릿지': '보철·틀니', '신경치료': '충치·신경치료', '균열·외상': '충치·신경치료', '잇몸질환': '잇몸치료', '잇몸치료': '잇몸치료', '임플란트 구조·보철': '임플란트', '임플란트 수술': '임플란트', '임플란트 유지관리': '임플란트', '발치·구강외과': '사랑니·발치', '틀니': '보철·틀니', '교정': '치아교정', '소아치과': '소아치과', '예방·생활 관리': '예방·구강관리', '턱관절·치아 마모': '턱관절', '심미치료': '심미치료', '구강질환·진료 안내': '구강점막'}
 PREFIX_CATEGORY = {'BAS': '예방·구강관리', 'EXM': '진료 전·후 안내', 'CAR': '충치·신경치료', 'CRN': '보철·틀니', 'END': '충치·신경치료', 'PUL': '충치·신경치료', 'CRK': '충치·신경치료', 'GUM': '잇몸치료', 'PER': '잇몸치료', 'IMP': '임플란트', 'SUR': '임플란트', 'IMC': '임플란트', 'EXT': '사랑니·발치', 'DEN': '보철·틀니', 'ORT': '치아교정', 'PED': '소아치과', 'PRV': '예방·구강관리', 'TMJ': '턱관절', 'EST': '심미치료', 'ORL': '구강점막'}
 CLOSING = '개인의 상태에 따라 치료 방법과 경과는 달라질 수 있습니다. 자세한 내용은 담당 의료진에게 확인해 주세요.'
@@ -166,6 +169,7 @@ def unit_from_dir(d, topic_hint=None):
     poster = posters[-1][1] if posters else None
     srts = [(n, p) for n, p in files if n.lower().endswith('.srt') and not re.search(r'partial|진행', n, re.I)]
     srt = sorted(srts, key=lambda x: (0 if x[0] == 'captions.srt' else 1, -os.stat(x[1]).st_mtime))[0][1] if srts else None
+    infos = [(n, p) for n, p in files if n.lower().endswith('.png') and INFOGRAPHIC_RE.search(n) and not INFOGRAPHIC_EXCLUDE.search(n)]
     script = next((p for n, p in files if n == 'production-script.json'), None)
     entry = next((p for n, p in files if n == 'catalog-entry.json'), None)
     ids = set()
@@ -181,10 +185,56 @@ def unit_from_dir(d, topic_hint=None):
     elif ids:
         topic = sorted(ids)[0]
     return {'dir': d, 'label': base, 'top': nfc(os.path.basename(os.path.relpath(d, ROOT).split(os.sep)[0])), 'topic': topic, 'video': vpath, 'video_name': vname, 'mtime': os.stat(vpath).st_mtime,
-            'poster': poster, 'srt': srt, 'script': script, 'entry': entry, 'final': '최종' in base}
+            'poster': poster, 'srt': srt, 'script': script, 'entry': entry, 'final': '최종' in base, 'infos': [p for n, p in infos], 'vtok': vtok}
+
+INFO_INDEX = {}  # topic → [png paths] from the '설명 인포그래픽' collection folder(s)
+
+def index_infographics():
+    INFO_INDEX.clear()
+    for raw in sorted(os.listdir(ROOT)):
+        name = nfc(raw); top = os.path.join(ROOT, raw)
+        if not os.path.isdir(top) or not INFOGRAPHIC_DIR_RE.search(name):
+            continue
+        for f in sorted(os.listdir(top)):
+            fn = nfc(f); p = os.path.join(top, f)
+            if not os.path.isfile(p) or not fn.lower().endswith('.png') or INFOGRAPHIC_EXCLUDE.search(fn):
+                continue
+            ids = ID_RE.findall(fn)
+            if ids:
+                INFO_INDEX.setdefault(ids[0], []).append(p)
+
+def pick_infographic(unit, topic):
+    """요약 이미지 선택: 채택 단위 폴더 안 → 그 상위 주제 폴더 → 인포그래픽 모음 폴더(같은 버전 토큰 우선, 아니면 최신)."""
+    cands = list(unit['infos'])
+    if not cands:
+        parent = os.path.dirname(unit['dir'])
+        try:
+            if os.path.abspath(parent) != os.path.abspath(ROOT):
+                cands = [os.path.join(parent, f) for f in os.listdir(parent) if nfc(f).lower().endswith('.png') and INFOGRAPHIC_RE.search(nfc(f)) and not INFOGRAPHIC_EXCLUDE.search(nfc(f))]
+        except OSError:
+            cands = []
+    if not cands:
+        cands = list(INFO_INDEX.get(topic, []))
+    if not cands:
+        return None
+    if unit['vtok']:
+        same = [c for c in cands if version_token(nfc(os.path.basename(c))) == unit['vtok']]
+        if same:
+            cands = same
+    cands.sort(key=lambda c: os.stat(c).st_mtime)
+    return cands[-1]
+
+def infographic_jpg(png_cached):
+    """4K PNG(8~9MB) → 2560px JPG(수백 KB). 글자가 있으므로 품질 3."""
+    out = png_cached + '.2560.jpg'
+    if os.path.exists(out) and os.path.getsize(out) > 0:
+        return out
+    subprocess.run(['ffmpeg', '-y', '-v', 'error', '-i', png_cached, '-vf', 'scale=2560:-2', '-q:v', '3', out], capture_output=True, timeout=180)
+    return out if os.path.exists(out) and os.path.getsize(out) > 0 else None
 
 def scan():
     """ROOT 를 걸어 주제별 단위 목록을 만든다."""
+    index_infographics()
     units = []
     for raw in sorted(os.listdir(ROOT)):
         name = nfc(raw)
@@ -283,8 +333,56 @@ def build(units, cat, ov):
             sort = 500 + len(items)
         pub = [{k: v for k, v in im.items() if not k.startswith('_')} for im in images]
         rev = hashlib.sha256(json.dumps({'t': title, 'b': body, 'c': category, 'k': kind, 'i': pub, 's': SPECIALTY}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
-        items.append({'key': f'drive:{topic}', 'topic_id': topic, 'kind': kind, 'category': category, 'title': title[:80], 'body': body[:4000], 'images_json': json.dumps(pub, ensure_ascii=False), 'rev': rev, 'sort': sort, 'active': 1, 'specialty': SPECIALTY,
+        items.append({'key': f'drive:{topic}', 'topic_id': topic, 'kind': kind, 'category': category, 'title': title[:80], 'body': body[:4000], 'images_json': json.dumps(pub, ensure_ascii=False), 'rev': rev, 'sort': sort * 10, 'active': 1, 'specialty': SPECIALTY,
                       'source': nfc(os.path.relpath(chosen[-1]['dir'], ROOT)), '_media': images, '_units': [u['label'] + ' → ' + u['video_name'] for u in chosen]})
+        # 요약 이미지(인포그래픽)는 영상과 별개 자료로 — 형식별 검색·선택이 되도록 분리
+        info = pick_infographic(chosen[-1], topic)
+        if info:
+            src = cached(info); jpg = infographic_jpg(src)
+            if jpg:
+                js = sha256(jpg)
+                iim = [{'key': f"library/{topic}/{js[:12]}.jpg", 'media_type': 'image', 'caption': '요약 이미지', '_src': jpg, '_sha': js, '_ct': 'image/jpeg'}]
+                ipub = [{k: v for k, v in im.items() if not k.startswith('_')} for im in iim]
+                ititle = (title[:70] + ' · 요약 이미지')
+                irev = hashlib.sha256(json.dumps({'t': ititle, 'b': body, 'c': category, 'k': kind, 'i': ipub, 's': SPECIALTY}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
+                items.append({'key': f'drive:{topic}:img', 'topic_id': topic, 'kind': kind, 'category': category, 'title': ititle, 'body': body[:4000], 'images_json': json.dumps(ipub, ensure_ascii=False), 'rev': irev, 'sort': sort * 10 + 1, 'active': 1, 'specialty': SPECIALTY,
+                              'source': nfc(os.path.relpath(info, ROOT)), '_media': iim, '_units': ['요약 이미지 ← ' + nfc(os.path.basename(info))]})
+            else:
+                notes.append(f"{topic}: 요약 이미지 변환 실패({nfc(os.path.basename(info))})")
+        else:
+            notes.append(f"{topic}: 요약 이미지(인포그래픽) 없음")
+    # 영상은 아직 없고 요약 이미지만 올라온 주제 → 이미지 자료만 먼저 만든다
+    covered = {it['topic_id'] for it in items}
+    for topic, pngs in sorted(INFO_INDEX.items()):
+        if topic in covered:
+            continue
+        o = ov.get(topic, {})
+        if o.get('skip'):
+            continue
+        row = cat.get(topic, {})
+        png = sorted(pngs, key=lambda c: os.stat(c).st_mtime)[-1]
+        title = o.get('title') or row.get('title') or folder_title(os.path.basename(png).rsplit('.', 1)[0])
+        field = row.get('field') or ''
+        category = o.get('category') or FIELD_CATEGORY.get(field) or PREFIX_CATEGORY.get(topic[:3], '기타 자료')
+        typ = row.get('type') or ''
+        kind = o.get('kind') or ('disease' if typ == '질환 진행' else 'notice' if typ == '관리·주의' else 'explain')
+        body = o.get('body') or CLOSING
+        src = cached(png); jpg = infographic_jpg(src)
+        if not jpg:
+            notes.append(f"{topic}: 요약 이미지 변환 실패({nfc(os.path.basename(png))})"); continue
+        js = sha256(jpg)
+        iim = [{'key': f"library/{topic}/{js[:12]}.jpg", 'media_type': 'image', 'caption': '요약 이미지', '_src': jpg, '_sha': js, '_ct': 'image/jpeg'}]
+        ipub = [{k: v for k, v in im.items() if not k.startswith('_')} for im in iim]
+        ititle = (title[:70] + ' · 요약 이미지')
+        order = row.get('order1') or ''
+        try:
+            sort = int(float(order)) if order else 500 + len(items)
+        except ValueError:
+            sort = 500 + len(items)
+        irev = hashlib.sha256(json.dumps({'t': ititle, 'b': body, 'c': category, 'k': kind, 'i': ipub, 's': SPECIALTY}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
+        items.append({'key': f'drive:{topic}:img', 'topic_id': topic, 'kind': kind, 'category': category, 'title': ititle, 'body': body[:4000], 'images_json': json.dumps(ipub, ensure_ascii=False), 'rev': irev, 'sort': sort * 10 + 1, 'active': 1, 'specialty': SPECIALTY,
+                      'source': nfc(os.path.relpath(png, ROOT)), '_media': iim, '_units': ['요약 이미지만(영상 대기) ← ' + nfc(os.path.basename(png))]})
+        notes.append(f"{topic}: 영상 없음 → 요약 이미지만 반입(본문은 overrides 필요)")
     return items, notes
 
 def r2_put(key, path, ct):

@@ -15,6 +15,10 @@
 - 자동: Claude 데스크톱 앱 예약작업 `connect-library-sync`(매일 09·13·17·21시)가 `tools/library-sync.sh` 를 실행하고 결과를 보고한다. launchd 는 `~/Library/CloudStorage` TCC 때문에 무인 접근이 막혀(PermissionError) 9/23 에 제거했다. 앱이 꺼져 있으면 다음 실행 때 돈다. 보고서 `~/pflive/patient-experience-2026/runtime/connect-library-sync-report.md`, 상태 `tools/library-state.json`(커밋).
 - 새 주제 폴더가 올라오면 다음 실행에서 자동 추가된다. 판별이 이상하면 overrides 에 `title/kind/category/body/mode/skip` 을 넣는다. 진행본만 있는 주제는 `skip: true`(SUR-005).
 
+## 영상과 요약 이미지는 별개 자료
+- 주제마다 **영상 자료**(`drive:{ID}`)와 **요약 이미지 자료**(`drive:{ID}:img`, 제목 끝에 ' · 요약 이미지')를 따로 만든다. 요약 이미지는 단위 폴더 → 주제 폴더 → `설명 인포그래픽` 모음 폴더 순으로 찾고(`인포그래픽|infographic` 파일명, `제외|사용중단|폐기|이전본` 제외, 같은 버전 토큰 우선), 4K PNG 를 2560px JPG 로 변환해 올린다. 영상이 아직 없고 이미지만 있으면 이미지 자료만 먼저 들어간다(본문은 overrides).
+- 콘솔 자료함에는 형식 필터(전체·영상·이미지)가 있고 검색어 '영상'·'이미지'도 통한다.
+
 ## 진료과 매칭
 - 라이브러리 자료마다 `specialty`(현재 폴더는 모두 `치과`)가 있고, 병원 진료과는 허브 프로필 `basic.clinic_type`('치과'·'한의원'·'한의과'…)을 `hospitals.clinic_type`에 복사해 쓴다(SSO 로그인마다 갱신, 없으면 동기화 때 조회).
 - `specialtyMatches()`: 치과 자료는 진료과에 '치과'/'치의'가 들어간 병원에만 들어간다. 진료과를 모르는 병원은 통과(카운트 `unknown_specialty`). 진료과가 다른 병원의 기존 사본은 내려두되 `library_rev='specialty-mismatch'`로 표시해 병원이 직접 숨긴 것과 구분하고, 나중에 진료과가 맞으면 다시 올린다.
