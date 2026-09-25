@@ -3,6 +3,7 @@
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const app = $('#app');
+  const A = 'https://patient-connect.pages.dev/a/'; // 국내 트래픽이 LAX로 붙는 patientfunnel.kr 존을 피해 ICN으로 붙는 원본에서 미디어를 받는다
   const CATS = ['임플란트', '보철·틀니', '충치·신경치료', '잇몸치료', '치아교정', '사랑니·발치', '소아치과', '심미치료', '턱관절', '구강점막', '예방·구강관리', '진료 전·후 안내'];
   const state = { topics: [], cat: '', q: '', open: null, speed: 1 };
   const mmss = (s) => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '';
@@ -49,7 +50,7 @@
     app.querySelectorAll('[data-open]').forEach((b) => b.onclick = () => openTopic(b.dataset.open));
   }
   function renderKeepFocus() { const pos = $('#q').selectionStart; render(); const q = $('#q'); q.focus(); try { q.setSelectionRange(pos, pos); } catch {} }
-  const poster = (t) => t.video?.poster_key ? `/a/${t.video.poster_key}` : t.images[0] ? `/a/${t.images[0].key}` : '';
+  const poster = (t) => t.video?.poster_key ? `${A}${t.video.poster_key}` : t.images[0] ? `${A}${t.images[0].key}` : '';
   function card(t) {
     return `<button class="cat-card" data-open="${esc(t.id)}"><span class="cat-cover">${poster(t) ? `<img src="${esc(poster(t))}" alt="" loading="lazy">` : '<i class="fa-regular fa-image"></i>'}${t.video ? `<span class="cat-badge"><i class="fa-solid fa-play"></i> ${mmss(t.video.duration_seconds) || '영상'}</span>` : ''}</span><span class="cat-card-body"><small>${esc(t.category)}${t.images.length ? ' · 요약 이미지' : ''}</small><b>${esc(t.title)}</b></span></button>`;
   }
@@ -62,8 +63,8 @@
     const t = list[i];
     box.innerHTML = `<header><button class="cat-close" aria-label="닫기"><i class="fa-solid fa-xmark"></i> 닫기</button><span class="cat-viewer-cat">${esc(t.category)}</span><span class="cat-viewer-nav"><button class="cat-prev" ${i === 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left"></i> 이전</button><span>${i + 1} / ${list.length}</span><button class="cat-next" ${i === list.length - 1 ? 'disabled' : ''}>다음 <i class="fa-solid fa-chevron-right"></i></button></span></header>
       <div class="cat-stage"><h1>${esc(t.title)}</h1>
-        ${t.video ? `<div class="pc-video"><video src="/a/${esc(t.video.key)}" ${t.video.poster_key ? `poster="/a/${esc(t.video.poster_key)}"` : ''} controls playsinline preload="metadata" aria-label="${esc(t.title)} 설명 영상"></video><div class="pc-speed" role="group" aria-label="재생 속도">${[1, 1.5, 2, 3].map((v) => `<button type="button" data-speed="${v}" aria-pressed="${state.speed === v}">${v}×</button>`).join('')}</div></div>` : ''}
-        ${t.images.map((im) => `<figure class="cat-summary"><img src="/a/${esc(im.key)}" alt="${esc(im.caption || '요약 이미지')}" loading="lazy"><figcaption>${esc(im.caption || '요약 이미지')}</figcaption></figure>`).join('')}
+        ${t.video ? `<div class="pc-video"><video src="${A}${esc(t.video.key)}" ${t.video.poster_key ? `poster="${A}${esc(t.video.poster_key)}"` : ''} controls playsinline preload="metadata" aria-label="${esc(t.title)} 설명 영상"></video><div class="pc-speed" role="group" aria-label="재생 속도">${[1, 1.5, 2, 3].map((v) => `<button type="button" data-speed="${v}" aria-pressed="${state.speed === v}">${v}×</button>`).join('')}</div></div>` : ''}
+        ${t.images.map((im) => `<figure class="cat-summary"><img src="${A}${esc(im.key)}" alt="${esc(im.caption || '요약 이미지')}" loading="lazy"><figcaption>${esc(im.caption || '요약 이미지')}</figcaption></figure>`).join('')}
         ${t.body ? `<div class="cat-body pc-body">${bodyHtml(t.body)}</div>` : ''}
         <p class="cat-note">일반 진료 설명 자료입니다. 개인의 상태에 따라 치료 방법과 결과는 달라질 수 있으니 담당 의료진과 상의해 주세요.</p>
       </div>`;

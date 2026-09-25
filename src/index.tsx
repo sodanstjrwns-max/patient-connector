@@ -33,7 +33,7 @@ app.route('/api/v1', psApi)
 app.route('/api', api)
 
 // ─── HTML 셸 ───
-const ASSET_VER = 'v20260925a'
+const ASSET_VER = 'v20260925b'
 const shell = (title: string, script: string, opts: { bodyClass?: string; noindex?: boolean; desc?: string } = {}) => `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -86,7 +86,7 @@ app.get('/a/*', async (c) => {
     }
   }
   if (!allowed) return c.text('forbidden', 403)
-  const headers: Record<string, string> = { 'Cache-Control': isLibrary ? 'public, max-age=86400' : 'private, no-store', 'X-Robots-Tag': isLibrary ? 'noimageindex' : 'noindex', 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff' }
+  const headers: Record<string, string> = { 'Cache-Control': isLibrary ? 'public, max-age=86400' : 'private, no-store', 'X-Robots-Tag': isLibrary ? 'noimageindex' : 'noindex', 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff', ...(isLibrary ? { 'Access-Control-Allow-Origin': '*', 'Timing-Allow-Origin': '*' } : {}) }
   const requested = c.req.header('Range')
   if (requested) {
     const meta = await c.env.MEDIA.head(key)

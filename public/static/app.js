@@ -23,11 +23,14 @@
   function bodyHtml(text) {
     return String(text || '').split('\n').map((l) => l.startsWith('- ') ? `<div class="li">${esc(l.slice(2))}</div>` : `<div>${l.trim() ? esc(l) : '&nbsp;'}</div>`).join('');
   }
-  function imgUrl(key, token) { return '/a/' + key + (token ? '?t=' + token : ''); }
+  // 【2026-09-25】patientfunnel.kr 존은 국내 트래픽이 해외 PoP(LAX)로 붙어 영상이 끊긴다. 공개 라이브러리 미디어는 ICN으로 붙는 pages.dev 원본으로 직접 받는다(같은 워커, CORS 허용).
+  const MEDIA_PUBLIC = 'https://patient-connect.pages.dev/a/';
+  const isLibraryKey = key => typeof key === 'string' && key.startsWith('library/');
+  function imgUrl(key, token) { return (isLibraryKey(key) ? MEDIA_PUBLIC : '/a/') + key + (token ? '?t=' + token : ''); }
   const isVideo = im => im?.media_type === 'video' || /\.(mp4|webm)$/i.test(im?.key || '');
   // 【2026-09-20】설명 영상 배속: 1·1.5·2·3배 (설명 화면·안내장 공통 .pc-speed, 선택값은 기기별 기억)
   const speedBar = () => `<div class="pc-speed" role="group" aria-label="재생 속도">${[1,1.5,2,3].map(v => `<button type="button" data-speed="${v}">${v}×</button>`).join('')}</div>`;
-  const mediaHtml = (im, token, cls='w-full') => isVideo(im) ? `<div class="pc-video"><video src="${imgUrl(im.key, token)}" ${im.poster_key ? `poster="${imgUrl(im.poster_key, token)}"` : ''} controls playsinline preload="metadata" class="${cls}" aria-label="${esc(im.caption || '설명 영상')}"></video>${speedBar()}</div>` : `<img src="${imgUrl(im.key, token)}" alt="${esc(im.caption || '설명 이미지')}" class="${cls}" loading="lazy">`;
+  const mediaHtml = (im, token, cls='w-full') => isVideo(im) ? `<div class="pc-video"><video src="${imgUrl(im.key, token)}" ${isLibraryKey(im.key) ? 'crossorigin="anonymous"' : ''} ${im.poster_key ? `poster="${imgUrl(im.poster_key, token)}"` : ''} controls playsinline preload="metadata" class="${cls}" aria-label="${esc(im.caption || '설명 영상')}"></video>${speedBar()}</div>` : `<img src="${imgUrl(im.key, token)}" ${isLibraryKey(im.key) ? 'crossorigin="anonymous"' : ''} alt="${esc(im.caption || '설명 이미지')}" class="${cls}" loading="lazy">`;
   function toast(msg, ok) {
     const t = document.createElement('div');
     t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-white text-sm z-[70] fade-in ' + (ok === false ? 'bg-rose-600' : 'bg-slate-900');

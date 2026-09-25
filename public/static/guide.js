@@ -3,6 +3,8 @@
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const won = (n) => Number(n || 0).toLocaleString('ko-KR') + '원';
+  // 【2026-09-25】라이브러리 미디어는 국내에서 빠른 pages.dev 원본으로(존 라우팅 LAX 회피). 병원 자료는 그대로 /a/.
+  const A = (key) => (typeof key === 'string' && key.startsWith('library/') ? 'https://patient-connect.pages.dev/a/' : '/a/') + key;
   const KIND = { explain: '설명자료', disease: '설명자료', cost: '비용설명', before_after: '비포애프터', notice: '주의사항' };
   const app = $('#app');
   const m = location.pathname.match(/^\/(g|optout)\/([0-9a-f]{32})$/);
@@ -13,7 +15,7 @@
   const img = (im, notes) => {
     const a = annotationFor(im, notes), video = isVideo(im);
     const time = a?.video_time == null ? '' : `${Math.floor(a.video_time / 60)}:${String(Math.floor(a.video_time % 60)).padStart(2, '0')}`;
-    return `<figure class="my-3">${video ? `<div class="pc-video"><video src="/a/${im.key}?t=${token}" ${im.poster_key ? `poster="/a/${im.poster_key}?t=${token}"` : ''} controls playsinline preload="metadata" class="w-full rounded-xl" aria-label="${esc(im.caption || '설명 영상')}"></video><div class="pc-speed" role="group" aria-label="재생 속도">${[1, 1.5, 2, 3].map((v) => `<button type="button" data-speed="${v}">${v}×</button>`).join('')}</div></div>` : `<img src="/a/${a?.image_key || im.key}?t=${token}" alt="${a ? '의료진 필기가 포함된 설명 이미지' : esc(im.caption || '설명 이미지')}" class="w-full rounded-xl bg-slate-100 ${a ? 'patient-annotation' : ''}" loading="lazy">`}${a && video ? `<figcaption class="annotation-caption">${time} 장면에 필기한 설명</figcaption><img src="/a/${a.image_key}?t=${token}" alt="영상 장면에 필기한 설명" class="w-full rounded-xl patient-annotation" loading="lazy">` : a ? '<figcaption class="annotation-caption">의료진 필기 포함 · 원본은 변경되지 않았습니다</figcaption>' : ''}${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}${a && !video ? `<details class="media-supplement"><summary>원본 이미지 보기</summary><img src="/a/${im.key}?t=${token}" alt="필기 전 원본" class="w-full rounded-xl" loading="lazy"></details>` : ''}</figure>`;
+    return `<figure class="my-3">${video ? `<div class="pc-video"><video src="${A(im.key)}?t=${token}" ${im.poster_key ? `poster="${A(im.poster_key)}?t=${token}"` : ''} controls playsinline preload="metadata" class="w-full rounded-xl" aria-label="${esc(im.caption || '설명 영상')}"></video><div class="pc-speed" role="group" aria-label="재생 속도">${[1, 1.5, 2, 3].map((v) => `<button type="button" data-speed="${v}">${v}×</button>`).join('')}</div></div>` : `<img src="${A(a?.image_key || im.key)}?t=${token}" alt="${a ? '의료진 필기가 포함된 설명 이미지' : esc(im.caption || '설명 이미지')}" class="w-full rounded-xl bg-slate-100 ${a ? 'patient-annotation' : ''}" loading="lazy">`}${a && video ? `<figcaption class="annotation-caption">${time} 장면에 필기한 설명</figcaption><img src="${A(a.image_key)}?t=${token}" alt="영상 장면에 필기한 설명" class="w-full rounded-xl patient-annotation" loading="lazy">` : a ? '<figcaption class="annotation-caption">의료진 필기 포함 · 원본은 변경되지 않았습니다</figcaption>' : ''}${im.caption ? `<figcaption class="text-center text-sm text-slate-500 mt-1">${esc(im.caption)}</figcaption>` : ''}${a && !video ? `<details class="media-supplement"><summary>원본 이미지 보기</summary><img src="${A(im.key)}?t=${token}" alt="필기 전 원본" class="w-full rounded-xl" loading="lazy"></details>` : ''}</figure>`;
   };
 
   function materialHtml(x, i) {
@@ -22,7 +24,7 @@
       inner = x.images.map(im => img(im, x.annotations)).join('') + (x.body ? `<details class="media-supplement"><summary>보충 설명 보기</summary><div class="pc-body">${bodyHtml(x.body)}</div></details>` : '');
     } else if (x.kind === 'before_after') {
       const [b, a] = x.images;
-      inner = `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure>${im ? `<img src="/a/${annotationFor(im, x.annotations)?.image_key || im.key}?t=${token}" class="w-full rounded-xl bg-slate-100 ${annotationFor(im, x.annotations) ? 'patient-annotation' : ''}" alt="${esc(l)}${annotationFor(im, x.annotations) ? ' · 필기 포함' : ''}">` : ''}<figcaption class="text-sm">${l}</figcaption></figure>`).join('')}</div>${x.body ? `<div class="pc-body mt-3">${bodyHtml(x.body)}</div>` : ''}`;
+      inner = `<div class="ba">${[['치료 전', b], ['치료 후', a]].map(([l, im]) => `<figure>${im ? `<img src="${A(annotationFor(im, x.annotations)?.image_key || im.key)}?t=${token}" class="w-full rounded-xl bg-slate-100 ${annotationFor(im, x.annotations) ? 'patient-annotation' : ''}" alt="${esc(l)}${annotationFor(im, x.annotations) ? ' · 필기 포함' : ''}">` : ''}<figcaption class="text-sm">${l}</figcaption></figure>`).join('')}</div>${x.body ? `<div class="pc-body mt-3">${bodyHtml(x.body)}</div>` : ''}`;
     } else if (x.kind === 'cost') {
       const total = x.cost.reduce((s, c) => s + (Number(c.price) || 0) * (Number(c.qty) || 1), 0);
       inner = `${x.body ? `<div class="pc-body mb-3">${bodyHtml(x.body)}</div>` : ''}<div class="pc-cost">${x.cost.map((c) => `<div class="pc-cost-row"><div><b>${esc(c.name)}</b>${c.note ? `<small>${esc(c.note)}</small>` : ''}${(c.qty || 1) > 1 ? `<small>${won(c.price)} × ${c.qty}</small>` : ''}</div><span>${won((Number(c.price) || 0) * (Number(c.qty) || 1))}</span></div>`).join('')}<div class="pc-cost-total"><span>합계</span><b>${won(total)}</b></div></div><p class="pc-fine">안내 시점 기준 금액이며 진단에 따라 달라질 수 있습니다.</p>`;
@@ -55,7 +57,7 @@
   function friendHtml(h){const u=friendUrl(h);return u?`<a href="${esc(u)}" target="_blank" rel="noopener noreferrer" class="pc-friend" data-friend><span class="pc-friend-ico"><i class="fa-solid fa-comment"></i></span><span><b>${esc(h.name)} 카카오톡 채널 친구추가</b><small>치료 안내와 병원 소식을 카카오톡으로 받아보세요</small></span><i class="fa-solid fa-chevron-right"></i></a>`:''}
   function guideHtml(j) {
     const h=j.hospital;
-    const logo=h.logo_key?`<img src="/a/${esc(h.logo_key)}?t=${token}" alt="${esc(h.name)} 로고" class="pc-logo">`:'';
+    const logo=h.logo_key?`<img src="${A(esc(h.logo_key))}?t=${token}" alt="${esc(h.name)} 로고" class="pc-logo">`:'';
     const d = new Date(String(j.sent_at).replace(' ', 'T'));
     const dateTxt = isNaN(d) ? esc(j.sent_at.slice(0, 10)) : `${d.getMonth() + 1}월 ${d.getDate()}일`;
     const kinds = [...new Set(j.materials.map((x) => x.kind))];
