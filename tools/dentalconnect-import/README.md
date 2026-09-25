@@ -13,3 +13,9 @@
 | `bd-cost-transcript-2026-09-25.md` | 서울비디치과 비용안내 원본 28장 전사(화면 판독). |
 
 주의: 비포애프터는 `external_allowed=false, consent_ref=''`로 넣었다. 환자 안내장 외부 전송(카톡)은 병원이 사진 동의 범위를 확인해 자료 편집에서 체크해야 열린다. 원내 설명은 바로 가능.
+
+## 비용 카드 사진 출처 (2026-09-25 교체)
+- 덴탈커넥트 이미지에서 잘라낸 사진은 전부 폐기했다(템플릿 잔여물 때문에 품질 불량). `photos/`는 전부 웹에서 구한 제품 공식 렌더·제품 사진이다.
+- 검색: `python3 bing_images.py <slot> "<검색어>" [max] [--transparent]` → `imgsearch/<slot>/NN.ext` + meta.json(출처 페이지 URL). 투명 배경 PNG는 흰 배경에 합성해 저장.
+- 케이스(환자) 사진은 비용 카드에 넣지 않는다. 골드 보철은 별도 카드(`gold`, D1 id 413, active=0 숨김)로 분리했다.
+- `cost.mjs`의 `PHOTO_DIR`을 `photos/` 경로로 바꾸고 `node cost.mjs [slug...]`로 렌더한다. 산출물은 R2 `h1/m192~m213/*.png`(27장)과 `h1/m413/dc-goldhide1.png`.
