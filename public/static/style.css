@@ -81,6 +81,11 @@
 .empty-media-cover i { font-size: 32px; }
 .media-stage { max-width: 1100px; margin: 0 auto; display: grid; gap: 1.25rem; }
 .media-stage img, .media-stage video { display: block; width: 100%; max-height: 65vh; object-fit: contain; background: #172035; border-radius: .75rem; }
+/* 【2026-09-25】비용·주의사항 카드(16:9 이미지)는 화면을 꽉 채워 크게 — 원장 요청 */
+.present .stage.stage-cards { padding-top: 1.25rem; }
+.present .stage.stage-cards h1 { font-size: clamp(1.1rem, 1.8vw, 1.5rem); margin-bottom: .25rem; }
+.present .stage-cards .media-stage { max-width: min(1700px, 100%); gap: 1.5rem; }
+.present .stage-cards .media-stage img { max-height: 84vh; background: transparent; box-shadow: 0 12px 40px #0006; }
 .media-stage figcaption { color: #94a3b8; font-size: .75rem; margin-top: .5rem; text-align: center; }
 .media-supplement { margin-top: 1.5rem; font-size: .8rem; color: #64748b; }
 .media-supplement summary, .supplemental-body summary { cursor: pointer; padding: .5rem 0; }
