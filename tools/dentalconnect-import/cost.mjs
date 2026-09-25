@@ -171,8 +171,8 @@ const PAGES = [
   // ── 어금니 보철
   { slug: 'posterior-1', title: '어금니 보철 비용', sub: '지르코니아 크라운 · 세라믹 오버레이 · 세라믹 인레이 (치아 1개 기준)', body: `<div class="col">${rows([
     { img: 'zir_crown.jpg', fit: 'contain', tag: '크라운', name: '지르코니아 크라운', desc: '독일 Amann Girrbach 오스트리아 직영 공장 · 100% 토소(Tosoh) 분말 블록', price: 55 },
-    { img: 'ceramic_overlay.jpg', fit: 'contain', tag: '오버레이', name: '세라믹 오버레이', desc: '치아를 최대한 보존하며 손상 부위만 덮는 치료 · Ivoclar e.max', price: 80 },
-    { img: 'ceramic_inlay.jpg', fit: 'contain', tag: '인레이', name: '세라믹 인레이', desc: '심미적이고 튼튼한 Ivoclar vivadent e.max', price: 35 },
+    { img: 'ceramic_overlay.jpg', tag: '오버레이', name: '세라믹 오버레이', desc: '치아를 최대한 보존하며 손상 부위만 덮는 치료 · Ivoclar e.max', price: 80 },
+    { img: 'ceramic_inlay.jpg', tag: '인레이', name: '세라믹 인레이', desc: '심미적이고 튼튼한 Ivoclar vivadent e.max', price: 35 },
   ])}</div><div class="col" style="flex:.55">${sec('보철 보증 기간')}${warr(WARR_GEN)}${card('보증 안내', bul(['일반 보철(크라운·인레이) 공통 보증 기준입니다.', '정기 검진 주기를 지키실 때 보증이 유지됩니다.']))}</div>` },
   { slug: 'posterior-2', title: '어금니 보철 재료 안내', sub: '서울비디치과가 재료를 고르는 기준', body: `<div class="col"><div class="grid2">${card('지르코니아', pic('zolid_zi.png', 'Amann Girrbach 지르코니아 블록 (100% 토소 분말)', 'contain h260') + bul(['아주 단단해 보철물로 적합하며 치아색과 유사해 심미적입니다.', '지르코니아 블록을 깎아서 만들며, 필요한 치아 삭제량은 금보다 큽니다.', '국내 유통 블록 상당수는 중국산·국내산 분말입니다. 본원은 독일 Amann Girrbach 오스트리아 직영 공장의 100% 토소 분말 블록을 사용합니다.']))}${card('세라믹 (e.max)', pic('emax_ingots.jpg', 'Ivoclar IPS e.max Press 잉곳', 'h260') + bul(['아주 단단하고 치아색과 유사해 심미적으로 뛰어납니다.', '필요한 치아 삭제량은 금보다 큽니다.', '본원은 매우 심미적이고 튼튼한 Ivoclar vivadent e.max로 인레이·오버레이를 제작합니다.']))}</div></div>` },
   { slug: 'gold', title: '골드 보철 비용', sub: '요청하시는 분께만 안내드리는 보철 · 치아 1개 기준', body: `<div class="col">${rows([

@@ -19,3 +19,4 @@
 - 검색: `python3 bing_images.py <slot> "<검색어>" [max] [--transparent]` → `imgsearch/<slot>/NN.ext` + meta.json(출처 페이지 URL). 투명 배경 PNG는 흰 배경에 합성해 저장.
 - 케이스(환자) 사진은 비용 카드에 넣지 않는다. 골드 보철은 별도 카드(`gold`, D1 id 413, active=0 숨김)로 분리했다.
 - `cost.mjs`의 `PHOTO_DIR`을 `photos/` 경로로 바꾸고 `node cost.mjs [slug...]`로 렌더한다. 산출물은 R2 `h1/m192~m213/*.png`(27장)과 `h1/m413/dc-goldhide1.png`.
+- 2026-09-25 2차 교체: PFZ는 광택·투명감 있는 층상 크라운 사진, 통 지르코니아는 단순한 크라운 사진(비싼 쪽이 더 좋아 보이게). 세라믹 오버레이·인레이는 실제 온레이/인레이 사진으로 교체. 글로우네이트 모델 사진은 병원 홈페이지(bdbddc.com /images/glownate-model-2.webp)를 Real-ESRGAN x4로 확대해 사용. 골드 카드(id 413)는 숨기지 않고 active=1·sort 최하단.
