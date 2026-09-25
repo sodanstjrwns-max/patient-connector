@@ -17,11 +17,23 @@ app.use('*', async (c, next) => {
 })
 
 app.use('/api/*', cors())
+// 공개 라이브러리 목록(세션 불필요). 병원이 올린 자료·환자 정보는 포함하지 않는다.
+app.get('/api/public/library', async (c) => {
+  const rows = await c.env.DB.prepare('SELECT key, topic_id, kind, category, title, body, images_json FROM library_materials WHERE active = 1 ORDER BY sort ASC, key ASC').all<{ key: string; topic_id: string; kind: string; category: string | null; title: string; body: string; images_json: string }>()
+  const items = (rows.results || []).map((r) => {
+    let media: any[] = []
+    try { media = JSON.parse(r.images_json || '[]') } catch {}
+    media = media.filter((m) => m && typeof m.key === 'string' && m.key.startsWith('library/')).map((m) => ({ key: m.key, media_type: m.media_type === 'video' ? 'video' : 'image', poster_key: m.poster_key || null, duration_seconds: Number(m.duration_seconds) || null, caption: m.caption || '' }))
+    return { key: r.key, topic_id: r.topic_id, kind: r.kind, category: r.category, title: r.title, body: r.body || '', media }
+  })
+  c.header('Cache-Control', 'public, max-age=300')
+  return c.json({ items, count: items.length })
+})
 app.route('/api/v1', psApi)
 app.route('/api', api)
 
 // ─── HTML 셸 ───
-const ASSET_VER = 'v20260923e'
+const ASSET_VER = 'v20260925a'
 const shell = (title: string, script: string, opts: { bodyClass?: string; noindex?: boolean; desc?: string } = {}) => `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -45,7 +57,9 @@ const shell = (title: string, script: string, opts: { bodyClass?: string; noinde
 </body>
 </html>`
 
-app.get('/', (c) => c.html(landingPage()))
+// 【2026-09-25】루트 = 로그인 없이 보는 공개 설명자료 라이브러리(플랫폼 영상만, 전송·병원 자료 없음). 서비스 소개는 /about.
+app.get('/', (c) => c.html(shell('환자 설명자료 라이브러리', 'catalog.js', { bodyClass: 'bg-white', desc: '치과 치료 과정을 쉽게 설명하는 영상·요약 이미지 라이브러리. 로그인 없이 볼 수 있습니다.' })))
+app.get('/about', (c) => c.html(landingPage()))
 app.get('/app', (c) => c.html(shell('병원 콘솔', 'app.js', { noindex: true })))
 app.get('/app/qr-cards/print', (c) => c.html(shell('QR 카드 인쇄', 'qrcards.js', { bodyClass: 'bg-white', noindex: true })))
 app.get('/g/:token', (c) => c.html(shell('진료 안내장', 'guide.js', { bodyClass: 'bg-white', noindex: true, desc: '병원에서 보내드린 진료 안내 자료입니다' })))
@@ -57,13 +71,13 @@ app.get('/legal-guide', (c) => c.html(legalShell('병원용 안내 문구', lega
 // ─── 이미지(R2) ── 병원 세션(자기 병원 키) 또는 유효한 안내장 토큰(스냅샷에 포함된 키)만 열람
 app.get('/a/*', async (c) => {
   const key = decodeURIComponent(new URL(c.req.url).pathname.slice(3))
-  // 플랫폼 영상 라이브러리(library/…)는 로그인한 병원 누구나, 환자는 자기 안내장 스냅샷에 든 키만 볼 수 있다. 병원 업로드(h{id}/…)는 소유 병원만.
+  // 플랫폼 영상 라이브러리(library/…)는 공개(9/25, 루트 카탈로그). 병원 업로드(h{id}/…)는 소유 병원 세션 또는 안내장 토큰 스냅샷에 든 키만.
   const isLibrary = /^library\/[A-Z]{3}-\d{3}\/[0-9a-f]{8,16}\.(mp4|jpg)$/.test(key)
   if (!isLibrary && !/^h\d+\/(m\d+|brand)\/[0-9a-z-]+\.(jpg|png|webp|mp4|webm)$/.test(key)) return c.text('not found', 404)
   const isBrand = /^h\d+\/brand\//.test(key)
-  let allowed = false
-  const sid = await verifySession(getSessionToken(c.req.header('Cookie')), c.env.SESSION_SECRET)
-  if (sid && (isLibrary || key.startsWith(`h${sid}/`))) allowed = true
+  let allowed = isLibrary
+  const sid = allowed ? null : await verifySession(getSessionToken(c.req.header('Cookie')), c.env.SESSION_SECRET)
+  if (sid && key.startsWith(`h${sid}/`)) allowed = true
   if (!allowed) {
     const t = c.req.query('t') || ''
     if (/^[0-9a-f]{32}$/.test(t)) {
@@ -72,7 +86,7 @@ app.get('/a/*', async (c) => {
     }
   }
   if (!allowed) return c.text('forbidden', 403)
-  const headers: Record<string, string> = { 'Cache-Control': isLibrary ? 'private, max-age=86400' : 'private, no-store', 'X-Robots-Tag': 'noindex', 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff' }
+  const headers: Record<string, string> = { 'Cache-Control': isLibrary ? 'public, max-age=86400' : 'private, no-store', 'X-Robots-Tag': isLibrary ? 'noimageindex' : 'noindex', 'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff' }
   const requested = c.req.header('Range')
   if (requested) {
     const meta = await c.env.MEDIA.head(key)
