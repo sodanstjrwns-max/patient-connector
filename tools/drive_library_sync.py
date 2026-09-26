@@ -396,7 +396,27 @@ def push(items, remove_missing=True):
     body = json.dumps({'items': [{k: v for k, v in it.items() if not k.startswith('_')} for it in items], 'remove_missing': remove_missing}, ensure_ascii=False).encode()
     req = urllib.request.Request(API, data=body, method='POST', headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json', 'User-Agent': 'patient-connect-library-sync/1 (+launchd)'})
     with urllib.request.urlopen(req, timeout=120) as r:
-        return json.loads(r.read().decode())
+        res = json.loads(r.read().decode())
+    # 【2026-09-26】병원이 많으면 서버가 병원 자료함 반영을 나눠 한다 — propagated.next_cursor 가 있으면 없어질 때까지 이어 부른다.
+    #  구버전 서버는 next_cursor 를 주지 않으므로 이 루프를 타지 않는다(호환).
+    prop = res.get('propagated') if isinstance(res, dict) else None
+    cur = prop.get('next_cursor') if isinstance(prop, dict) else None
+    calls = 0
+    while cur and calls < 1000:
+        calls += 1
+        req2 = urllib.request.Request(API.replace('/ops/library-sync', '/ops/library-propagate') + f'?cursor={int(cur)}', data=b'{}', method='POST',
+                                      headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json', 'User-Agent': 'patient-connect-library-sync/1 (+launchd)'})
+        with urllib.request.urlopen(req2, timeout=120) as r2:
+            p2 = (json.loads(r2.read().decode()) or {}).get('propagated') or {}
+        for k2 in ('inserted', 'updated', 'deactivated', 'locked', 'specialty_skipped', 'unknown_specialty', 'hospitals', 'statements'):
+            if isinstance(p2.get(k2), int):
+                prop[k2] = int(prop.get(k2) or 0) + p2[k2]
+        nxt = p2.get('next_cursor')
+        cur = nxt if nxt and int(nxt) > int(cur) else None
+    if isinstance(prop, dict):
+        prop['next_cursor'] = cur
+        prop['propagate_calls'] = calls + 1
+    return res
 
 def main():
     ap = argparse.ArgumentParser()

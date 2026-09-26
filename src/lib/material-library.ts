@@ -39,19 +39,45 @@ export async function ensureClinicType(env: LibraryEnv, hospitalId: number, psHo
 }
 
 /** 라이브러리 → 병원 자료함 반영. 없는 자료는 추가, 병원이 손대지 않은 사본(library_locked=0)은 최신 rev 로 갱신, 라이브러리에서 빠진 자료는 비활성.
- *  병원이 숨긴 자료(active=0)는 그대로 둔다 — 보이기/숨기기는 병원의 선택이며 동기화가 되돌리지 않는다. */
-export async function propagateLibrary(env: LibraryEnv, hospitalId?: number) {
+ *  병원이 숨긴 자료(active=0)는 그대로 둔다 — 보이기/숨기기는 병원의 선택이며 동기화가 되돌리지 않는다.
+ *
+ *  【2026-09-26】병원 500곳(여유 1,000곳) 대비
+ *  - 사본 찾기를 배열 find(병원×자료×전체 사본 = 1,000×300×300,000 비교) → Map 조회로. 이전엔 병원 수백 곳이면 CPU 30초를 넘는다.
+ *  - 전 병원 반영(hospitalId 없음)은 병원 id 순으로 나눠 한다: 한 호출에 병원 최대 100곳·쓰기 문장 약 800개·15초.
+ *    남으면 next_cursor(마지막으로 끝낸 병원 id)를 돌려준다 → /api/v1/ops/library-propagate?cursor= 로 이어 부른다.
+ *    한 병원의 문장은 한 호출 안에서 다 쓴다(병원 단위로 끊음). 재실행해도 결과가 같다(ON CONFLICT·rev 비교).
+ *  - 병원 1곳 반영(hospitalId 지정, 로그인·[라이브러리 다시 가져오기])은 이전과 같다. */
+export async function propagateLibrary(env: LibraryEnv, hospitalId?: number, opts: { afterId?: number; maxStatements?: number; maxMs?: number; maxHospitals?: number } = {}) {
   const db = env.DB
+  const started = Date.now()
+  const bulk = !hospitalId
+  const afterId = Math.max(0, Math.floor(Number(opts.afterId) || 0))
+  const maxStatements = opts.maxStatements ?? 800
+  const maxMs = opts.maxMs ?? 15000
+  const maxHospitals = opts.maxHospitals ?? 100
   const lib = (await db.prepare('SELECT * FROM library_materials ORDER BY sort, key').all<LibraryRow>()).results || []
-  const hospitals = (await db.prepare(`SELECT id, ps_hospital_id, name, clinic_type FROM hospitals${hospitalId ? ' WHERE id = ?' : ''}`).bind(...(hospitalId ? [hospitalId] : [])).all<{ id: number; ps_hospital_id: string; name: string; clinic_type: string | null }>()).results || []
-  const copies = (await db.prepare(`SELECT id, hospital_id, example_key, library_rev, library_locked, active FROM materials WHERE example_key LIKE '${LIBRARY_KEY_PREFIX}%'${hospitalId ? ' AND hospital_id = ?' : ''}`).bind(...(hospitalId ? [hospitalId] : [])).all<HospitalCopy>()).results || []
+  const hospitals = (await (hospitalId
+    ? db.prepare('SELECT id, ps_hospital_id, name, clinic_type FROM hospitals WHERE id = ?').bind(hospitalId)
+    : db.prepare('SELECT id, ps_hospital_id, name, clinic_type FROM hospitals WHERE id > ? ORDER BY id LIMIT ?').bind(afterId, maxHospitals)
+  ).all<{ id: number; ps_hospital_id: string; name: string; clinic_type: string | null }>()).results || []
+  const lastId = hospitals.length ? hospitals[hospitals.length - 1].id : afterId
+  const copies = hospitals.length ? ((await (hospitalId
+    ? db.prepare(`SELECT id, hospital_id, example_key, library_rev, library_locked, active FROM materials WHERE example_key LIKE '${LIBRARY_KEY_PREFIX}%' AND hospital_id = ?`).bind(hospitalId)
+    : db.prepare(`SELECT id, hospital_id, example_key, library_rev, library_locked, active FROM materials WHERE hospital_id > ? AND hospital_id <= ? AND example_key LIKE '${LIBRARY_KEY_PREFIX}%'`).bind(afterId, lastId)
+  ).all<HospitalCopy>()).results || []) : []
+  const copyMap = new Map<string, HospitalCopy>()
+  for (const cp of copies) copyMap.set(cp.hospital_id + '\u0000' + cp.example_key, cp)
   const stmts: D1PreparedStatement[] = []
   const counts = { inserted: 0, updated: 0, deactivated: 0, locked: 0, specialty_skipped: 0, unknown_specialty: 0 }
+  let processed = 0
+  let nextCursor: number | null = null
   for (const h of hospitals) {
+    // 예산: 병원 하나가 최대 lib.length 문장을 만든다 — 다음 병원까지 넣으면 넘칠 것 같으면 여기서 끊는다(최소 1곳은 처리)
+    if (bulk && processed > 0 && (stmts.length + lib.length > maxStatements || Date.now() - started > maxMs)) { nextCursor = hospitals[processed - 1].id; break }
     const clinicType = await ensureClinicType(env, h.id, h.ps_hospital_id, h.clinic_type, h.name)
     if (!clinicType) counts.unknown_specialty++
     for (const item of lib) {
-      const copy = copies.find(c => c.hospital_id === h.id && c.example_key === item.key)
+      const copy = copyMap.get(h.id + '\u0000' + item.key)
       const fits = specialtyMatches(item.specialty, clinicType)
       if (!fits) {
         // 진료과가 다른 자료: 넣지 않고, 이미 들어간 미수정 사본은 내려둔다(병원이 숨긴 것과 구분해 표시)
@@ -78,7 +104,10 @@ export async function propagateLibrary(env: LibraryEnv, hospitalId?: number) {
         stmts.push(db.prepare(`UPDATE materials SET kind = ?, category = ?, title = ?, body = ?, images_json = ?, library_rev = ?${restore ? ', active = 1' : ''}, updated_at = datetime('now') WHERE id = ? AND library_locked = 0`).bind(item.kind, item.category, item.title, item.body, item.images_json, item.rev, copy.id))
       }
     }
+    processed++
   }
+  // 한 페이지(maxHospitals)를 다 채웠으면 뒤에 병원이 더 있을 수 있다
+  if (bulk && nextCursor === null && hospitals.length === maxHospitals) nextCursor = lastId
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50))
-  return { ...counts, hospitals: hospitals.length, library: lib.filter(x => x.active).length }
+  return { ...counts, hospitals: processed, library: lib.filter(x => x.active).length, statements: stmts.length, next_cursor: nextCursor }
 }

@@ -74,8 +74,23 @@ psApi.post('/ops/library-sync', async (c) => {
     const r = await c.env.DB.prepare(`UPDATE library_materials SET active = 0, updated_at = datetime('now') WHERE active = 1${keep.length ? ` AND key NOT IN (${keep.map(() => '?').join(',')})` : ''}`).bind(...keep).run()
     removed = Number(r.meta.changes || 0)
   }
-  const propagated = await propagateLibrary(c.env)
+  // 【2026-09-26】전 병원 반영은 나눠서 — 첫 조각만 여기서, 남으면 propagated.next_cursor 로 /ops/library-propagate 를 이어 부른다
+  //  (위 upsert 문장 수만큼 이번 호출의 쓰기 예산에서 뺀다)
+  const propagated = await propagateLibrary(c.env, undefined, { maxStatements: Math.max(200, 800 - items.length) })
   return c.json({ ok: true, upserted: items.length, removed, propagated })
+})
+
+// 【2026-09-26】운영: 라이브러리 → 병원 자료함 반영 이어 하기. 인증: Bearer PS_SERVICE_KEY. ?cursor=<마지막으로 끝낸 병원 id>
+//  library-sync 응답의 propagated.next_cursor 가 있을 때 tools/drive_library_sync.py 가 없어질 때까지 부른다. 멱등.
+psApi.post('/ops/library-propagate', async (c) => {
+  const key = c.env.PS_SERVICE_KEY
+  const auth = c.req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
+  if (!key || !token || !timingSafeEqualStr(token, key)) return err(c, 401, 'unauthorized', '유효하지 않은 서비스 키')
+  const cursor = Number(c.req.query('cursor') || 0)
+  if (!Number.isInteger(cursor) || cursor < 0) return err(c, 400, 'invalid_cursor', 'cursor 는 0 이상 정수입니다')
+  const propagated = await propagateLibrary(c.env, undefined, { afterId: cursor })
+  return c.json({ ok: true, propagated })
 })
 
 // 운영: 파일 반입함. 브라우저 세션에서 가져온 자료를 R2 inbox/ 에 넣는다(Bearer PS_SERVICE_KEY). 운영자가 wrangler 로 꺼내 쓴다.
