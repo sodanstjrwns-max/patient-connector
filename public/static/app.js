@@ -696,6 +696,7 @@
         <label class="block mt-3">한 줄 소개 (선택)<input id="st-tagline" maxlength="60" value="${esc(h.tagline||'')}" placeholder="예: 천안 불당동 · 임플란트·교정 전문" class="mt-1 w-full border rounded-lg px-3 py-2"></label>
       </fieldset>
       ${qrCardsHtml()}
+      ${hubEntitlementHtml()}
       <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">카카오 알림톡 상태: ${state.me.alimtalk_ready ? '<span class="text-emerald-700 font-semibold">사용 가능</span>' : '<span class="text-amber-700 font-semibold">설정 미완료</span>'} · 발송 채널은 페이션트퍼널의 'Patient Connect' 공용 채널이며 병원이 따로 개설할 것은 없습니다.</div>
       <div class="flex gap-2"><button id="st-save" class="px-5 py-2 rounded-lg bg-slate-900 text-white font-semibold">저장</button><button id="st-logout" class="ml-auto px-3 py-2 text-slate-500">로그아웃</button></div>
       <p class="text-xs text-slate-400"><a href="/legal-guide" target="_blank" class="underline">병원용 안내 문구</a> · <a href="/privacy" target="_blank" class="underline">개인정보처리방침</a></p>
@@ -709,6 +710,14 @@
 
   async function loadSets(){state.sets=(await api('/material-sets')).sets}
   async function loadMe() { state.me = await api('/me'); }
+  // 【2026-09-26】허브 올패스 적용 한 줄 (있을 때만)
+  function hubEntitlementHtml() {
+    const he = state.me && state.me.hub_entitlement;
+    if (!he || !he.tier) return '';
+    const t = new Date(he.ends_at).getTime();
+    const end = isNaN(t) ? '' : new Date(t + 9 * 3600000).toISOString().slice(0, 10);
+    return `<div class="rounded-lg bg-emerald-50 p-3 text-xs font-semibold text-emerald-700">허브 올패스 ${esc(he.tier)} 적용 중${end ? ' · ' + esc(end) + '까지' : ''}${he.source === 'grant' ? ' · 올인원 수강생 무료 제공' : ''}</div>`;
+  }
   async function loadLibrary() { state.library = await api('/material-library'); }
   async function loadMaterials() { const all = (await api('/materials?all=1')).materials; state.materials = all.filter(m => m.active !== false); state.hidden = all.filter(m => m.active === false); state.today = state.today.filter((id) => state.materials.some((m) => m.id === id)); }
   (async () => {

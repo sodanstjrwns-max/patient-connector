@@ -7,6 +7,7 @@ import { normalizePhone, phoneHash, encPhone, randomToken, maskPhone } from '../
 import { sendAlimtalk, alimtalkReady } from '../lib/solapi'
 import { materialCategories, libraryNotice, propagateLibrary, LIBRARY_KEY_PREFIX } from '../lib/material-library'
 import { fetchHospitalProfile } from '../lib/hub-profile'
+import { fetchHubEntitlement } from '../lib/hub-entitlement'
 import annotations from './annotations'
 import { guidanceOf, publicGuidance, shareIssue, safeLink, digest } from '../lib/guidance'
 import { formKeyFor, fetchFormCheckins } from '../lib/form-checkins'
@@ -193,7 +194,9 @@ api.get('/me', async (c) => {
   await purgeOldPhones(c.env.DB).catch(() => undefined)
   const h = await c.env.DB.prepare('SELECT id, ps_hospital_id, name, phone, address, link_days, chat_url, booking_url, logo_key, primary_color, tagline FROM hospitals WHERE id = ?').bind(c.get('hid')).first<any>()
   if (!h) { c.header('Set-Cookie', clearCookie()); return c.json({ error: 'no_hospital', auth_required: true }, 401) }
-  return c.json({ hospital: h, alimtalk_ready: alimtalkReady(c.env), base_url: baseUrl(c) })
+  // 【2026-09-26】허브 올패스 유효 권한 (설정 화면 한 줄 표시용 · 실패/없음 = null → 기존 화면 그대로)
+  const hubEntitlement = await fetchHubEntitlement(c.env, h.ps_hospital_id).catch(() => null)
+  return c.json({ hospital: h, alimtalk_ready: alimtalkReady(c.env), base_url: baseUrl(c), hub_entitlement: hubEntitlement })
 })
 api.put('/settings', async (c) => {
   const b = await c.req.json().catch(() => ({} as any))

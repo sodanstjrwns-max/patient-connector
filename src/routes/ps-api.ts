@@ -5,6 +5,7 @@ import { checkSolapiCredentials, alimtalkReady } from '../lib/solapi'
 import { timingSafeEqualStr, randomToken } from '../lib/util'
 import { guidanceOf, publicGuidance, digest } from '../lib/guidance'
 import { purgeOldPhones } from './api'
+import { invalidateHubEntitlement } from '../lib/hub-entitlement'
 import { propagateLibrary, LIBRARY_KEY_PREFIX, type LibraryItem } from '../lib/material-library'
 
 type Bindings = { DB: D1Database; PS_SERVICE_KEY?: string; PS_SSO_SECRET?: string; APP_BASE_URL?: string } & Record<string, any>
@@ -18,9 +19,14 @@ psApi.post('/hub-events', async (c) => {
   const auth = c.req.header('Authorization') || ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''
   if (!secret || !token || !timingSafeEqualStr(token, secret)) return err(c, 401, 'unauthorized', '유효하지 않은 인증입니다')
-  const body = (await c.req.json().catch(() => null)) as { ps_hospital_id?: string } | null
+  const body = (await c.req.json().catch(() => null)) as { type?: string; ps_hospital_id?: string } | null
   const psId = typeof body?.ps_hospital_id === 'string' ? body.ps_hospital_id.trim() : ''
   if (!psId) return err(c, 400, 'invalid_body', 'ps_hospital_id가 필요합니다')
+  // 【2026-09-26】올패스·서비스 구독 변경 → 권한 캐시만 삭제 (허브 올패스 권한연동 규약 v1)
+  if (body?.type === 'subscription_updated') {
+    await invalidateHubEntitlement(c.env.DB, psId)
+    return c.json({ ok: true })
+  }
   await c.env.DB.prepare('DELETE FROM hub_profile_cache WHERE ps_hospital_id = ?').bind(psId).run().catch(() => undefined)
   return c.json({ ok: true })
 })
